@@ -12,6 +12,13 @@ simulation, camera, background stream, sprite admission, and frame publication.
 Store large maps and collision columns in Arcade RAM; keep only the working
 column/cache and active actor state in CPU-accessible memory.
 
+This is a compact HuCard topic sample, not a complete multi-screen platformer.
+Its static demo BAT, sprite wrapper, and collision sketch must not be combined
+without their limits: `demo_draw_sprite()` always uses SAT slot zero, and the
+demo BAT repeats instead of streaming a world map. Use
+[Example 25](../25-platformer-integration/README.md) for the cross-feature
+coordinate, HUD, scrolling, CD-target, and gameplay-verification checks.
+
 ## Frame path
 
 ```text

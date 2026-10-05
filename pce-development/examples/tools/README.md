@@ -21,13 +21,21 @@ Makefiles, explicitly releases all controller buttons through the emulator's
 RPC input command, runs the requested frames, and replaces each
 `assets/screenshot.png` only after a successful capture. It uses a fresh
 emulator configuration directory for every project. The bundled headless
-binary must first be built following
-[`README_HEADLESS.md`](../../third_party/mednafenPceDev-main/README_HEADLESS.md).
+binary must first be built using the headless source snapshot's
+`README_HEADLESS.md` build instructions.
 
 ```sh
 python3 capture_screenshots.py --example 8
-python3 capture_screenshots.py --emulator /path/to/mednafen-pce-headless --frames 120
+python3 capture_screenshots.py --emulator /path/to/pce-headless --frames 120
 ```
+
+Platformer examples also include `tools/platformer-trace.py`. Copy it with the
+starter Makefile and tools, add a P2TR v1 state record to the game, then call
+`make trace PCE_PLATFORM_TRACE_ADDRESS=... PCE_PLATFORM_TRACE_SCENARIO=...`.
+The helper applies scripted controller input and returns a concise text report
+from per-frame game state. Read
+[`../../references/platformer-rules.md`](../../references/platformer-rules.md)
+for the ABI and interpretation limits.
 
 Generated backgrounds, sprite patterns, and the font occupy separate VRAM
 regions. SAT pattern fields use 32-word address units, so the pattern at VRAM

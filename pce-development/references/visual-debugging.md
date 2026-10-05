@@ -16,10 +16,18 @@ generated assets, mode, and runtime display state.
    or VDC dots/words.
 4. Follow transformations in order: source state -> camera/scroll -> display
    mode/scaling -> SAT/BAT submission -> frame-boundary publication -> image.
-5. Make the smallest coherent change to the intended visual group. Preserve
+5. If an actor appears duplicated, compare its authored/background tiles with
+   every matching SAT entry and metasprite part; confirm the capture came from
+   the current image and that one logical actor is submitted once. If its
+   palette is wrong, trace source pen values through the baked palette and the
+   SAT palette selector. If it appears to float or sink, measure visible sprite
+   feet and collision-box bottom against the platform's rendered top and
+   collision top in the same frame. Do not infer the cause from the player's
+   world `y` value alone.
+6. Make the smallest coherent change to the intended visual group. Preserve
    spacing, clipping, alignment, and safe-edge margin. Keep fixed HUDs in
    screen-space; do not move world simulation coordinates to fix a HUD.
-6. Rebuild and capture the same scene/state/frame. Confirm the intended visual
+7. Rebuild and capture the same scene/state/frame. Confirm the intended visual
    moved, unrelated actors/background stayed fixed, and no new overlap or
    clipping appeared.
 

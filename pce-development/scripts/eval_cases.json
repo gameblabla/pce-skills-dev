@@ -340,67 +340,153 @@
     ]
   },
   {
-    "id": "headless-mcp-bios-debugging",
-    "question": "Plan a headless emulator/MCP investigation of a CD boot that stays on the System Card screen. The active project root is different from the skill root: use a <skill-root> placeholder resolved from the loaded SKILL.md path for bundled files. Use the bundled README_HEADLESS.md and MCP wrapper source for exact build/startup options, then verify the selected binary and live tools. Include BIOS discovery, a useful first capture, debugger operations, and MCP limitations. Do not assume the user's BIOS path or present an example frame count as a universal limit.",
-    "context": "The public skill bundles source-only Mednafen PCE Dev under the skill root at third_party/mednafenPceDev-main, including README_HEADLESS.md, build_headless.sh, and mednafen/src/drivers_libxxx/mcp_server.py. The active project working directory is not the skill root. It does not include a built binary, game image, or BIOS. The user may build that source or have a separate configured binary; the extracted System Card BIOS path is user-supplied. The bundled wrapper exposes run_frames, disassemble, read_memory, take_screenshot, coverage_clear/dump, Y4M recording, reset, and status. It does not include controller input or arbitrary memory writes. Coverage records logical 16-bit PCs; Y4M contains video only. The shared Makefile bootstrap has a `make bios-check` target: without an explicit BIOS file it prints the user-local folder `${XDG_DATA_HOME:-$HOME/.local/share}/pce-development/bios` and asks for `PCE_SYSTEM_CARD_BIOS` to point to the extracted `.pce` file.",
+    "id": "platformer-text-only-diagnostics",
+    "question": "Diagnose this PCE platformer from text-only P2TR evidence. Identify which mechanics are failing, tie each finding to frame data, and give the smallest source-level correction plus a repeatable `make trace` scenario to verify it. State what telemetry can and cannot prove; do not request an image or tell the coding agent to launch an emulator executable directly.",
+    "context": "A current P2TR v1 report was captured from the game's real update/render state. Scenario held right for 12 frames, then released. From frames 40-51, player world x stays 64.0, right is present in the input mask, vx is 0, and the horizontal-blocked flag is clear. On descent, player collision box is 12x16; surface 3 is valid/collidable at x=40..120 with collision top y=100 and visible-art top y=100. Feet move from y=98 at frame 70 to y=101 at frame 71 with vy=3, horizontal overlap is true, but frame 71 has no landed event and grounded remains false. Frame 72 feet are y=104 and the player continues below the surface. The report labels `movement_stalled` and `missed_landing`; screenshot pixels were not supplied. P2TR coordinates are Q16.8 pixels and the record is game-authored.",
     "references": [
+      "references/platformer-rules.md",
       "references/headless-emulator.md",
-      "examples/13-headless-debugging/README.md",
-      "references/debugging-and-verification.md",
-      "third_party/mednafenPceDev-main/README_HEADLESS.md",
-      "third_party/mednafenPceDev-main/mednafen/src/drivers_libxxx/mcp_server.py",
-      "references/toolchain-setup.md",
+      "examples/25-platformer-integration/README.md",
+      "examples/25-platformer-integration/platformer-scenario.example.json",
       "examples/starter/Makefile",
-      "examples/starter/tools/check-pce-bios.sh"
+      "examples/starter/tools/platformer-trace.py"
     ],
     "checks": [
       {
-        "id": "discovers actual binary flags and isolated base path",
-        "regex": "(?is)(configured|environment variable|binary|--help|help).{0,220}(binary|flag|--help|base[- ]dir|isolated)|(base[- ]dir|isolated).{0,220}(binary|configured|environment variable|help)"
+        "id": "diagnoses held-right movement from unchanged world x and zero velocity",
+        "all_terms": [
+          "40",
+          "51",
+          "64.0"
+        ],
+        "any_groups": [
+          [
+            "right"
+          ],
+          [
+            "vx=0",
+            "vx = 0",
+            "zero velocity",
+            "stalled",
+            "unchanged"
+          ]
+        ]
       },
       {
-        "id": "uses bundled headless build guide/script and MCP wrapper",
-        "regex": "(?is)(?=.*(?:README_HEADLESS\\.md|build_headless\\.sh))(?=.*(?:third_party|mcp_server\\.py))"
+        "id": "diagnoses the missed downward crossing at frame 71",
+        "any_groups": [
+          [
+            "71",
+            "70–72",
+            "70-72",
+            "70 to 72",
+            "frames 70"
+          ],
+          [
+            "feet",
+            "bottom"
+          ],
+          [
+            "cross",
+            "pass",
+            "swept"
+          ],
+          [
+            "surface",
+            "platform",
+            "land"
+          ]
+        ]
       },
       {
-        "id": "resolves bundled paths from skill root, not project root",
-        "regex": "(?is)(?=.*(?:skill[- ]root|loaded skill|SKILL\\.md))(?=.*third_party)(?=.*(?:project root|working directory|project directory))"
+        "id": "prescribes swept vertical collision, snap to top, and vertical-speed reset",
+        "any_groups": [
+          [
+            "previous",
+            "prior",
+            "swept",
+            "cross"
+          ],
+          [
+            "snap",
+            "set"
+          ],
+          [
+            "feet",
+            "bottom",
+            "top",
+            "y=100"
+          ],
+          [
+            "vy",
+            "vertical velocity"
+          ],
+          [
+            "zero",
+            "vy=0",
+            "vy = 0"
+          ]
+        ]
       },
       {
-        "id": "names bundled MCP startup arguments",
-        "regex": "(?is)(?=.*(?:mcp_server\\.py|MCP wrapper|bundled wrapper))(?=.*--binary)(?=.*--rom)(?=.*--base-dir)(?=.*--output-dir)"
+        "id": "recommends a repeatable scripted trace and rebuild",
+        "all_terms": [
+          "make trace",
+          "scenario"
+        ],
+        "any_groups": [
+          [
+            "right",
+            "walk",
+            "landing",
+            "jump"
+          ],
+          [
+            "build",
+            "rebuild",
+            "verify",
+            "rerun",
+            "repeat",
+            "run"
+          ]
+        ]
       },
       {
-        "id": "uses user-supplied extracted BIOS without assuming filename",
-        "regex": "(?is)(?=.*(?:user[- ]supplied|configured|extracted))(?=.*(?:System Card|BIOS))(?=.*(?:path|filename|not assume|not bundled))"
+        "id": "separates authored telemetry from actual pixels",
+        "any_groups": [
+          [
+            "game-authored",
+            "telemetry",
+            "trace"
+          ],
+          [
+            "pixel",
+            "screenshot",
+            "image"
+          ],
+          [
+            "cannot",
+            "does not",
+            "not prove",
+            "not establish",
+            "unverified"
+          ]
+        ]
       },
       {
-        "id": "inspects screenshot, status and boot sequence/PC through MCP",
-        "regex": "(?is)(?=.*(?:screenshot|capture))(?=.*(?:status|run_frames|take_screenshot|tools/list))(?=.*(?:disassembl|active PC|MPR|IPL|extent))"
-      },
-      {
-        "id": "states MCP has no controller input or arbitrary memory writes",
-        "regex": "(?is)(?=.*(?:no|lacks|does not|cannot).{0,100}(?:controller input|input))(?=.*(?:no|lacks|does not|cannot).{0,100}(?:arbitrary memory writes|memory writes))"
-      },
-      {
-        "id": "states logical-PC coverage aliases across mapped banks",
-        "regex": "(?is)(?=.*coverage)(?=.*(?:logical 16[- ]bit PC|logical PCs|logical address))(?=.*(?:alias|same logical|active MPR|bank))"
-      },
-      {
-        "id": "states Y4M is video-only without audio evidence",
-        "regex": "(?is)Y4M.{0,100}(?:video[- ]only|video only)"
-      },
-      {
-        "id": "separates emulator and physical hardware claim",
-        "regex": "(?i)(emulator).{0,140}(?:not|does not|doesn.t|cannot|≠|not prove).{0,100}(?:physical|console|hardware)"
-      },
-      {
-        "id": "uses a bounded/configured interval without assuming a universal default",
-        "regex": "(?i)(bounded|configured).{0,100}(run|frame|interval)|(run|frame|interval).{0,100}(bounded|configured)"
-      },
-      {
-        "id": "tells the terminal where to place a missing BIOS",
-        "regex": "(?is)(?=.*(?:make bios-check|bios-check))(?=.*(?:pce-development/bios|PCE_BIOS_DIR))(?=.*PCE_SYSTEM_CARD_BIOS)"
+        "id": "uses P2TR or platformer-rules rather than pretending to inspect the screenshot",
+        "any_groups": [
+          [
+            "P2TR",
+            "platformer-rules"
+          ],
+          [
+            "source",
+            "collision",
+            "physics",
+            "trace"
+          ]
+        ]
       }
     ]
   },
@@ -429,6 +515,160 @@
       {
         "id": "does not repeat the supplied expression",
         "not_regex": "50\\s*\\*\\s*1888"
+      }
+    ]
+  },
+  {
+    "id": "platformer-live-p2tr-trace",
+    "question": "Review this real text-only `make trace` report. State which walking, gravity, jump, landing, and camera behaviors are supported; explain the observed input-mask delay and how to align claims to actual input; identify any follow-up check; and state what the report cannot prove. Do not request an image or tell the coding agent to launch an emulator executable.",
+    "context": "Example 08 was run from a fresh ROM with this scenario: right 58 frames; right+I 24; neutral 14; right 140. P2TR reports 236 samples, game frames 2-237, emulator frames 3-238, and no diagnostic issues. Segment evidence: right world x=35 to92, delta57, requested right, observed button mask 0 at the first sample then32, input_latch_delay_samples=1, vx=0 to1, grounded at both ends. Right+I x=93 to116, delta23, observed mask 32 to33, delay1, grounded to airborne. Neutral x=117 to117, observed mask33 to0, delay1, airborne to grounded. Final right x=117 to256, delta139, observed mask0 to32, delay1, grounded at both ends. Airborne dvy is consistently +0.25 px/update. Events: frame61 jumped at x94, feet171.25, vy=-4.75, airborne; frame91 landed at x117, feet144, vy=0, grounded on surface2; frame148 landed at x167, feet176, vy=0, grounded on floor surface1. Surface2 spans x104-152 with top y144; floor top y176. End camera x149, world player x256, screen x107. The trace guide says to use the per-sample P2TR buttons mask to align movement/jump claims to an input segment because controller polling can put a change on either side of a trace sample. No screenshot was attached. Trace values are game-authored.",
+    "references": [
+      "references/platformer-rules.md",
+      "references/headless-emulator.md",
+      "examples/25-platformer-integration/README.md"
+    ],
+    "checks": [
+      {
+        "id": "describes positive airborne gravity",
+        "any_groups": [
+          [
+            "0.25",
+            "quarter"
+          ],
+          [
+            "gravity",
+            "vy",
+            "dvy"
+          ]
+        ]
+      },
+      {
+        "id": "uses frame 61 as the observed jump event",
+        "all_terms": [
+          "61",
+          "jump"
+        ],
+        "any_groups": [
+          [
+            "94",
+            "x=94"
+          ],
+          [
+            "airborne",
+            "vy",
+            "upward",
+            "negative"
+          ]
+        ]
+      },
+      {
+        "id": "confirms frame 91 landing on elevated surface 2 and reset velocity",
+        "all_terms": [
+          "91",
+          "144"
+        ],
+        "any_groups": [
+          [
+            "surface 2",
+            "surface2",
+            "platform"
+          ],
+          [
+            "vy=0",
+            "vy = 0",
+            "zero vertical velocity",
+            "zero vy",
+            "velocity is reset"
+          ],
+          [
+            "land",
+            "ground"
+          ]
+        ]
+      },
+      {
+        "id": "explains camera transform from world x and camera x to screen x",
+        "all_terms": [
+          "256",
+          "149",
+          "107"
+        ],
+        "any_groups": [
+          [
+            "world",
+            "camera",
+            "screen"
+          ]
+        ]
+      },
+      {
+        "id": "explains one-sample requested-versus-observed button-mask delay and alignment",
+        "any_groups": [
+          [
+            "delay",
+            "lag",
+            "latch"
+          ],
+          [
+            "mask",
+            "button"
+          ],
+          [
+            "observed",
+            "actual",
+            "sample"
+          ],
+          [
+            "align",
+            "compare",
+            "check",
+            "use"
+          ]
+        ]
+      },
+      {
+        "id": "states the report has no raised physics/render diagnostics",
+        "any_groups": [
+          [
+            "no issues",
+            "zero issues",
+            "no diagnostic flags",
+            "none were raised",
+            "no flags",
+            "no warnings",
+            "issues []",
+            "empty issues"
+          ]
+        ]
+      },
+      {
+        "id": "states telemetry cannot establish rendered pixels",
+        "any_groups": [
+          [
+            "trace",
+            "telemetry",
+            "report"
+          ],
+          [
+            "pixel",
+            "screenshot",
+            "image"
+          ],
+          [
+            "cannot",
+            "does not",
+            "not prove",
+            "not establish",
+            "unverified"
+          ]
+        ]
+      },
+      {
+        "id": "does not ask for an image or direct frontend launch",
+        "forbidden": [
+          "launch the emulator executable",
+          "send me a screenshot"
+        ]
       }
     ]
   }

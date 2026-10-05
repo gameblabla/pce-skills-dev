@@ -28,6 +28,8 @@ TITLES = ['PROJECT TEMPLATE','HELLO CD-ROM2','STATIC BACKGROUND','CD TO ARCADE R
           'ENEMIES AND SHOTS','PALETTE FADES','BITMAP FONT','RASTER PARALLAX',
           'MEMORY MANAGEMENT','ADPCM AND PSG DDA']
 WIDTHS = {0:256,8:256,9:512,10:256,17:256,18:256,19:256,22:512}
+PLATFORM_LAYOUT = [(0,176,512,80,80), (104,144,48,8,16),
+                   (208,120,48,8,16), (352,144,48,8,16)]
 
 
 def image(size, color=8):
@@ -55,9 +57,12 @@ def landscape(im, collision=False):
         d.rectangle((x+16,48,x+31,55), fill=1)
         d.polygon([(x,144),(x+32,80),(x+64,144)], fill=10)
         d.polygon([(x+16,160),(x+48,104),(x+80,160)], fill=9)
-    d.rectangle((0,176,511,255), fill=9)
-    d.rectangle((0,176,511,183), fill=6)
-    for y in range(184,256,16):
+    floor_x,floor_y,floor_w,floor_collision_h,floor_art_h = PLATFORM_LAYOUT[0]
+    floor_right = floor_x + floor_w - 1
+    floor_bottom = floor_y + floor_art_h - 1
+    d.rectangle((floor_x,floor_y,floor_right,floor_bottom), fill=9)
+    d.rectangle((floor_x,floor_y,floor_right,floor_y+7), fill=6)
+    for y in range(floor_y+8,floor_bottom+1,16):
         for x in range(0,512,32):
             dx = 16 if (y//16)&1 else 0
             d.rectangle((x+dx,y,x+dx+30,y+14), outline=8)
@@ -66,9 +71,10 @@ def landscape(im, collision=False):
         for y in range(64,176,8):
             d.line((192,y,199,y+7), fill=4)
     else:
-        for x,y in [(104,144),(208,120),(352,144)]:
-            d.rectangle((x,y,x+47,y+7), fill=6)
-            d.rectangle((x,y+8,x+47,y+15), fill=9)
+        for x,y,width,collision_h,art_h in PLATFORM_LAYOUT[1:]:
+            d.rectangle((x,y,x+width-1,y+collision_h-1), fill=6)
+            if art_h > collision_h:
+                d.rectangle((x,y+collision_h,x+width-1,y+art_h-1), fill=9)
 
 
 def scene(n):
@@ -156,7 +162,7 @@ def scene(n):
     d.rectangle((0,0,511,31), fill=8)
     d.line((0,31,511,31),fill=3)
     text(d,(8,8),f'{n:02d}  {TITLES[n]}',1)
-    if n not in (9,22):
+    if n not in (8,9,22):
         text(d,(8,208), {8:'LEFT / RIGHT TO WALK',10:'I: FIRE',11:'I: MOVE HUD UP',
                         17:'STREAMING THE ENTERING EDGE',18:'D-PAD: MOVE / WALL AT X=192',
                         19:'I: FIRE AT ENEMY',20:'VCE PALETTE ANIMATION',
@@ -230,6 +236,16 @@ def bake(folder,n):
     header += array('pce_demo_bat',bat,'uint16_t')
     header += array('pce_demo_sprite_pattern',sprite_bytes)
     (folder/'assets/demo_assets.h').write_text(header)
+    if n == 8:
+        layout = ('#pragma once\n#include <stdint.h>\n'
+                  'typedef struct { int16_t x, top, width, collision_height, art_height; } DemoPlatform;\n'
+                  f'#define PCE_DEMO_SURFACE_COUNT {len(PLATFORM_LAYOUT)}\n'
+                  f'#define PCE_DEMO_WORLD_WIDTH {PLATFORM_LAYOUT[0][0] + PLATFORM_LAYOUT[0][2]}\n'
+                  f'#define PCE_DEMO_FLOOR_TOP {PLATFORM_LAYOUT[0][1]}\n'
+                  'static const DemoPlatform pce_demo_surfaces[PCE_DEMO_SURFACE_COUNT] = {\n')
+        layout += ''.join('    {%d,%d,%d,%d,%d},\n' % surface for surface in PLATFORM_LAYOUT)
+        layout += '};\n'
+        (folder/'assets/platform_layout.h').write_text(layout)
     im.crop((0,0,WIDTHS.get(n,320),224)).save(folder/'assets/source.png')
     sheet.save(folder/'assets/sprite-sheet.png')
     print(f'{folder.name}: {len(patterns)} tiles, {len(pattern_bytes)} pattern bytes')

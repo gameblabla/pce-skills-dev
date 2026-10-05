@@ -219,7 +219,7 @@ static void SaveCoverage(const std::string& path)
 {
  std::ofstream f(path.c_str(), std::ios::binary | std::ios::trunc);
  if(!f) throw std::runtime_error("could not open coverage output: " + path);
- f << "{\n  \"format\": \"mednafen-pce-logical-pc-coverage-v1\",\n";
+ f << "{\n  \"format\": \"pce-logical-pc-coverage-v1\",\n";
  f << "  \"frames\": " << (g_state ? g_state->frame_count : 0) << ",\n";
  f << "  \"total_instructions\": " << g_cov_total << ",\n";
  f << "  \"unique_logical_pcs\": " << CoverageUnique() << ",\n";
@@ -415,6 +415,64 @@ static void RPCLoop()
     auto data = MemRead(ParseU32(a[1]), len, ParseInt(a[3]) != 0);
     RPCReplyOK(",\"hex\":\"" + HexBytes(data) + "\"");
    }
+   else if(op == "trace_frames")
+   {
+    if(a.size() != 4) throw std::runtime_error("trace_frames requires address, length, frame count");
+    uint32 address = ParseU32(a[1]);
+    unsigned len = (unsigned)ParseInt(a[2]);
+    unsigned frames = (unsigned)ParseInt(a[3]);
+    if(address > 0xFFFF || len != 432 || address + len > 0x10000 || !frames || frames > 3600)
+     throw std::runtime_error("trace_frames requires two consecutive 216-byte P2TR v1 records and 1-3600 samples within logical memory");
+    auto valid_record = [](const std::vector<uint8_t>& data, size_t offset) {
+     return data.size() >= offset + 216 && data[offset] == 'P' && data[offset + 1] == '2' &&
+            data[offset + 2] == 'T' && data[offset + 3] == 'R' && data[offset + 4] == 1 &&
+            !(data[offset + 18] & 1) && data[offset + 19] == 0;
+    };
+    auto latest_record = [&](const std::vector<uint8_t>& pair) {
+     const bool first_valid = valid_record(pair, 0);
+     const bool second_valid = valid_record(pair, 216);
+     if(!first_valid && !second_valid) return std::vector<uint8_t>();
+     size_t offset = 0;
+     if(!first_valid) offset = 216;
+     else if(second_valid)
+     {
+      const uint8_t first_sequence = pair[18];
+      const uint8_t second_sequence = pair[216 + 18];
+      const uint8_t difference = (uint8_t)(first_sequence - second_sequence);
+      if(difference && difference >= 128) offset = 216;
+     }
+     return std::vector<uint8_t>(pair.begin() + offset, pair.begin() + offset + 216);
+    };
+    auto read_trace = [&]() { return latest_record(MemRead(address, len, true)); };
+    std::vector<uint8_t> latest = read_trace();
+    if(latest.empty())
+     throw std::runtime_error("no complete P2TR v1 record is ready before input; increase initial frames or publish two records in mapped main RAM");
+    uint8_t last_sequence = latest[18];
+    std::ostringstream out;
+    out << ",\"start_frame\":" << g_state->frame_count << ",\"samples\":[";
+    for(unsigned i = 0; i < frames; i++)
+    {
+     if(i) out << ',';
+     bool published = false;
+     for(unsigned attempt = 0; attempt < 4; attempt++)
+     {
+      RunFrames(1);
+      latest = read_trace();
+      if(!latest.empty() && latest[18] != last_sequence)
+      {
+       last_sequence = latest[18];
+       published = true;
+       break;
+      }
+     }
+     if(!published)
+      throw std::runtime_error("P2TR publication did not advance within four emulator frames; update the trace once per gameplay frame");
+     out << "{\"frame\":" << g_state->frame_count << ",\"hex\":\""
+         << HexBytes(latest) << "\"}";
+    }
+    out << ']';
+    RPCReplyOK(out.str());
+   }
    else if(op == "loadstate")
    {
     if(a.size() != 2) throw std::runtime_error("loadstate requires path");
@@ -556,7 +614,7 @@ static void RPCLoop()
 struct Options
 {
  std::string rom;
- std::string base_dir = ".mednafen-headless";
+ std::string base_dir = ".pce-headless";
  std::string bios;
  std::string screenshot;
  std::string y4m;

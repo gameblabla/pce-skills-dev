@@ -1,0 +1,6 @@
+[
+  {"frames": 1, "buttons": []},
+  {"frames": 30, "buttons": ["right"]},
+  {"frames": 1, "buttons": ["i"]},
+  {"frames": 30, "buttons": []}
+]

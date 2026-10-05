@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal MCP stdio server for mednafen-pce-headless.
+"""Minimal MCP stdio server for the PCE headless frontend.
 
 Starts one native emulator process and exposes frame execution, disassembly,
 coverage, screenshots, memory reads, reset, and Y4M recording as MCP tools.
@@ -25,8 +25,13 @@ def _text(s):
     return {"type": "text", "text": str(s)}
 
 
+_trace_lib = pathlib.Path(__file__).resolve().parents[5] / "tools" / "pce"
+sys.path.insert(0, str(_trace_lib))
+from platformer_trace import BUTTON_BITS, TRACE_WINDOW_BYTES, analyze_platform_trace
+
+
 class Native:
-    def __init__(self, binary, rom, base_dir, bios=None, initial_frames=1):
+    def __init__(self, binary, rom, base_dir, bios=None, initial_frames=2):
         cmd = [binary, "--rom", rom, "--base-dir", base_dir, "--frames", str(initial_frames), "--rpc"]
         if bios:
             cmd += ["--bios", bios]
@@ -75,6 +80,28 @@ def tool_defs():
                 "properties": {"frames": {"type": "integer", "minimum": 1, "maximum": 100000}},
                 "required": ["frames"],
                 "additionalProperties": False,
+            },
+        },
+        {
+            "name": "run_platformer_scenario",
+            "description": "Apply a deterministic PCE button script and sample a P2TR v1 platformer trace from the game's logical RAM every frame. Returns frame-addressed movement, gravity, landing, collision-geometry, sprite-offset, and camera diagnostics as text; it does not interpret pixels.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "trace_address": {"description": "Logical CPU RAM address of the first of two consecutive P2TR v1 records, obtained from the current link map/symbol table."},
+                    "steps": {
+                        "type": "array", "minItems": 1, "maxItems": 32,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "frames": {"type": "integer", "minimum": 1, "maximum": 3600},
+                                "buttons": {"type": "array", "items": {"type": "string", "enum": list(BUTTON_BITS)}},
+                            },
+                            "required": ["frames", "buttons"], "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["trace_address", "steps"], "additionalProperties": False,
             },
         },
         {
@@ -166,6 +193,41 @@ def handle_tool(native, name, args, output_dir):
     if name == "run_frames":
         d = native.call("run", int(args["frames"]))
         return [_text(f"frame={d['frame']}")]
+    if name == "run_platformer_scenario":
+        try:
+            address = int(str(args["trace_address"]), 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("trace_address must be an integer or 0x-prefixed address") from exc
+        if address > 0xFFFF and address >> 16 == 0xF8:
+            address &= 0xFFFF
+        if address < 0x2000 or address + TRACE_WINDOW_BYTES > 0x4000:
+            raise ValueError(f"two P2TR v1 records must fit completely in PCE main RAM ($2000-$3FFF); got 0x{address:04X}")
+        steps = args["steps"]
+        if not isinstance(steps, list) or not 1 <= len(steps) <= 32:
+            raise ValueError("steps must contain 1-32 input segments")
+        if sum(int(step.get("frames", 0)) for step in steps) > 3600:
+            raise ValueError("a platformer scenario is limited to 3600 frames")
+        samples = []
+        held = []
+        for step in steps:
+            frames = int(step.get("frames", 0))
+            buttons = [str(button).lower() for button in step.get("buttons", [])]
+            if not 1 <= frames <= 3600:
+                raise ValueError("each step must run 1-3600 frames")
+            if any(button not in BUTTON_BITS for button in buttons):
+                raise ValueError("buttons must be PCE names: i, ii, select, run, up, right, down, left, iii, iv, v, vi")
+            if len(set(buttons)) != len(buttons):
+                raise ValueError("button names must be unique within a step")
+            mask = sum(1 << BUTTON_BITS[button] for button in buttons)
+            start = len(samples)
+            native.call("input", mask)
+            batch = native.call("trace_frames", hex(address), TRACE_WINDOW_BYTES, frames)["samples"]
+            held.append((start, start + len(batch) - 1, buttons))
+            samples.extend(batch)
+        report = analyze_platform_trace(samples, held)
+        report["input_script"] = [{"frames": int(step["frames"]), "buttons": [str(b).lower() for b in step.get("buttons", [])]} for step in steps]
+        report["trace_address"] = f"0x{address:04X}"
+        return [_text(json.dumps(report, separators=(",", ":")))]
     if name == "disassemble":
         d = native.call("disasm", as_native_int(args["address"]), int(args.get("count", 16)))
         return [_text("\n".join(d["lines"]))]
@@ -206,13 +268,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rom", required=True)
     script_path = pathlib.Path(__file__).resolve()
-    binary_candidates = [script_path.with_name("mednafen-pce-headless"), script_path.parent.parent / "mednafen-pce-headless"]
-    auto_binary = next((str(x) for x in binary_candidates if x.exists()), "mednafen-pce-headless")
-    ap.add_argument("--binary", default=os.environ.get("MEDNAFEN_PCE_HEADLESS", auto_binary))
-    ap.add_argument("--base-dir", default=os.environ.get("MEDNAFEN_HEADLESS_BASE", ".mednafen-headless"))
+    binary_candidates = [script_path.parents[3] / "pce-headless", script_path.parent / "pce-headless"]
+    auto_binary = next((str(x) for x in binary_candidates if x.exists()), "pce-headless")
+    ap.add_argument("--binary", default=os.environ.get("PCE_HEADLESS", auto_binary))
+    ap.add_argument("--base-dir", default=os.environ.get("PCE_HEADLESS_BASE_DIR", ".pce-headless"))
     ap.add_argument("--bios")
-    ap.add_argument("--output-dir", default=os.environ.get("MEDNAFEN_HEADLESS_OUTPUT", "."))
-    ap.add_argument("--initial-frames", type=int, default=1)
+    ap.add_argument("--output-dir", default=os.environ.get("PCE_HEADLESS_OUTPUT_DIR", "."))
+    ap.add_argument("--initial-frames", type=int, default=2)
     ns = ap.parse_args()
 
     pathlib.Path(ns.base_dir).mkdir(parents=True, exist_ok=True)
@@ -232,7 +294,7 @@ def main():
                     result = {
                         "protocolVersion": requested,
                         "capabilities": {"tools": {}},
-                        "serverInfo": {"name": "mednafen-pce-headless", "version": "1.0"},
+                        "serverInfo": {"name": "pce-headless", "version": "1.0"},
                     }
                     _write({"jsonrpc": "2.0", "id": rid, "result": result})
                 elif method == "notifications/initialized":

@@ -1,6 +1,15 @@
 # PC Engine / CD-ROM² example projects
 
-Each numbered entry is a standalone project folder containing a Makefile, README, C source under `src/`, assets under `assets/`, and a local copy of the LLVM-MOS bootstrap tools. Run `make` to build a HuCard `.pce` ROM; each README embeds a Mednafen headless screenshot captured after 120 frames. A bootable CD-ROM² release still needs project-specific IPL/disc packaging and a user-supplied System Card BIOS; `make bios-check` reports the local BIOS setup path.
+Runnable examples 00–24 are standalone project folders containing a Makefile,
+README, C source under `src/`, assets under `assets/`, and a local copy of the
+LLVM-MOS bootstrap tools. Run `make` to build a HuCard `.pce` ROM; each README
+embeds a headless-emulator screenshot captured after 120 frames. Example 25 is
+a cross-feature integration case study, not a standalone project. A bootable
+CD-ROM² release still needs project-specific IPL/disc packaging and a
+user-supplied System Card BIOS; `make bios-check` reports the local BIOS setup
+path. The examples include `make run` for a bounded headless capture and
+`make debug` for a capture plus execution coverage; CD examples require their
+packaged disc image and System Card to be configured first.
 
 Every project includes a compact PCE screen fixture in `src/demo_video.c` and `assets/demo_assets.h`. The feature-specific entry point is `src/main.c`; use the folder README to follow the target design, constraints, and next adaptation steps.
 
@@ -31,6 +40,7 @@ Every project includes a compact PCE screen fixture in `src/demo_video.c` and `a
 - [Example 22: parallax from raster scroll bands](22-raster-parallax/README.md)
 - [Example 23: plan CPU, VRAM, Arcade RAM, and audio memory](23-memory-management/README.md)
 - [Example 24: hardware ADPCM and timer-driven PSG DDA](24-hardware-adpcm-and-psg-dda/README.md)
+- [Example 25: integrate platformer collision, scrolling, and HUD](25-platformer-integration/README.md)
 
 ## Shared converters and audio modules
 

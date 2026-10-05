@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build numbered examples and capture actual ROM output with headless Mednafen."""
+"""Build numbered examples and capture actual ROM output with the PCE headless frontend."""
 import argparse
 import json
 from urllib.parse import quote
@@ -7,20 +7,34 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import os
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_EMULATOR = ROOT.parent / 'third_party/mednafenPceDev-main/mednafen/src/mednafen-pce-headless'
+
+
+def configured_headless():
+    configured = os.environ.get('PCE_HEADLESS')
+    if configured:
+        return Path(configured)
+    for parent in (ROOT, *ROOT.parents):
+        for candidate in (parent / 'PCE').glob('*headless*') if (parent / 'PCE').is_dir() else ():
+            if candidate.is_file() and candidate.stat().st_mode & 0o111:
+                return candidate
+        for candidate in (parent / 'third_party').glob('*/pce-headless'):
+            if candidate.is_file() and candidate.stat().st_mode & 0o111:
+                return candidate
+    return Path('')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--emulator', type=Path, default=DEFAULT_EMULATOR)
+    parser.add_argument('--emulator', type=Path, default=configured_headless())
     parser.add_argument('--frames', type=int, default=120)
     parser.add_argument('--example', type=int, choices=range(25))
     args = parser.parse_args()
     emulator = args.emulator.resolve()
     if not emulator.is_file():
-        parser.error('build the bundled headless emulator or pass --emulator PATH')
+        parser.error('build/configure the bundled PCE headless frontend or pass --emulator PATH')
     if args.frames <= 0:
         parser.error('--frames must be positive')
     for folder in sorted(ROOT.glob('[0-9][0-9]-*')):

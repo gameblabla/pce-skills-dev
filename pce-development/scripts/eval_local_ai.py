@@ -77,7 +77,7 @@ def load_cases(path: Path) -> list[dict]:
             if field not in case:
                 raise RuntimeError(f"Case missing {field}: {case!r}")
         for check in case["checks"]:
-            if not any(key in check for key in ("regex", "forbidden", "not_regex")):
+            if not any(key in check for key in ("regex", "forbidden", "not_regex", "all_terms", "any_groups")):
                 raise RuntimeError(f"Check needs a regex or forbidden terms: {check!r}")
         if "image" in case:
             image_path = (path.parent / case["image"]).resolve()
@@ -139,8 +139,15 @@ def load_skill_context(skill_dir: Path, case: dict) -> str:
 
 def score_answer(text: str, checks: list[dict]) -> dict:
     results = []
+    folded_text = text.casefold()
     for check in checks:
-        if "regex" in check:
+        if "all_terms" in check or "any_groups" in check:
+            matched = all(term.casefold() in folded_text for term in check.get("all_terms", []))
+            matched = matched and all(
+                any(term.casefold() in folded_text for term in group)
+                for group in check.get("any_groups", [])
+            )
+        elif "regex" in check:
             matched = re.search(check["regex"], text, flags=re.IGNORECASE | re.DOTALL) is not None
         elif "not_regex" in check:
             matched = re.search(check["not_regex"], text, flags=re.IGNORECASE | re.DOTALL) is None

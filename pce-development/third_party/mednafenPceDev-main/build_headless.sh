@@ -32,5 +32,5 @@ cd "$ROOT/mednafen"
 
 JOBS=${JOBS:-2}
 make -j"$JOBS"
-cp -f src/mednafen src/mednafen-pce-headless
-printf 'Built %s\n' "$ROOT/mednafen/src/mednafen-pce-headless"
+cp -f src/mednafen "$ROOT/pce-headless"
+printf 'Built PCE headless emulator at %s\n' "$ROOT/pce-headless"

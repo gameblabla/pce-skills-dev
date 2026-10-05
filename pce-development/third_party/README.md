@@ -1,7 +1,12 @@
-# Third-party emulator source
+# Third-party source
 
-This bundle contains the supplied Mednafen PCE Dev source snapshot, its build scripts, headless build notes, MCP wrapper, upstream documentation, and component license notices. Source and documentation were copied unchanged. Locally generated object files, libraries, configured build files, and emulator executables were omitted.
+This folder contains the supplied PCE headless source snapshot, its build
+scripts, headless frontend notes, MCP wrapper, upstream documentation, and
+component license notices. Preserve all source licenses and notices. Locally
+generated object files, libraries, configured build files, and executables are
+not part of the skill bundle.
 
-The generated `mednafen/po/Makefile.in` is omitted with the other configured files; its source template, `mednafen/po/Makefile.in.in`, is included.
-
-For the headless frontend, start with [`mednafenPceDev-main/README_HEADLESS.md`](mednafenPceDev-main/README_HEADLESS.md). The main Mednafen license is at [`mednafenPceDev-main/mednafen/COPYING`](mednafenPceDev-main/mednafen/COPYING); retain all vendored component notices. The MCP server source is [`mednafenPceDev-main/mednafen/src/drivers_libxxx/mcp_server.py`](mednafenPceDev-main/mednafen/src/drivers_libxxx/mcp_server.py).
+Start with the headless frontend notes in the source snapshot. The public skill
+does not include a compiled binary, game ROM/disc image, or BIOS. Project Make
+targets select the configured executable; keep source and executable details
+inside the project helpers rather than coding-agent prompts.

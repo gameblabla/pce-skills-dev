@@ -37,6 +37,12 @@ the current code before repeating their numbers or assumptions.
 - For game feature changes, sprite/background production, or audio, read
   [runtime and asset pipeline](references/runtime-and-assets.md) and the
   [CD-ROM² project cookbook](references/project-cookbook.md).
+- For a platformer that combines collision, scrolling, sprites, and a fixed HUD,
+  read the [platformer integration example](examples/25-platformer-integration/README.md)
+  alongside examples 08, 17, 18, and 21. Those smaller samples are not a
+  complete game scaffold when combined without their stated limits.
+- For platformer physics invariants, text-only per-frame state traces, and
+  repeatable input scenarios, read [platformer rules](references/platformer-rules.md).
 - For symptom tracing, test selection, profiling, and hardware claims, read
   [debugging and verification](references/debugging-and-verification.md) and
   the [headless emulator and MCP guide](references/headless-emulator.md).
@@ -96,15 +102,32 @@ exactly which checks ran. Emulator checks, manually viewed emulator
 captures, a human playthrough, and physical PC Engine tests are different
 evidence; never report one as another.
 
+For a new example or scratch project, copy the starter Makefile and its tools,
+then use `make run` or `make debug` for neutral-input capture and coverage. Use
+`make trace` with a P2TR-instrumented game and an explicit scenario file for
+repeatable platformer input and text diagnostics. Treat those Make targets as
+the only project interface to the emulator; do not search for or invoke an
+emulator executable from a coding-agent prompt. The helpers use the configured
+headless binary and keep its command line out of the game-development workflow.
+
+Before calling a build a Super CD-ROM² game, verify the produced artifact and
+boot path. A direct `mos-pce-clang` build of a `.pce` ROM is the HuCard preview
+path used by most examples here. A CD-ROM² target needs the CD compiler and the
+project's IPL/disc-image packaging flow, plus a user-supplied compatible System
+Card BIOS for emulator boot. Do not infer the target from a Makefile comment,
+the output filename, or a successful HuCard emulator run. Follow
+[`examples/25-platformer-integration/README.md`](examples/25-platformer-integration/README.md)
+for the output audit.
+
 ## Local references and project-specific facts
 
 This public skill bundle includes no game source tree, exported conversation
-logs, compiled emulator binary, ROM/disc image, or BIOS image. It does include
-the Mednafen PCE Dev source snapshot in
-[`third_party/mednafenPceDev-main/`](third_party/mednafenPceDev-main/) with its
-headless build guide and MCP wrapper. Use that source when you need its
-implementation details or to build the headless binary. If the active project
-supplies a different emulator build, inspect its current help/source as well.
+logs, compiled emulator binary, ROM/disc image, or BIOS image. It includes a
+licensed PCE headless source snapshot under `third_party/`; use the project's
+Make targets to select or build it. Do not ask a coding agent to locate, name,
+or invoke an emulator executable directly. The skill's run/debug/trace helpers
+own that detail. If the active project supplies a different headless build,
+configure it through `PCE_HEADLESS`.
 If the user supplies a project/base-code checkout, treat that checkout as the
 project-specific authority. Do not invent an API, bank assignment, build
 command, BIOS filename, or measured timing value when the relevant source does
