@@ -1,8 +1,10 @@
 # Example 03: CD sectors to Arcade RAM and named files
 
-**Project:** Run `make` in this folder to compile `src/*.c` and `src/*.S` to `build/03-cd-to-aram-files.elf` with the bundled LLVM-MOS setup. `make bios-check` checks local CD System Card setup. The ELF is not a packaged CD image; IPL and disc layout remain project-specific.
+![Example 03: CD sectors to Arcade RAM and named files emulator screenshot](assets/screenshot.png)
 
-**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable visual fixture. See additional files in this folder for topic-specific data.
+**Project:** Run `make` for a HuCard preview ROM; because it has no CD drive, pressing Button I displays the no-disc result. For the BIOS-backed CD-ROM² call, run `make clean && make PCE_CDROM2=1`; provide an extracted System Card BIOS for emulator use, then package the application with the project's CD IPL/disc layout. `make bios-check` reports the local BIOS setup path.
+
+**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable source artwork. `assets/screenshot.png` is captured from the built ROM in the headless emulator. See additional files in this folder for topic-specific data.
 
 CD-ROM reads generally pass through a CPU-visible destination or hardware DMA
 window before software copies the bytes to Arcade RAM. Use the LLVM-MOS PCE CD

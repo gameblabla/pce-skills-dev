@@ -42,7 +42,7 @@ void demo_video_init(uint16_t width_pixels, uint8_t vce_flags) {
             bat[y * 64u + x] = tile;
         }
     }
-    pce_vdc_copy_to_vram(0x7000, bat, sizeof(bat));
+    pce_vdc_copy_to_vram(0x0000, bat, sizeof(bat));
     pce_vdc_irq_vblank_enable();
     pce_irq_enable(IRQ_VDC);
     pce_vdc_bg_enable();
@@ -104,7 +104,7 @@ void demo_draw_bitmap_text_pce(void) {
         for (uint8_t row = 0; row < 8; ++row)
             patterns[(uint16_t)glyph * 32u + (uint16_t)row * 2u] = glyphs[glyph][row];
     pce_vdc_copy_to_vram(0x0840, patterns, sizeof(patterns));
-    pce_vdc_copy_to_vram(0x7000, bat_words, sizeof(bat_words));
+    pce_vdc_copy_to_vram(0x0000, bat_words, sizeof(bat_words));
 }
 
 void demo_enable_parallax_bands(void) {

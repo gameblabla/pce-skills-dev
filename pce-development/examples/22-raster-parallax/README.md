@@ -1,8 +1,10 @@
 # Example 22: parallax from raster scroll bands
 
-**Project:** Run `make` in this folder to compile `src/*.c` and `src/*.S` to `build/22-raster-parallax.elf` with the bundled LLVM-MOS setup. `make bios-check` checks local CD System Card setup. The ELF is not a packaged CD image; IPL and disc layout remain project-specific.
+![Example 22: parallax from raster scroll bands emulator screenshot](assets/screenshot.png)
 
-**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable visual fixture. See additional files in this folder for topic-specific data.
+**Project:** Run `make` in this folder to build `build/22-raster-parallax.pce` with the bundled LLVM-MOS setup. This HuCard ROM can run in a PC Engine emulator. CD-ROM² deployment needs project-specific IPL/disc packaging and a user-supplied System Card BIOS.
+
+**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable source artwork. `assets/screenshot.png` is captured from the built ROM in the headless emulator. See additional files in this folder for topic-specific data.
 
 Saber Rider's second race phase uses the 512-dot mode from the previous example. Its sky has far and near horizontal scroll values, while the road receives a new horizontal offset for successive scanline pairs. A VBlank handler installs the far-sky BXR and schedules the first raster interrupt. At scanline 80 the HBlank handler installs the near-sky BXR; at scanline 112 it starts the road band. The road handler then reads the frame's precomputed per-line offsets and wrap-copy selection.
 

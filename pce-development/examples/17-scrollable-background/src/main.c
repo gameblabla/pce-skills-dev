@@ -11,7 +11,8 @@ static void stream_column(uint8_t bat_column, uint8_t world_column) {
     for (uint8_t row = 0; row < 32; ++row)
         column[row] = next_column(world_column, row);
     pce_vdc_set_copy_column_64();
-    pce_vdc_copy_to_vram((uint16_t)(0x7000u + bat_column), column, sizeof(column));
+    /* The PC Engine BAT is fixed at VDC word address zero. */
+    pce_vdc_copy_to_vram((uint16_t)bat_column, column, sizeof(column));
     pce_vdc_set_copy_word();
 }
 

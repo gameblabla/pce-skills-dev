@@ -1,8 +1,10 @@
 # Example 17: stream a scrollable background
 
-**Project:** Run `make` in this folder to compile `src/*.c` and `src/*.S` to `build/17-scrollable-background.elf` with the bundled LLVM-MOS setup. `make bios-check` checks local CD System Card setup. The ELF is not a packaged CD image; IPL and disc layout remain project-specific.
+![Example 17: stream a scrollable background emulator screenshot](assets/screenshot.png)
 
-**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable visual fixture. See additional files in this folder for topic-specific data.
+**Project:** Run `make` in this folder to build `build/17-scrollable-background.pce` with the bundled LLVM-MOS setup. This HuCard ROM can run in a PC Engine emulator. CD-ROM² deployment needs project-specific IPL/disc packaging and a user-supplied System Card BIOS.
+
+**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable source artwork. `assets/screenshot.png` is captured from the built ROM in the headless emulator. See additional files in this folder for topic-specific data.
 
 For a 256-dot platform viewport, Saber Rider keeps a 64 by 32 BAT and a 256-dot screen window. The scene map is stored in Arcade RAM as columns. Each column has a pattern ID and palette for every map row. A 33-column CPU-side ring tracks the columns currently assigned to the BAT: the visible 32 columns plus one edge column for the next camera step.
 

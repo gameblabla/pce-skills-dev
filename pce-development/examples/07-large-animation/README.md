@@ -1,8 +1,10 @@
 # Example 07: large animation by staged pattern swaps
 
-**Project:** Run `make` in this folder to compile `src/*.c` and `src/*.S` to `build/07-large-animation.elf` with the bundled LLVM-MOS setup. `make bios-check` checks local CD System Card setup. The ELF is not a packaged CD image; IPL and disc layout remain project-specific.
+![Example 07: large animation by staged pattern swaps emulator screenshot](assets/screenshot.png)
 
-**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable visual fixture. See additional files in this folder for topic-specific data.
+**Project:** Run `make` in this folder to build `build/07-large-animation.pce` with the bundled LLVM-MOS setup. This HuCard ROM can run in a PC Engine emulator. CD-ROM² deployment needs project-specific IPL/disc packaging and a user-supplied System Card BIOS.
+
+**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable source artwork. `assets/screenshot.png` is captured from the built ROM in the headless emulator. See additional files in this folder for topic-specific data.
 
 When an animation contains more graphics than can remain resident in VRAM,
 store frame data or deltas in Arcade RAM and upload only the required patterns.

@@ -5,14 +5,14 @@ LLVM_MOS_CC ?= mos-pce-clang
 include tools/llvm-mos-sdk.mk
 
 PROJECT := $(notdir $(CURDIR))
-OUT := build/$(PROJECT).elf
+OUT := build/$(PROJECT).pce
 SOURCES := $(wildcard src/*.c) $(wildcard src/*.S)
 PCE_FLAGS ?= -std=gnu11 -Os -Wall -Wextra -Werror -mlto-zp=0
 
 .PHONY: all clean bios-check
 all: $(OUT)
 
-$(OUT): $(SOURCES) $(wildcard src/*.h) $(wildcard assets/*) | toolchain
+$(OUT): $(SOURCES) $(wildcard src/*.h) $(filter-out assets/screenshot.png,$(wildcard assets/*)) | toolchain
 	@mkdir -p $(dir $@)
 	$(LLVM_MOS_CC) $(PCE_FLAGS) -Isrc -Iassets $(SOURCES) -o $@ -Wl,-Map,$@.map
 

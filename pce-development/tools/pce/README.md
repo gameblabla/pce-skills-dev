@@ -42,7 +42,7 @@ Encode a packed sample with the bundled tables:
 
 Compile the bundled `softadpcm_tables.c` with the library. Its six arrays live
 in the `.pce_softadpcm.tables` section. The IRQ decoder lives in
-`.pce_softadpcm.text`; put both sections in a fixed CPU-visible region that
+`.text.pce_softadpcm`; put both sections in a fixed CPU-visible region that
 remains mapped while the IRQ can run. Keep each packed sample wholly inside one
 physical bank mapped at CPU `$c000-$dfff` through MPR6.
 `PceSoftAdpcmCue.sample_count` is the exact decoded sample count from the
@@ -57,10 +57,12 @@ reload to `pce_softadpcm_init()`; for Saber Rider's nominal rate, use
 `PCE_FREQ_TO_TIMER(6991)` from `pce/system.h`.
 
 For CD-ROM², compile `softadpcm_player_cdrom2.c` and call
-`pce_softadpcm_install_cdrom2_irq()`. For HuCard, install `pce_softadpcm_irq`
-as the raw timer RTI handler, or call `pce_softadpcm_service()` from an
-existing handler that clears decimal mode, preserves A/X/Y, acknowledges the
-timer, and performs RTI itself. Start and stop cues with `pce_softadpcm_play()` and
+`pce_softadpcm_install_cdrom2_irq()`. For a HuCard project that assigns the
+player the whole timer vector, define `PCE_SOFTADPCM_HUCARD_IRQ` to bind
+`irq_timer` directly to its RTI handler. Otherwise call
+`pce_softadpcm_service()` from the project's existing handler, which must clear
+decimal mode, preserve A/X/Y, acknowledge the timer, and perform RTI itself.
+Start and stop cues with `pce_softadpcm_play()` and
 `pce_softadpcm_stop()`; the cue selects decoder slot 0 or 1, PSG channel,
 source bank/address, exact sample count, and loop mode. The player refuses two
 simultaneous voices on the same PSG channel.

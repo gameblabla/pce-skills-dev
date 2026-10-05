@@ -1,6 +1,6 @@
 # PC Engine / CD-ROM² example projects
 
-Each numbered entry is a standalone project folder containing a Makefile, README, C source under `src/`, assets under `assets/`, and a local copy of the LLVM-MOS bootstrap tools. Run `make` in a project folder to link its ELF. A bootable CD image still requires project-specific IPL/disc packaging and a user-supplied System Card BIOS; `make bios-check` reports the local BIOS setup path.
+Each numbered entry is a standalone project folder containing a Makefile, README, C source under `src/`, assets under `assets/`, and a local copy of the LLVM-MOS bootstrap tools. Run `make` to build a HuCard `.pce` ROM; each README embeds a Mednafen headless screenshot captured after 120 frames. A bootable CD-ROM² release still needs project-specific IPL/disc packaging and a user-supplied System Card BIOS; `make bios-check` reports the local BIOS setup path.
 
 Every project includes a compact PCE screen fixture in `src/demo_video.c` and `assets/demo_assets.h`. The feature-specific entry point is `src/main.c`; use the folder README to follow the target design, constraints, and next adaptation steps.
 

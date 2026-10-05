@@ -1,7 +1,9 @@
 #include <pce.h>
 #include "demo_video.h"
 #include "softadpcm_player.h"
+#ifdef PCE_SOFTADPCM_CDROM2
 #include "softadpcm_player_cdrom2.h"
+#endif
 
 /* Replace these deployment fields with the packed sample's actual bank manifest. */
 static const PceSoftAdpcmCue project_cue = {
@@ -11,7 +13,9 @@ static const PceSoftAdpcmCue project_cue = {
 
 int main(void) {
     demo_video_init(320, VCE_PIXEL_CLOCK_7MHZ);
+#ifdef PCE_SOFTADPCM_CDROM2
     pce_softadpcm_install_cdrom2_irq();
+#endif
     pce_softadpcm_init((uint8_t)PCE_FREQ_TO_TIMER(6991));
     for (;;) {
         demo_wait_frame();

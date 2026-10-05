@@ -1,18 +1,29 @@
 # Standalone LLVM-MOS PCE CD SDK project.
 .DEFAULT_GOAL := all
 
-LLVM_MOS_CC ?= mos-pce-clang
+PCE_CDROM2 ?= 0
+LLVM_MOS_CC ?= $(if $(filter 1,$(PCE_CDROM2)),mos-pce-cd-clang,mos-pce-clang)
 include tools/llvm-mos-sdk.mk
 
 PROJECT := $(notdir $(CURDIR))
-OUT := build/$(PROJECT).elf
-SOURCES := $(wildcard src/*.c) $(wildcard src/*.S)
+ifeq ($(PCE_CDROM2),1)
+OUT := build/$(PROJECT).bin
+else
+OUT := build/$(PROJECT).pce
+endif
+SOURCES := $(filter-out src/softadpcm_player_cdrom2.c,$(wildcard src/*.c)) $(wildcard src/*.S)
 PCE_FLAGS ?= -std=gnu11 -Os -Wall -Wextra -Werror -mlto-zp=0
+ifeq ($(PCE_CDROM2),1)
+SOURCES += src/softadpcm_player_cdrom2.c
+PCE_FLAGS += -DPCE_SOFTADPCM_CDROM2
+else
+PCE_FLAGS += -DPCE_SOFTADPCM_HUCARD_IRQ
+endif
 
 .PHONY: all clean bios-check
 all: $(OUT)
 
-$(OUT): $(SOURCES) $(wildcard src/*.h) $(wildcard assets/*) | toolchain
+$(OUT): $(SOURCES) $(wildcard src/*.h) $(filter-out assets/screenshot.png,$(wildcard assets/*)) | toolchain
 	@mkdir -p $(dir $@)
 	$(LLVM_MOS_CC) $(PCE_FLAGS) -Isrc -Iassets $(SOURCES) -o $@ -Wl,-Map,$@.map
 

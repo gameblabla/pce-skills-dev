@@ -1,8 +1,10 @@
 # Example 24: hardware ADPCM and timer-driven PSG DDA
 
-**Project:** Run `make` in this folder to compile `src/*.c` and `src/*.S` to `build/24-hardware-adpcm-and-psg-dda.elf` with the bundled LLVM-MOS setup. `make bios-check` checks local CD System Card setup. The ELF is not a packaged CD image; IPL and disc layout remain project-specific.
+![Example 24: hardware ADPCM and timer-driven PSG DDA emulator screenshot](assets/screenshot.png)
 
-**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable visual fixture. See additional files in this folder for topic-specific data.
+**Project:** Run `make` for the HuCard ROM, which binds the decoder RTI handler to the native timer vector. To use the optional CD-ROM² BIOS adapter, run `make clean && make PCE_CDROM2=1` and package the output with the project's CD IPL/disc layout. `make bios-check` reports the local System Card BIOS setup path.
+
+**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable source artwork. `assets/screenshot.png` is captured from the built ROM in the headless emulator. See additional files in this folder for topic-specific data.
 
 The PCE CD hardware ADPCM unit and PSG DDA output are different playback paths. Saber Rider uses the CD BIOS ADPCM unit for character voices and the PSG DDA channels for short samples and a looping gallop. CD-DA music is a third path. Keep their storage and ownership rules separate.
 
@@ -44,4 +46,4 @@ The case-study runtime is Saber Rider's src/platform/pce/audio_pcm.c and audio_p
 
 ## Included runtime and audio source
 
-This folder contains local copies of the SoftADPCM player, its bundled tables, the CD-ROM² timer adapter, and [`assets/chirp.wav`](assets/chirp.wav). `src/main.c` installs the CD-ROM² IRQ adapter and includes a cue template. `make encode-audio` runs the ROM-independent host converter (requires ffmpeg). Place the emitted stream wholly in the physical bank/address named by the cue, then update its bank, address, and exact sample count from the manifest before playback. The bundled `assets/chirp.softadpcm` file is a tiny raw-format fixture, not a preinstalled ROM bank.
+This folder contains local copies of the SoftADPCM player, its bundled tables, the optional CD-ROM² timer adapter, and [`assets/chirp.wav`](assets/chirp.wav). `src/main.c` includes a cue template; update its bank, address, and exact sample count from the manifest before playback. `make encode-audio` runs the ROM-independent host converter (requires ffmpeg). The bundled `assets/chirp.softadpcm` file is a tiny raw-format fixture, not a preinstalled ROM bank.

@@ -1,4 +1,4 @@
 {
   "markers": ["debug_frames", "debug_marker"],
-  "purpose": "Read these symbols from the ELF while advancing a headless emulator."
+  "purpose": "Use the linker map to locate these symbols while advancing the ROM in a headless emulator."
 }

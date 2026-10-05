@@ -7,6 +7,11 @@
 .section .text.irq,"ax",@progbits
 .global pce_softadpcm_irq
 .global pce_softadpcm_service
+#ifdef PCE_SOFTADPCM_HUCARD_IRQ
+/* Optional raw HuCard timer-vector binding; omit when the project owns it. */
+.global irq_timer
+.set irq_timer,pce_softadpcm_irq
+#endif
 
 /* HuC6280 direct-page work RAM. Override at assembly time if this range is
  * already reserved by the project; reserve all 33 bytes from C allocations. */
@@ -31,7 +36,7 @@ pce_softadpcm_irq:
 
 /* Keep this code and the six lookup tables in an always-mapped region.
  * Sample bytes are mapped temporarily through MPR6 by pce_softadpcm_decode. */
-.section .pce_softadpcm.text,"ax",@progbits
+.section .text.pce_softadpcm,"ax",@progbits
 .global pce_softadpcm_service
 .extern pce_softadpcm_small_lo,pce_softadpcm_small_hi,pce_softadpcm_large_lo,pce_softadpcm_large_hi
 .extern pce_softadpcm_next_small,pce_softadpcm_next_large

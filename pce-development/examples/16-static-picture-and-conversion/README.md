@@ -1,8 +1,10 @@
 # Example 16: convert and display a static picture
 
-**Project:** Run `make` in this folder to compile `src/*.c` and `src/*.S` to `build/16-static-picture-and-conversion.elf` with the bundled LLVM-MOS setup. `make bios-check` checks local CD System Card setup. The ELF is not a packaged CD image; IPL and disc layout remain project-specific.
+![Example 16: convert and display a static picture emulator screenshot](assets/screenshot.png)
 
-**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable visual fixture. See additional files in this folder for topic-specific data.
+**Project:** Run `make` in this folder to build `build/16-static-picture-and-conversion.pce` with the bundled LLVM-MOS setup. This HuCard ROM can run in a PC Engine emulator. CD-ROM² deployment needs project-specific IPL/disc packaging and a user-supplied System Card BIOS.
+
+**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable source artwork. `assets/screenshot.png` is captured from the built ROM in the headless emulator. See additional files in this folder for topic-specific data.
 
 The shared picture converter takes a PNG, fits tile-local colors into the PC Engine's 16 background palettes, converts pixels into four-plane 8 by 8 characters, deduplicates identical character patterns, emits BAT words, and writes a preview from the quantized output.
 
@@ -37,4 +39,4 @@ The Saber Rider UI loader follows this ordering in ui_show(): it disables video,
 
 ## Included image asset
 
-[`assets/source.png`](assets/source.png) is a small source-screen fixture. Run `make convert-assets` to generate patterns, palettes, BAT data, preview, and manifest under `build/static-picture/`; `src/main.c` uses the compact embedded fixture so the ELF example does not depend on generated host files.
+[`assets/source.png`](assets/source.png) is a small source-screen fixture. Run `make convert-assets` to generate patterns, palettes, BAT data, preview, and manifest under `build/static-picture/`; `src/main.c` uses the compact embedded fixture so the ROM example does not depend on generated host files.
