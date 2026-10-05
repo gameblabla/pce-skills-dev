@@ -9,7 +9,7 @@ int main(void) {
     for (;;) {
         uint8_t pad;
         demo_wait_frame();
-        pad = pce_joypad_read();
+        pad = demo_read_pad();
         if ((pad & KEY_1) && !(previous_pad & KEY_1)) {
             if (width == 320) { width = 512; clock = VCE_PIXEL_CLOCK_10MHZ; }
             else { width = 320; clock = VCE_PIXEL_CLOCK_7MHZ; }

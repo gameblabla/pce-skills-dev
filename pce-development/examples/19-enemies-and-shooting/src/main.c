@@ -11,9 +11,10 @@ int main(void) {
     demo_upload_sprite_patterns();
     demo_hide_sprite_slot(0);
     demo_hide_sprite_slot(1);
+    demo_draw_sprite_slot(2, 104, 80, DEMO_PLAYER_PATTERN, VDC_SPRITE_COLOR(1));
     for (;;) {
         demo_wait_frame();
-        if (pce_joypad_read() & KEY_1) { shot.x = 120; shot.y = enemy.y + 8; shot.active = 1; }
+        if (demo_read_pad() & KEY_1) { shot.x = 120; shot.y = enemy.y + 8; shot.active = 1; }
         if (shot.active) {
             ++shot.x;
             if (enemy.alive && shot.x >= enemy.x && shot.y >= enemy.y && shot.y < enemy.y + 16) {
@@ -23,11 +24,11 @@ int main(void) {
             if (shot.x > 300) shot.active = 0;
         }
         if (enemy.alive)
-            demo_draw_sprite_slot(0, enemy.x, enemy.y, 0x0100, VDC_SPRITE_COLOR(1));
+            demo_draw_sprite_slot(0, enemy.x, enemy.y, DEMO_ENEMY_PATTERN, VDC_SPRITE_COLOR(1));
         else
             demo_hide_sprite_slot(0);
         if (shot.active)
-            demo_draw_sprite_slot(1, shot.x, shot.y, 0x0100, VDC_SPRITE_COLOR(2));
+            demo_draw_sprite_slot(1, shot.x, shot.y, DEMO_SHOT_PATTERN, VDC_SPRITE_COLOR(2));
         else
             demo_hide_sprite_slot(1);
     }

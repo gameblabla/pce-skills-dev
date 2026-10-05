@@ -39,3 +39,32 @@ The standalone host tools and target-side reference modules are documented in [`
 ## Starting a project
 
 The `00-project-template/` folder demonstrates the layout. The shared bootstrap is in `starter/`; each example has a local copy of the bootstrap files under `tools/`. See [`../references/toolchain-setup.md`](../references/toolchain-setup.md).
+
+## Rebuilding the graphics and screenshots
+
+The examples use original indexed artwork with a shared 16-color VCE palette.
+Each ROM loads its generated background patterns and full BAT from
+`assets/demo_assets.h`; `assets/source.png` shows the initial viewport before
+runtime sprites, scroll, and palette changes. `assets/sprite-sheet.png` holds
+the player, projectile, enemy, HUD icon, and two robot poses. The old repeating
+four-tile screen fixture has been replaced with topic-specific art.
+
+From the bundle root (`pce-skills-dev/`), with Pillow and NumPy installed:
+
+```sh
+python3 pce-development/examples/tools/generate_graphics.py
+python3 pce-development/examples/tools/capture_screenshots.py
+```
+
+Both commands accept `--example NUMBER` to update one project. The capture
+command builds the ROM and runs 120 frames with all controller buttons
+released, using the bundled headless emulator; build that emulator first or
+pass `--emulator PATH`. Its captures are actual emulator output. The source art
+is not substituted for a screenshot. See the [graphics tools guide](tools/README.md).
+
+The numbered projects reserve a fixed ROM window beginning at 0x8000 for
+embedded graphics. Background patterns start at VRAM word address 0x0800,
+the custom font at 0x5000, sprite patterns at 0x6000, and the SAT at 0x7f00.
+The bank-relocation worker uses physical bank 4 outside the fixed ROM window.
+The CD, Arcade Card, and audio diagrams illustrate those topics; the default
+HuCard demos retain the deployment limitations described in their READMEs.

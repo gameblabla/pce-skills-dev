@@ -5,7 +5,7 @@
 volatile uint8_t demo_vblank_count;
 static volatile uint8_t parallax_enabled;
 static volatile uint8_t parallax_band;
-static uint16_t bat[64 * 32];
+
 
 __attribute__((interrupt)) void irq_vdc(void) {
     uint8_t status = *IO_VDC_STATUS;
@@ -13,6 +13,7 @@ __attribute__((interrupt)) void irq_vdc(void) {
         ++demo_vblank_count;
         if (parallax_enabled) {
             parallax_band = 0;
+            pce_vdc_poke(VDC_REG_BG_SCROLL_X, 0);
             pce_vdc_poke(VDC_REG_SCANLINE, 64);
         }
     }
@@ -26,6 +27,9 @@ __attribute__((interrupt)) void irq_vdc(void) {
 }
 
 void demo_video_init(uint16_t width_pixels, uint8_t vce_flags) {
+    pce_cpu_irq_disable();
+    parallax_enabled = 0;
+    pce_vdc_irq_scanline_disable();
     pce_vdc_bg_disable();
     pce_vdc_sprite_disable();
     pce_vdc_set_resolution(width_pixels, 224, vce_flags);
@@ -36,13 +40,8 @@ void demo_video_init(uint16_t width_pixels, uint8_t vce_flags) {
     pce_vce_copy_palette(17, pce_demo_palette, 1);
     pce_vce_copy_palette(18, pce_demo_palette, 1);
     pce_vdc_copy_to_vram(0x0800, pce_demo_patterns, sizeof(pce_demo_patterns));
-    for (uint16_t y = 0; y < 32; ++y) {
-        for (uint16_t x = 0; x < 64; ++x) {
-            uint16_t tile = (uint16_t)(0x80u + ((x / 4u + y / 4u) & 3u));
-            bat[y * 64u + x] = tile;
-        }
-    }
-    pce_vdc_copy_to_vram(0x0000, bat, sizeof(bat));
+    pce_vdc_copy_to_vram(0x0000, pce_demo_bat, sizeof(pce_demo_bat));
+    demo_set_scroll(0, 0);
     pce_vdc_irq_vblank_enable();
     pce_irq_enable(IRQ_VDC);
     pce_vdc_bg_enable();
@@ -64,8 +63,11 @@ void demo_set_color(uint8_t palette, uint8_t color, uint16_t value) {
 }
 
 void demo_upload_sprite_patterns(void) {
-    pce_vdc_copy_to_vram(0x1000, pce_demo_sprite_pattern, sizeof(pce_demo_sprite_pattern));
+    pce_vdc_copy_to_vram(0x6000, pce_demo_sprite_pattern, sizeof(pce_demo_sprite_pattern));
+    /* Clear every SAT entry before enabling automatic VBlank publication. */
+    for (uint8_t slot = 0; slot < 64; ++slot) demo_hide_sprite_slot(slot);
     pce_vdc_sprite_set_table_start(0x7f00);
+    pce_vdc_poke(VDC_REG_DMA_CONTROL, VDC_DMA_REPEAT_SATB);
     pce_vdc_sprite_enable();
 }
 
@@ -80,7 +82,7 @@ void demo_draw_sprite_slot(uint8_t slot, int16_t x, int16_t y,
     sprite.y = (uint16_t)(y + 64);
     sprite.x = (uint16_t)(x + 32);
     sprite.pattern = pattern_word;
-    sprite.attr = attr;
+    sprite.attr = attr | VDC_SPRITE_FG;
     pce_vdc_copy_to_vram((uint16_t)(0x7f00u + (uint16_t)slot * 4u),
                          &sprite, sizeof(sprite));
 }
@@ -98,13 +100,13 @@ void demo_draw_bitmap_text_pce(void) {
         {0x78,0x84,0x80,0x80,0x80,0x84,0x78,0x00},
         {0xf8,0x80,0x80,0xf0,0x80,0x80,0xf8,0x00}
     };
-    uint8_t patterns[96] = {0};
-    uint16_t bat_words[3] = {132, 133, 134};
+    static const uint16_t bat_words[3] = {0x500, 0x501, 0x502};
+    static uint8_t patterns[96];
     for (uint8_t glyph = 0; glyph < 3; ++glyph)
         for (uint8_t row = 0; row < 8; ++row)
             patterns[(uint16_t)glyph * 32u + (uint16_t)row * 2u] = glyphs[glyph][row];
-    pce_vdc_copy_to_vram(0x0840, patterns, sizeof(patterns));
-    pce_vdc_copy_to_vram(0x0000, bat_words, sizeof(bat_words));
+    pce_vdc_copy_to_vram(0x5000, patterns, sizeof(patterns));
+    pce_vdc_copy_to_vram(0x05c2, bat_words, sizeof(bat_words));
 }
 
 void demo_enable_parallax_bands(void) {
@@ -112,4 +114,14 @@ void demo_enable_parallax_bands(void) {
     parallax_enabled = 1;
     pce_vdc_irq_scanline_enable();
     pce_vdc_poke(VDC_REG_SCANLINE, 64);
+}
+
+/* Periodic 512-pixel source map, including columns outside the initial viewport. */
+uint16_t demo_map_tile(uint16_t world_column, uint8_t row) {
+    return pce_demo_bat[(uint16_t)(row & 31u) * 64u + (world_column & 63u)];
+}
+
+uint8_t demo_read_pad(void) {
+    /* The SDK read returns active-low hardware bits; normalize once here. */
+    return (uint8_t)~pce_joypad_read();
 }

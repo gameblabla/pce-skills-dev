@@ -19,7 +19,7 @@ int main(void) {
     pce_softadpcm_init((uint8_t)PCE_FREQ_TO_TIMER(6991));
     for (;;) {
         demo_wait_frame();
-        if (pce_joypad_read() & KEY_1) (void)pce_softadpcm_play(&project_cue);
-        if (pce_joypad_read() & KEY_2) pce_softadpcm_stop_all();
+        if (demo_read_pad() & KEY_1) (void)pce_softadpcm_play(&project_cue);
+        if (demo_read_pad() & KEY_2) pce_softadpcm_stop_all();
     }
 }

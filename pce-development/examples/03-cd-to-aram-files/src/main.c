@@ -26,10 +26,10 @@ int main(void) {
     demo_video_init(320, VCE_PIXEL_CLOCK_7MHZ);
     for (;;) {
         demo_wait_frame();
-        if (pce_joypad_read() & KEY_1) {
+        if (demo_read_pad() & KEY_1) {
             uint8_t result = read_one_sector_to_cpu();
             /* A project loader checks this result before consuming cpu_stage. */
-            demo_set_color(0, 1, result == PCE_CDB_SUCCESS
+            demo_set_color(0, 3, result == PCE_CDB_SUCCESS
                                      ? VCE_COLOR(1, 7, 2)
                                      : VCE_COLOR(7, 1, 1));
         }

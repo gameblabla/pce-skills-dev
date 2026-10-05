@@ -10,6 +10,6 @@ int main(void) {
         demo_wait_frame();
         ++debug_frames;
         debug_marker = (uint8_t)(debug_frames & 0xff);
-        demo_set_color(0, 1, VCE_COLOR(debug_marker & 7, (debug_marker >> 3) & 7, 2));
+        demo_set_color(0, 3, VCE_COLOR(debug_marker & 7, (debug_marker >> 3) & 7, 2));
     }
 }

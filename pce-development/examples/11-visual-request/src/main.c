@@ -15,15 +15,15 @@ int main(void) {
     for (;;) {
         uint8_t pad;
         demo_wait_frame();
-        pad = pce_joypad_read();
+        pad = demo_read_pad();
         if (pad & KEY_RIGHT) ++actor_world_x;
         if (pad & KEY_LEFT) --actor_world_x;
         camera_x = actor_world_x > 160 ? (uint16_t)(actor_world_x - 160) : 0;
         if ((pad & KEY_1) && hud.screen_y > 0) --hud.screen_y;
         demo_set_scroll(camera_x, 0);
         demo_draw_sprite_slot(0, (int16_t)(actor_world_x - camera_x), actor_world_y,
-                              0x0100, VDC_SPRITE_COLOR(1));
-        demo_draw_sprite_slot(1, hud.screen_x, hud.screen_y, 0x0100,
+                              DEMO_PLAYER_PATTERN, VDC_SPRITE_COLOR(1));
+        demo_draw_sprite_slot(1, hud.screen_x, hud.screen_y, DEMO_HUD_PATTERN,
                               VDC_SPRITE_COLOR(2));
     }
 }

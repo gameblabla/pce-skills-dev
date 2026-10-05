@@ -13,3 +13,12 @@ void demo_draw_sprite_slot(uint8_t slot, int16_t x, int16_t y,
 void demo_hide_sprite_slot(uint8_t slot);
 void demo_draw_bitmap_text_pce(void);
 void demo_enable_parallax_bands(void);
+
+/* Sprite patterns at VRAM word 0x6000; SAT uses 32-word address units. */
+#define DEMO_PLAYER_PATTERN 0x0300
+#define DEMO_SHOT_PATTERN 0x0302
+#define DEMO_ENEMY_PATTERN 0x0304
+#define DEMO_HUD_PATTERN 0x0306
+#define DEMO_POSE_PATTERN 0x0308
+uint16_t demo_map_tile(uint16_t world_column, uint8_t row);
+uint8_t demo_read_pad(void);

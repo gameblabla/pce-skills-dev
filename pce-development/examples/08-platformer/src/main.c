@@ -9,11 +9,11 @@ int main(void) {
     for (;;) {
         uint8_t pad;
         demo_wait_frame();
-        pad = pce_joypad_read();
+        pad = demo_read_pad();
         if ((pad & KEY_LEFT) && world_x > 0) --world_x;
         if ((pad & KEY_RIGHT) && world_x < 480) ++world_x;
         camera_x = world_x > 128 ? (uint16_t)(world_x - 128) : 0;
         demo_set_scroll(camera_x, 0);
-        demo_draw_sprite((int16_t)(world_x - camera_x), 160, 0x0100, VDC_SPRITE_COLOR(1));
+        demo_draw_sprite((int16_t)(world_x - camera_x), 160, DEMO_PLAYER_PATTERN, VDC_SPRITE_COLOR(1));
     }
 }

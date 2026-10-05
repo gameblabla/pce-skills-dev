@@ -16,13 +16,13 @@ int main(void) {
         int16_t next_x, next_y;
         uint8_t pad;
         demo_wait_frame();
-        pad = pce_joypad_read();
+        pad = demo_read_pad();
         next_x = world_x + ((pad & KEY_RIGHT) != 0) - ((pad & KEY_LEFT) != 0);
         next_y = world_y + ((pad & KEY_DOWN) != 0) - ((pad & KEY_UP) != 0);
         if (!solid_at(next_x, world_y)) world_x = next_x;
         if (!solid_at(world_x, next_y)) world_y = next_y;
         camera_x = world_x > 128 ? (uint16_t)(world_x - 128) : 0;
         demo_set_scroll(camera_x, 0);
-        demo_draw_sprite((int16_t)(world_x - camera_x), world_y, 0x0100, VDC_SPRITE_COLOR(1));
+        demo_draw_sprite((int16_t)(world_x - camera_x), world_y, DEMO_PLAYER_PATTERN, VDC_SPRITE_COLOR(1));
     }
 }
