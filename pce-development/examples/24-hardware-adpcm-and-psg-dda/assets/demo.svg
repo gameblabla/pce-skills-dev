@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="224" viewBox="0 0 320 224">
+<rect width="320" height="224" fill="#101c38"/>
+<path d="M0 168h320M0 184h320M0 200h320" stroke="#23d5cf" stroke-width="2" opacity=".7"/>
+<path d="M0 64h320M0 96h320M0 128h320" stroke="#ffbd4a" stroke-width="2" opacity=".7"/>
+<rect x="24" y="24" width="272" height="176" fill="none" stroke="#f3f4fb" stroke-width="3"/>
+<text x="160" y="112" text-anchor="middle" fill="#f3f4fb" font-family="monospace" font-size="15">24 Hardware Adpcm And Psg Dda</text>
+<text x="160" y="136" text-anchor="middle" fill="#23d5cf" font-family="monospace" font-size="10">PCE PROJECT FIXTURE</text>
+</svg>

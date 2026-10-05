@@ -1,0 +1,6 @@
+{
+  "file": "scene.bin",
+  "first_sector": "replace with the project's TOC/extent value",
+  "sector_count": 1,
+  "staging_address": "CPU-visible RAM chosen by the linker"
+}

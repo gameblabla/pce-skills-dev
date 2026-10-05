@@ -1,93 +1,41 @@
-# PC Engine / CD-ROM² project examples
+# PC Engine / CD-ROM² example projects
 
-This folder is a self-contained recipe library for a fresh project. It assumes
-no game repository, exported conversation log, private BIOS, preinstalled
-compiler, or compiled emulator binary is bundled. Project recipes use the
-shared [starter Makefile](starter/Makefile): it accepts an existing
-`mos-pce-clang` on `PATH`, or downloads and installs the pinned LLVM-MOS SDK
-23.2.0 into user-local folders when that compiler is absent. See the
-[toolchain and BIOS setup guide](../references/toolchain-setup.md). The adjacent
-`third_party/mednafenPceDev-main/` directory contains the emulator source, build
-notes, and MCP server source. If a user provides a base-code checkout, inspect
-and adapt it; otherwise implement the small platform adapter against the
-project's LLVM-MOS PCE CD SDK and linker.
+Each numbered entry is a standalone project folder containing a Makefile, README, C source under `src/`, assets under `assets/`, and a local copy of the LLVM-MOS bootstrap tools. Run `make` in a project folder to link its ELF. A bootable CD image still requires project-specific IPL/disc packaging and a user-supplied System Card BIOS; `make bios-check` reports the local BIOS setup path.
 
-Every recipe that creates or changes project code must copy the starter
-Makefile and all files under `starter/tools/` into the new project. Include
-`tools/llvm-mos-sdk.mk` in its Makefile, make every compile/assemble/link target
-depend on `toolchain`, and make CD boot/test targets depend on `bios-check`.
-The toolchain setup guide documents the interactive-shell `PATH` command and
-the BIOS folder printed by `make bios-check` when firmware is missing.
+Every project includes a compact PCE screen fixture in `src/demo_video.c` and `assets/demo_assets.h`. The feature-specific entry point is `src/main.c`; use the folder README to follow the target design, constraints, and next adaptation steps.
 
-Code blocks marked **Pseudocode** express control flow and data ownership; API
-names are descriptive placeholders, not promised SDK symbols. Do not turn
-them into C calls until the target headers/source confirm the matching API.
+## Projects
 
-## Recipes
-
-- [`00-project-template.md`](00-project-template.md): clean project layout,
-  adapter boundary, build and test gates.
-- [`01-cdrom2-hello.md`](01-cdrom2-hello.md): IPL/CD boot to a visible Hello
-  World screen.
-- [`02-static-screen.md`](02-static-screen.md): bake and display a static
-  background with palettes, patterns, and BAT data.
-- [`03-cd-to-aram-files.md`](03-cd-to-aram-files.md): read CD sectors, stage
-  through CPU memory, and load named files into Arcade RAM.
-- [`04-aram-to-vram.md`](04-aram-to-vram.md): verify Arcade RAM data and upload
-  patterns to VDC VRAM with TAI/TIA CPU block-transfer instructions assembled
-  by LLVM-MOS.
-- [`05-sound-samples.md`](05-sound-samples.md): plan CD-DA, ADPCM, PSG DDA,
-  and PSG effects around shared resources.
-- [`06-sprites-and-sat.md`](06-sprites-and-sat.md): create sprites and admit
-  them under SAT/scanline limits.
-- [`07-large-animation.md`](07-large-animation.md): animate many frames by
-  staging and swapping pattern data safely.
-- [`08-platformer.md`](08-platformer.md): build a 2D platformer around
-  collision maps, camera, actors, and streamed tiles.
-- [`09-racing.md`](09-racing.md): combine road rendering, raster interrupts,
-  vehicles, opponents, and HUD.
-- [`10-shmup.md`](10-shmup.md): structure a shooter with deterministic waves,
-  object pools, collision, and boss phases.
-- [`11-visual-request.md`](11-visual-request.md): use an image plus source code
-  to resolve “the HUD is too low; move it higher.”
-- [`12-bank-relocation.md`](12-bank-relocation.md): handle a full code bank
-  without breaking mapped calls or runtime data.
-- [`13-headless-debugging.md`](13-headless-debugging.md): run and debug through
-  a local headless emulator or MCP server.
-- [`14-python-math.md`](14-python-math.md): use the included Python helpers
-  for every calculation.
-- [`15-video-modes-320-and-512.md`](15-video-modes-320-and-512.md): configure
-  Saber Rider's 320-dot UI and 512-dot race modes.
-- [`16-static-picture-and-conversion.md`](16-static-picture-and-conversion.md):
-  convert and upload a static background.
-- [`17-scrollable-background.md`](17-scrollable-background.md): stream a
-  column-based scrolling map through a VBlank-safe cache.
-- [`18-scroll-player-and-collision.md`](18-scroll-player-and-collision.md):
-  combine world coordinates, camera scroll, and streamed collision data.
-- [`19-enemies-and-shooting.md`](19-enemies-and-shooting.md): structure actor
-  pools, projectiles, hit rules, and sprite admission.
-- [`20-palette-fades.md`](20-palette-fades.md): fade old and new palettes
-  efficiently through black.
-- [`21-text-and-bitmap-fonts.md`](21-text-and-bitmap-fonts.md): draw BAT text
-  from a converted bitmap font.
-- [`22-raster-parallax.md`](22-raster-parallax.md): create layered motion with
-  raster scroll bands.
-- [`23-memory-management.md`](23-memory-management.md): plan CPU, VRAM, Arcade
-  RAM, and audio memory lifetimes.
-- [`24-hardware-adpcm-and-psg-dda.md`](24-hardware-adpcm-and-psg-dda.md):
-  prepare and play BIOS ADPCM and timer-driven PSG DDA audio.
+- [Example 00: project template](00-project-template/README.md)
+- [Example 01: CD-ROM² Hello World boot](01-cdrom2-hello/README.md)
+- [Example 02: static screen and background](02-static-screen/README.md)
+- [Example 03: CD sectors to Arcade RAM and named files](03-cd-to-aram-files/README.md)
+- [Example 04: Arcade RAM to VRAM with block transfers](04-aram-to-vram/README.md)
+- [Example 05: sound samples and music](05-sound-samples/README.md)
+- [Example 06: sprites, SAT, and admission](06-sprites-and-sat/README.md)
+- [Example 07: large animation by staged pattern swaps](07-large-animation/README.md)
+- [Example 08: 2D platformer](08-platformer/README.md)
+- [Example 09: racing and scanline road rendering](09-racing/README.md)
+- [Example 10: scrolling shooter](10-shmup/README.md)
+- [Example 11: “The HUD is too low; move it higher”](11-visual-request/README.md)
+- [Example 12: relocate code when a bank is full](12-bank-relocation/README.md)
+- [Example 13: headless emulator and MCP debugging](13-headless-debugging/README.md)
+- [Example 14: calculate with Python](14-python-math/README.md)
+- [Example 15: 320-dot and 512-dot display modes](15-video-modes-320-and-512/README.md)
+- [Example 16: convert and display a static picture](16-static-picture-and-conversion/README.md)
+- [Example 17: stream a scrollable background](17-scrollable-background/README.md)
+- [Example 18: scrolling player with collision](18-scroll-player-and-collision/README.md)
+- [Example 19: enemies, projectiles, and hit rules](19-enemies-and-shooting/README.md)
+- [Example 20: efficient fades to and from black](20-palette-fades/README.md)
+- [Example 21: draw text with a custom bitmap font](21-text-and-bitmap-fonts/README.md)
+- [Example 22: parallax from raster scroll bands](22-raster-parallax/README.md)
+- [Example 23: plan CPU, VRAM, Arcade RAM, and audio memory](23-memory-management/README.md)
+- [Example 24: hardware ADPCM and timer-driven PSG DDA](24-hardware-adpcm-and-psg-dda/README.md)
 
 ## Shared converters and audio modules
 
-See [`../tools/pce/README.md`](../tools/pce/README.md) for the standalone PNG
-converters, ADPCM compressors, BIOS ADPCM player wrapper, dependencies, and
-asset output formats.
+The standalone host tools and target-side reference modules are documented in [`../tools/pce/README.md`](../tools/pce/README.md).
 
-## Porting an existing base
+## Starting a project
 
-The recipes describe an architecture; they do not replace the base port's
-driver, linker, BIOS ABI, or compiler conventions. When base code is available,
-map each adapter operation to a real function/section/register path and keep
-the project's code. When it is absent, make that missing dependency explicit
-and use the recipes only as the design contract. Never claim an example builds
-until it has been adapted and compiled with the selected SDK.
+The `00-project-template/` folder demonstrates the layout. The shared bootstrap is in `starter/`; each example has a local copy of the bootstrap files under `tools/`. See [`../references/toolchain-setup.md`](../references/toolchain-setup.md).

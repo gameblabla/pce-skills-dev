@@ -102,5 +102,5 @@ For a given run:
 For a screenshot request, pass the returned image to the multimodal model with
 the source and asset manifest. For boot failures, inspect BIOS/version, disc
 extents, IPL entry, MPR state, and application disassembly in that order.
-See [`examples/13-headless-debugging.md`](../examples/13-headless-debugging.md)
+See [`examples/13-headless-debugging/README.md`](../examples/13-headless-debugging/README.md)
 for a worked workflow.

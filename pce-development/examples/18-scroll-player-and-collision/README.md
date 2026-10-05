@@ -1,0 +1,40 @@
+# Example 18: scrolling player with collision
+
+**Project:** Run `make` in this folder to compile `src/*.c` and `src/*.S` to `build/18-scroll-player-and-collision.elf` with the bundled LLVM-MOS setup. `make bios-check` checks local CD System Card setup. The ELF is not a packaged CD image; IPL and disc layout remain project-specific.
+
+**Files:** `src/main.c` contains the topic-specific C sample; `src/demo_video.c` and `src/demo_video.h` provide the small SDK-backed screen fixture; `assets/demo_assets.h` contains its embedded tile/palette data, and `assets/demo.svg` is the editable visual fixture. See additional files in this folder for topic-specific data.
+
+Keep world position, camera position, and screen position separate. Saber Rider stores each body as whole-pixel coordinates plus fractional bytes and Q8 velocity. Each update adds velocity to the fractional remainder and carries the high byte into world position. This avoids dropping subpixel motion when velocities do not land on whole pixels.
+
+The collision map is column-major data in Arcade RAM. A 32-column cache in CPU-accessible work RAM holds the collision rows around the player; tags identify which world columns occupy each cache slot. A tag mismatch loads that world column. The visual background cache is separate and can be evicted without losing collision state needed by physics.
+
+## Axis-separated collision
+
+Apply horizontal movement, query the cells touched by the body's leading edge, clamp to the first blocking cell, and clear horizontal velocity on contact. Then apply vertical movement, query the feet or head cells, and resolve floor or ceiling contact. Keeping the axes separate avoids tunneling through a corner when both velocity components change during the same frame.
+
+The Saber Rider collision byte uses directional flags: bit 0 blocks rightward motion, bit 1 blocks leftward motion, bit 2 marks floor, and bit 3 marks ceiling. Bit 4 distinguishes one-way or special floor behavior in the stage encoding. The one-way rule checks the prior body state and downward motion so the player can pass upward through a platform and land from above. Do not copy these bit meanings into another map format without copying its encoder too.
+
+    integrate_fractional_position(body)
+    resolve_horizontal_edges(body, collision_column_cache)
+    resolve_vertical_edges_and_one_way_rules(body, collision_column_cache)
+    update_camera_from_player_world_position(body)
+    stream_visual_columns_for_camera()
+    build_sat_using(player_world_position - camera_position)
+    publish_scroll_and_sat_together_at_vblank()
+
+The camera does not rewrite the player's world position. Convert to screen coordinates only when building SAT entries. Keep HUD entries in screen coordinates so scrolling cannot move them.
+
+## Boundaries to exercise
+
+- Approach walls from both directions and land on both solid and one-way floors.
+- Jump through a one-way platform, then land on it while descending.
+- Test map edges, respawn, and camera limits.
+- Replace a collision-cache column while the player overlaps its boundary.
+- Scroll while a new SAT is queued and confirm that the background and sprites change on the same VBlank.
+- Verify that rejected decorative sprites cannot affect collision or damage state.
+
+The reference physics and collision cache are in Saber Rider's src/platform/pce/play_pce.c. Background publication and the VBlank scroll hold are in video_pce.c and irq.S.
+
+`src/main.c` is a small controller-driven exercise with a fixed wall and floor
+collision rule. Replace that fixture with the project's map format and cached
+collision columns before using it as a full platformer.

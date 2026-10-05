@@ -1,0 +1,6 @@
+{
+  "example": "21-text-and-bitmap-fonts",
+  "source_art": "demo.svg",
+  "embedded_runtime_fixture": "demo_assets.h",
+  "note": "The C fixture is intentionally compact; replace it with assets baked for the target scene."
+}

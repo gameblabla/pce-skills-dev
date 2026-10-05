@@ -1,0 +1,6 @@
+{
+  "scene_decode": "temporary until scene assets are resident",
+  "audio_staging": "temporary during audio read; may share sequential scratch",
+  "collision_cache": "live throughout the active world",
+  "frame_sat": "double-buffered until VBlank publication"
+}

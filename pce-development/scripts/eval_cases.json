@@ -7,8 +7,8 @@
     "bank_needed": 1800,
     "references": [
       "references/banks-and-overlays.md",
-      "examples/12-bank-relocation.md",
-      "examples/14-python-math.md"
+      "examples/12-bank-relocation/README.md",
+      "examples/14-python-math/README.md"
     ],
     "checks": [
       {
@@ -51,7 +51,7 @@
     "context": "The project was created from scratch using the public skill examples. No LLVM-MOS compiler is on PATH, but GNU Make, bash, tar, xz, sha256sum, and curl are available and the network can reach the exact GitHub release. The starter Makefile and tools are supplied as references. No BIOS is supplied. The evaluator should describe behavior from the files; it must not download or install anything.",
     "references": [
       "references/toolchain-setup.md",
-      "examples/00-project-template.md",
+      "examples/00-project-template/README.md",
       "examples/starter/Makefile",
       "examples/starter/tools/llvm-mos-sdk.mk",
       "examples/starter/tools/llvm-mos-sdk.sh",
@@ -106,8 +106,8 @@
     "context": "The project is new. It has an LLVM-MOS installation with the PCE CD target driver, linker, integrated assembler, SDK headers, libraries, and disc image builder. It has no game source tree, no bundled BIOS, and no build script yet. A user can provide a compatible extracted System Card image and can configure a headless emulator.",
     "references": [
       "references/toolchain-setup.md",
-      "examples/00-project-template.md",
-      "examples/01-cdrom2-hello.md",
+      "examples/00-project-template/README.md",
+      "examples/01-cdrom2-hello/README.md",
       "references/hardware-and-architecture.md"
     ],
     "checks": [
@@ -134,8 +134,8 @@
     "question": "Describe a safe CD-to-Arcade-RAM file load followed by an Arcade-RAM-to-VRAM graphics upload. Explain when TAI and TIA are appropriate and what the LLVM-MOS assembly implementation must verify.",
     "context": "Generic LLVM-MOS PCE CD project: CD sector reads use a CPU-visible staging window. Arcade Card data ports can expose mirrored read/write addresses; the VDC data port uses adjacent aliases. The application stores a semantic extent manifest. Exact SDK function names, MPR assignments, and destination address units have not been supplied.",
     "references": [
-      "examples/03-cd-to-aram-files.md",
-      "examples/04-aram-to-vram.md",
+      "examples/03-cd-to-aram-files/README.md",
+      "examples/04-aram-to-vram/README.md",
       "references/hardware-and-architecture.md"
     ],
     "checks": [
@@ -166,7 +166,7 @@
     "question": "A large animation is stored in Arcade RAM and uploaded as it plays. Describe a frame swap that avoids tearing and use-after-free of pattern slots. Include a test plan if one frame cannot upload in a single interval.",
     "context": "The display references sprite patterns through the active SAT generation. The current frame remains visible until the next VBlank. Some frames share patterns; the next frame can exceed one safe transfer window. Raster and audio interrupts must remain responsive.",
     "references": [
-      "examples/07-large-animation.md",
+      "examples/07-large-animation/README.md",
       "references/hardware-and-architecture.md",
       "references/incident-patterns.md"
     ],
@@ -202,8 +202,8 @@
     "question": "An enemy projectile can be refused by the SAT or per-scanline sprite budget but its collision still hurts the player. Recommend a policy and a regression scenario that preserves essential visuals.",
     "context": "The hardware has a fixed SAT entry budget and a per-scanline sprite limit. Admission order is controlled by the renderer. Optional projectiles and particles compete with the player, boss, and hazards. The gameplay entity update and rendering admission currently have separate result paths.",
     "references": [
-      "examples/06-sprites-and-sat.md",
-      "examples/10-shmup.md",
+      "examples/06-sprites-and-sat/README.md",
+      "examples/10-shmup/README.md",
       "references/incident-patterns.md"
     ],
     "checks": [
@@ -230,7 +230,7 @@
     "question": "An effect start runs while PSG DDA playback and an HBlank raster handler are active. Give a concise ordering for sample lookup, voice-record preparation, publication, and PSG/timer setup. Explain how to keep the raster responsive.",
     "context": "This generic driver has one fixed DDA effect channel and one fixed looping channel. Its timer handler consumes only published active records and maps a sample bank while sending bytes. The sample table has bank/address/length/loop fields; it does not have per-sample rate fields. The HBlank routine has a measured deadline, but no numeric budget is included here.",
     "references": [
-      "examples/05-sound-samples.md",
+      "examples/05-sound-samples/README.md",
       "references/hardware-and-architecture.md",
       "references/incident-patterns.md"
     ],
@@ -271,10 +271,10 @@
     "question": "You are starting a small game from scratch. Give the first implementation milestones for a platformer, a road racer with HBlank updates, and a scrolling shooter. Identify one hardware budget and one deterministic test for each.",
     "context": "The available project is an LLVM-MOS PCE CD starter with CD/Arcade RAM, VDC/VCE, SAT, and PSG/BIOS sound. It has no game source or asset pipeline. Pseudocode is acceptable, but do not invent SDK APIs.",
     "references": [
-      "examples/08-platformer.md",
-      "examples/09-racing.md",
-      "examples/10-shmup.md",
-      "examples/00-project-template.md"
+      "examples/08-platformer/README.md",
+      "examples/09-racing/README.md",
+      "examples/10-shmup/README.md",
+      "examples/00-project-template/README.md"
     ],
     "checks": [
       {
@@ -307,10 +307,10 @@
     "id": "multimodal-vague-hud",
     "question": "The HUD is too low; make it higher up. Use the image and source together. Recommend the smallest implementation change and how to verify it. State that the editing agent must measure the screenshot and use scripts/calc.py to compute the chosen offset before writing numeric coordinates. This endpoint cannot execute local tools: give only a qualitative direction, no pixel count, range, numeric expression, or replacement coordinates.",
     "context": "Source excerpt from the active LLVM-MOS PCE CD project: `static const HudItem hud[] = {{12,18,HUD_LIVES},{48,18,HUD_HEALTH},{12,38,HUD_WEAPON}};` These are fixed screen-space anchors. World actors use `screen_x = world_x - camera_x; screen_y = world_y - camera_y;`. The user image is a gameplay screenshot showing the HUD group near the upper-left and a player in the playfield. This eval API has no shell/Python tool; an editing agent will make the actual change after receiving the recommendation.",
-    "image": "../examples/fixtures/hud-too-low.png",
+    "image": "../examples/11-visual-request/assets/hud-too-low.png",
     "references": [
       "references/visual-debugging.md",
-      "examples/11-visual-request.md"
+      "examples/11-visual-request/README.md"
     ],
     "checks": [
       {
@@ -345,7 +345,7 @@
     "context": "The public skill bundles source-only Mednafen PCE Dev under the skill root at third_party/mednafenPceDev-main, including README_HEADLESS.md, build_headless.sh, and mednafen/src/drivers_libxxx/mcp_server.py. The active project working directory is not the skill root. It does not include a built binary, game image, or BIOS. The user may build that source or have a separate configured binary; the extracted System Card BIOS path is user-supplied. The bundled wrapper exposes run_frames, disassemble, read_memory, take_screenshot, coverage_clear/dump, Y4M recording, reset, and status. It does not include controller input or arbitrary memory writes. Coverage records logical 16-bit PCs; Y4M contains video only. The shared Makefile bootstrap has a `make bios-check` target: without an explicit BIOS file it prints the user-local folder `${XDG_DATA_HOME:-$HOME/.local/share}/pce-development/bios` and asks for `PCE_SYSTEM_CARD_BIOS` to point to the extracted `.pce` file.",
     "references": [
       "references/headless-emulator.md",
-      "examples/13-headless-debugging.md",
+      "examples/13-headless-debugging/README.md",
       "references/debugging-and-verification.md",
       "third_party/mednafenPceDev-main/README_HEADLESS.md",
       "third_party/mednafenPceDev-main/mednafen/src/drivers_libxxx/mcp_server.py",
@@ -410,7 +410,7 @@
     "context": "The expression to evaluate is `50 * 1888`. The evaluation runner executes the skill's restricted Python calculator and appends its output below.",
     "calculation": "50 * 1888",
     "references": [
-      "examples/14-python-math.md",
+      "examples/14-python-math/README.md",
       "scripts/calc.py"
     ],
     "checks": [

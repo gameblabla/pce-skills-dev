@@ -68,10 +68,10 @@ palette, map, and SAT/BAT references are ready.
   and through stop/restart/loop transitions.
 - A host audio preview does not prove target decoder compatibility or timing.
 
-Use the example recipes for [visual asset loading](../examples/02-static-screen.md),
-[CD extent loading](../examples/03-cd-to-aram-files.md),
-[animation swaps](../examples/07-large-animation.md), and
-[sound samples](../examples/05-sound-samples.md). The reusable PNG converters,
+Use the example recipes for [visual asset loading](../examples/02-static-screen/README.md),
+[CD extent loading](../examples/03-cd-to-aram-files/README.md),
+[animation swaps](../examples/07-large-animation/README.md), and
+[sound samples](../examples/05-sound-samples/README.md). The reusable PNG converters,
 ADPCM encoders, and BIOS player wrapper are catalogued in
 [`tools/pce/README.md`](../tools/pce/README.md); gameplay recipes based on the
 Saber Rider PCE port are listed in [examples/README.md](../examples/README.md).

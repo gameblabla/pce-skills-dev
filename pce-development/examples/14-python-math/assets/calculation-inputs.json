@@ -1,0 +1,4 @@
+{
+  "transfer_example": "512 * 2",
+  "purpose": "Run the string through scripts/calc.py, then commit the reviewed result in source."
+}

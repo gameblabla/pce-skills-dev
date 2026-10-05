@@ -82,6 +82,6 @@ active console's ADPCM buffer and that the packaged sector range covers the
 sample before playback.
 
 The timer-driven two-channel PSG DDA implementation is documented in
-[`examples/24-hardware-adpcm-and-psg-dda.md`](../../examples/24-hardware-adpcm-and-psg-dda.md).
+[`examples/24-hardware-adpcm-and-psg-dda/README.md`](../../examples/24-hardware-adpcm-and-psg-dda/README.md).
 The included decoder adapts Saber Rider's measured runtime path; its state,
 code/table placement, and sample-bank constraints are listed above.

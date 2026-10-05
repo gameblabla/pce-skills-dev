@@ -88,7 +88,7 @@ When explaining a full-bank fix, make the decision sequence explicit:
 Do not report a completed relocation or safe destination before those gates
 pass.
 
-The complete example is in [`examples/12-bank-relocation.md`](../examples/12-bank-relocation.md).
+The complete example is in [`examples/12-bank-relocation/README.md`](../examples/12-bank-relocation/README.md).
 
 ## Frequent misses
 

@@ -1,0 +1,4 @@
+{
+  "markers": ["debug_frames", "debug_marker"],
+  "purpose": "Read these symbols from the ELF while advancing a headless emulator."
+}

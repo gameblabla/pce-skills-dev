@@ -40,5 +40,5 @@ calculations. If no measurement/tool output exists, keep the suggested visual
 adjustment qualitative. Visual
 similarity does not prove collision, input, bank mapping, or physical timing.
 
-See [`examples/11-visual-request.md`](../examples/11-visual-request.md) for a
+See [`examples/11-visual-request/README.md`](../examples/11-visual-request/README.md) for a
 self-contained vague-HUD request and expected reasoning.

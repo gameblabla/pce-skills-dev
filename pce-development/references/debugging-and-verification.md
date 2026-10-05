@@ -66,5 +66,5 @@ displacement, colors, tile totals, and frame counts. Similarity metrics do not
 prove collision, input handling, bank mapping, or timing.
 
 See [visual debugging](visual-debugging.md), the standalone HUD request in
-[`examples/11-visual-request.md`](../examples/11-visual-request.md), and the
-[headless/MCP example](../examples/13-headless-debugging.md).
+[`examples/11-visual-request/README.md`](../examples/11-visual-request/README.md), and the
+[headless/MCP example](../examples/13-headless-debugging/README.md).

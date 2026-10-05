@@ -1,0 +1,6 @@
+{
+  "format": "softadpcm-2bit-low-pair-first-v1",
+  "sample_count": 64,
+  "bytes": 16,
+  "note": "Small decoder fixture; use softadpcm.py for real audio."
+}
