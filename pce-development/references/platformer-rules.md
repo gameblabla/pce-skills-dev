@@ -34,6 +34,14 @@ per-frame trace even when the reviewing agent cannot inspect images.
    drawn rectangle and collision rectangle from the same map data. This makes
    a pass-through, invisible wall, or floating visual platform distinguishable
    from a rendering-only offset.
+8. **Keep pixel and tile coordinates distinct.** A function taking tile
+   indices must receive `pixel_x / tile_width` and `pixel_y / tile_height`,
+   after fixed-point conversion. Check its declared map width and height against
+   the values actually passed. Range-check before narrowing an integer: casting
+   an off-screen pixel coordinate to `uint8_t` can wrap it into a valid tile row
+   and create a false collision or landing. Follow the cast itself: for example,
+   `795` narrowed to `uint8_t` becomes row `27`, which can falsely match a map
+   whose ground occupies rows 24–27 even though the player is far below it.
 
 ## Publish a P2TR v1 state record
 
@@ -117,13 +125,30 @@ the JSON segment boundary alone.
 
 The report lists jump/landing/death/goal event frames and calls out missed
 platform crossings, grounded-without-support, landing state/velocity mismatches,
-art/collision top mismatch, stalled gravity or movement, and sprite/camera
-coordinate mismatch. Treat these as leads tied to exact frames. Inspect the
-source update order, map data, and linker map before changing code. A trace is
-game-authored: it cannot independently prove that pixels were drawn, the VCE
+art/collision top mismatch, stalled gravity or movement, repeated event flags,
+missing surface geometry, and sprite/camera coordinate mismatch. Transition
+events in `event_flags` are one-frame pulses; a flag that remains set across
+adjacent gameplay frames is a publisher bug and can make event counts
+misleading. During active gameplay, publish nearby collidable surfaces,
+including the support surface when grounded. If `surface_count` is zero, the
+trace cannot verify a landing or support even when the game-authored grounded
+flag says it occurred. Treat diagnostics as leads tied to exact frames. Inspect
+the source update order, map data, and linker map before changing code. A trace
+is game-authored: it cannot independently prove that pixels were drawn, the VCE
 palette looked correct, or the console ran at physical timing. Use the
 headless screenshot or video for rendering evidence; a text-only model should
 state which claims the trace proves and which still need image/hardware review.
+
+When a player falls through an expected floor, compare the feet coordinate and
+velocity with the map API's units, dimensions, and floor row before changing
+gravity. If a landing appears only after the player's coordinate exceeds the
+map, check for truncation or unsigned wrap and require a matching support
+surface. If `DIED` repeats while the trace still reports the play scene, inspect
+the death predicate and transition setup together: a per-frame handler that
+reinitializes its fade counter can prevent the transition from ever finishing.
+Initialize transitions once on entry, keep persistent state separate from
+one-frame event pulses, and verify the death scene and event edge in a fresh
+trace.
 
 If this MCP tool is unavailable, add an equivalent deterministic debug input
 hook and emit the same ABI as CSV/JSON from the game test build. Do not claim a

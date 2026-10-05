@@ -13,8 +13,9 @@ make run
 make debug
 ```
 
-These Make targets choose the workspace-configured headless PCE binary, use an
-isolated base directory, and print the screenshot and optional coverage paths.
+These Make targets choose the bundled P2TR-capable headless build when
+available, then the workspace-configured headless PCE binary. They use an
+isolated base directory and print the screenshot and optional coverage paths.
 They intentionally hide the executable name and command line so a coding agent
 can work through project targets. Configure another build with `PCE_HEADLESS`
 if the active project requires it. Keep any direct frontend commands inside
@@ -67,6 +68,18 @@ For CD, `PCE_RUN_IMAGE` must name the project's packaged disc image, and
 An application `.bin` is not a bootable disc. `make bios-check` prints the
 user-local firmware folder when no image is configured; do not search unrelated
 folders or copy firmware into the skill.
+
+After adding the project's packaging rule, run the image explicitly through
+the project target:
+
+```sh
+make PCE_CDROM2=1 PCE_RUN_IMAGE=build/game.cue \
+  PCE_SYSTEM_CARD_BIOS=/path/to/user-system-card.pce run
+```
+
+Replace both paths with the project's packaged image and the user's BIOS. A CD
+`run` with an empty `PCE_RUN_IMAGE` must fail clearly instead of trying to load
+the application `.bin` as a disc.
 
 ## MCP tools
 

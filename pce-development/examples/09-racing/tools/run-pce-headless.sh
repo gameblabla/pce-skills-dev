@@ -26,6 +26,22 @@ emulator=${PCE_HEADLESS:-}
 if [ -z "$emulator" ]; then
   search_dir=$project_dir
   while :; do
+    for candidate in \
+      "$search_dir"/third_party/*/pce-headless \
+      "$search_dir"/pce-development/third_party/*/pce-headless \
+      "$search_dir"/.opencode/skills/pce-development/third_party/*/pce-headless \
+      "$(dirname "$0")"/../../../third_party/*/pce-headless; do
+      if [ -x "$candidate" ] && [ -f "$candidate" ]; then emulator=$candidate; break; fi
+    done
+    [ -n "$emulator" ] && break
+    [ "$search_dir" = / ] && break
+    search_dir=$(dirname "$search_dir")
+  done
+fi
+
+if [ -z "$emulator" ]; then
+  search_dir=$project_dir
+  while :; do
     for candidate in "$search_dir"/PCE/*headless*; do
       if [ -x "$candidate" ] && [ -f "$candidate" ]; then emulator=$candidate; break; fi
     done

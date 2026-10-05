@@ -16,11 +16,19 @@ def configured_headless():
     configured = os.environ.get('PCE_HEADLESS')
     if configured:
         return Path(configured)
-    for parent in (ROOT, *ROOT.parents):
+    parents = (ROOT, *ROOT.parents)
+    for parent in parents:
+        third_party_roots = (
+            parent / 'third_party',
+            parent / 'pce-development' / 'third_party',
+            parent / '.opencode' / 'skills' / 'pce-development' / 'third_party',
+        )
+        for third_party in third_party_roots:
+            for candidate in third_party.glob('*/pce-headless') if third_party.is_dir() else ():
+                if candidate.is_file() and candidate.stat().st_mode & 0o111:
+                    return candidate
+    for parent in parents:
         for candidate in (parent / 'PCE').glob('*headless*') if (parent / 'PCE').is_dir() else ():
-            if candidate.is_file() and candidate.stat().st_mode & 0o111:
-                return candidate
-        for candidate in (parent / 'third_party').glob('*/pce-headless'):
             if candidate.is_file() and candidate.stat().st_mode & 0o111:
                 return candidate
     return Path('')

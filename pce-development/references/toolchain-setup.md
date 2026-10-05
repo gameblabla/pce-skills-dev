@@ -40,9 +40,10 @@ the build command runs.
 For a runnable HuCard preview, define `OUT` in the project Makefile and use
 the starter `run` and `debug` targets. `make run` saves a headless screenshot;
 `make debug` also saves execution coverage. The helper uses `PCE_HEADLESS` when
-configured, then searches the workspace and bundled source build for a PCE
-headless binary. Keep that selection inside the helper; a game task to a local
-agent should mention only project Make targets. Override `PCE_RUN_FRAMES`,
+configured; otherwise it prefers the bundled P2TR-capable build before a
+workspace PCE headless binary. Keep that selection inside the helper; a game
+task to a local agent should mention only project Make targets. Override
+`PCE_RUN_FRAMES`,
 `PCE_RUN_SCREENSHOT`, `PCE_COVERAGE`, and `PCE_HEADLESS_BASE_DIR` as needed.
 
 For platformer input and physics evidence, copy the trace helper too, define a

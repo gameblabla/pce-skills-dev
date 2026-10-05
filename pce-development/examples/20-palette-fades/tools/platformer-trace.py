@@ -79,6 +79,11 @@ def analyze_platform_trace(samples, held_buttons):
     for sample, state in zip(samples, decoded):
         state["emulator_frame"] = sample.get("frame")
     play = [s for s in decoded if s["scene"] == 1 and not (s["player_flags"] & 0x02)]
+    active_scene = [s for s in decoded if s["scene"] == 1]
+    for current in play:
+        if current["surface_count"] == 0:
+            issue(current["frame"], "surface_geometry_unavailable",
+                  "active gameplay sample publishes no collidable surfaces; landing and support geometry cannot be verified from this trace")
     for previous, current in zip(play, play[1:]):
         if current["frame"] != previous["frame"] + 1:
             delta = current["frame"] - previous["frame"]
@@ -110,11 +115,6 @@ def analyze_platform_trace(samples, held_buttons):
             )
             if current["surface_count"] and not supported:
                 issue(current["frame"], "unsupported_grounded", "grounded flag is set but no traced collidable surface supports the feet")
-        if current["event_flags"] & (1 << EVENT_BITS["landed"]):
-            if not (current["player_flags"] & 0x01):
-                issue(current["frame"], "landing_state_mismatch", "landed event is set but grounded is clear")
-            if current["vy"] > 1 / 256:
-                issue(current["frame"], "landing_velocity_not_reset", "landed event is set but downward velocity is still positive")
         expected_draw_x = current["player_x"] + current["sprite_dx"] - current["camera_x"]
         if abs(current["draw_x"] - expected_draw_x) > 1.0:
             issue(current["frame"], "camera_or_sprite_x_mismatch", f"submitted player screen x differs from world x minus camera and sprite offset by {round(current['draw_x'] - expected_draw_x, 2)} px")
@@ -132,6 +132,24 @@ def analyze_platform_trace(samples, held_buttons):
             stuck_y = 0
         if current["sat_piece_count"] > 1 and current["sat_first"] + current["sat_piece_count"] > 64:
             issue(current["frame"], "sat_range_invalid", "player metasprite SAT range exceeds 64 entries")
+
+    for current in active_scene:
+        if current["event_flags"] & (1 << EVENT_BITS["landed"]):
+            if not (current["player_flags"] & 0x01):
+                issue(current["frame"], "landing_state_mismatch", "landed event is set but grounded is clear")
+            if current["vy"] > 1 / 256:
+                issue(current["frame"], "landing_velocity_not_reset", "landed event is set but downward velocity is still positive")
+            if current["surface_count"] == 0:
+                issue(current["frame"], "landing_support_unverified",
+                      "landed event is set but no collidable surface is published to verify the support")
+    for previous, current in zip(active_scene, active_scene[1:]):
+        if current["frame"] != previous["frame"] + 1:
+            continue
+        repeated = current["event_flags"] & previous["event_flags"]
+        for name, bit in EVENT_BITS.items():
+            if repeated & (1 << bit):
+                issue(current["frame"], "repeated_event_flag",
+                      f"{name} event flag is set on consecutive game frames; publish transition events as one-frame pulses")
 
     if len(play) >= 30:
         still = play[-30:]
@@ -248,17 +266,30 @@ def _find_binary(rom):
         return pathlib.Path(configured).expanduser().resolve()
     roots = [pathlib.Path.cwd(), pathlib.Path(rom).expanduser().resolve().parent,
              pathlib.Path(__file__).resolve().parent]
+    directories = []
     for root in roots:
-        for directory in (root, *root.parents):
-            for candidate in (directory / "PCE" / "pce-headless",):
+        directories.extend(directory for directory in (root, *root.parents)
+                           if directory not in directories)
+    # Prefer the bundled RPC build because it exposes the scripted input and
+    # trace commands this tool needs. Only then fall back to a workspace build.
+    for directory in directories:
+        third_party_roots = (
+            directory / "third_party",
+            directory / "pce-development" / "third_party",
+            directory / ".opencode" / "skills" / "pce-development" / "third_party",
+        )
+        for third_party in third_party_roots:
+            for candidate in third_party.glob("*/pce-headless") if third_party.is_dir() else ():
                 if candidate.is_file() and os.access(candidate, os.X_OK):
                     return candidate
-            for candidate in (directory / "PCE").glob("*headless*") if (directory / "PCE").is_dir() else ():
-                if candidate.is_file() and os.access(candidate, os.X_OK):
-                    return candidate
-            for candidate in (directory / "third_party").glob("*/pce-headless"):
-                if candidate.is_file() and os.access(candidate, os.X_OK):
-                    return candidate
+    for directory in directories:
+        candidates = (directory / "PCE" / "pce-headless",)
+        for candidate in candidates:
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return candidate
+        for candidate in (directory / "PCE").glob("*headless*") if (directory / "PCE").is_dir() else ():
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return candidate
     raise RuntimeError("No configured PCE headless executable found; set PCE_HEADLESS or use the project's make run/debug setup.")
 
 

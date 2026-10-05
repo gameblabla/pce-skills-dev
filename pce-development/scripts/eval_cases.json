@@ -671,5 +671,258 @@
         ]
       }
     ]
+  },
+  {
+    "id": "platformer-generated-cd-game-failure-trace",
+    "question": "Answer in four short parts: (1) which movement/gravity facts are supported and which collision path fails; (2) explain the frame-125 LANDED+DIED record from the pixel-to-tile call and the uint8_t cast; (3) explain repeated death/fade behavior and whether the jump was tested; (4) give correction order and repeatable Make-based trace steps. Close by stating that game-authored trace data cannot prove rendered pixels. Ground conclusions in frame data and distinguish evidence from inference. Do not request an image or tell the coding agent to launch a frontend directly.",
+    "context": "Generated project trace: 141 samples, game frames 2–142. II is observed one sample after its requested segment. During the right hold, world x changes 32→186 and vx 0→2 px/frame, so horizontal movement works. The player falls to y=304.75, vy=6.25 at frame 49 and DIED first appears. `surface_count=0` on active gameplay frames 19–48. DIED remains set through frame 142; the report flags repeated events over 50–142. At frame 125, LANDED and DIED are both set, y=779, feet=795, vy=0, grounded=true, with no support surface; the report flags `landing_support_unverified`. There is no JUMPED event. The one-frame I press is observed after the player is already dead and airborne.\n\nSource facts: the level uses 8-pixel tiles, is 500 tiles wide and 28 rows high, with ground on rows 24–27. `get_tile(uint16_t tx, uint8_t ty)` expects tile indices and returns empty outside those bounds. The physics code converts Q8 feet/player positions to integer pixels, then calls `get_tile((uint16_t)feet_x, (uint8_t)feet_y)` without dividing by 8. Therefore the frame-125 `feet_y=795` is narrowed to uint8 value 27, an in-range ground row.\n\n`update_fade()` runs before the gameplay branch and increments an outgoing fade toward 15; it switches scenes only at 15. Every dead gameplay frame then sets `fade_in_progress=1`, `fade_direction=1`, `fade_level_current=0`, and target DEATH again. A one-minute interval is the goal. Use a fresh Make `trace` scenario after fixes; start II, allow spawn to settle, tap I for one frame, release, and separately test side-contact death. The relevant guides specify event flags as one-frame pulses and require a support surface for verified landings.",
+    "calculation": "((490*8)-32)/(2*60)",
+    "references": [
+      "references/platformer-rules.md",
+      "references/headless-emulator.md",
+      "examples/25-platformer-integration/README.md",
+      "examples/25-platformer-integration/platformer-scenario.example.json",
+      "examples/starter/Makefile",
+      "examples/starter/tools/platformer-trace.py"
+    ],
+    "checks": [
+      {
+        "id": "recognizes working horizontal movement and gravity while identifying floor collision failure",
+        "any_groups": [
+          [
+            "x changes",
+            "world x",
+            "horizontal movement"
+          ],
+          [
+            "falls",
+            "gravity",
+            "downward",
+            "y=304.75"
+          ],
+          [
+            "floor",
+            "ground",
+            "collision"
+          ]
+        ]
+      },
+      {
+        "id": "explains pixel-to-tile units and the narrowed 795-to-27 false landing at frame 125",
+        "all_terms": [
+          "125",
+          "795",
+          "27"
+        ],
+        "any_groups": [
+          [
+            "uint8",
+            "cast",
+            "narrow"
+          ],
+          [
+            "pixel",
+            "tile"
+          ],
+          [
+            "false",
+            "spurious",
+            "unsupported",
+            "no support"
+          ]
+        ]
+      },
+      {
+        "id": "explains repeated fade reset to zero prevents the death scene transition",
+        "any_groups": [
+          [
+            "every dead gameplay frame",
+            "every dead frame",
+            "each dead frame",
+            "every frame"
+          ],
+          [
+            "fade_level_current",
+            "fade level"
+          ],
+          [
+            "zero",
+            "0"
+          ],
+          [
+            "15",
+            "transition",
+            "scene"
+          ]
+        ]
+      },
+      {
+        "id": "states jump was not tested because I arrives after death or actor is airborne",
+        "any_groups": [
+          [
+            "no JUMPED",
+            "jump event",
+            "jump was not tested",
+            "cannot confirm jump"
+          ],
+          [
+            "dead",
+            "airborne",
+            "mask delay",
+            "after death"
+          ]
+        ]
+      },
+      {
+        "id": "proposes fresh Make-based input trace and checks support/landing events",
+        "any_groups": [
+          [
+            "make trace"
+          ],
+          [
+            "scenario",
+            "input"
+          ],
+          [
+            "grounded",
+            "support surface",
+            "LANDED"
+          ]
+        ]
+      },
+      {
+        "id": "states trace evidence cannot prove rendered pixels",
+        "any_groups": [
+          [
+            "trace",
+            "telemetry"
+          ],
+          [
+            "pixel",
+            "visual"
+          ],
+          [
+            "cannot prove",
+            "does not prove",
+            "cannot verify"
+          ]
+        ]
+      }
+    ]
+  },
+  {
+    "id": "platformer-generated-game-deliverable-audit",
+    "question": "Audit this output against the original one-minute Super CD-ROM² platformer request. State the exact built `.pce` and `.bin` artifact types, whether a one-minute full-route duration is demonstrated, whether a bootable CD was delivered, what the title capture visibly contains, and which requested features remain unproven. Quote only the attached Python pure-run time; do not recalculate it or add another route distance/count. Say whether a full-route time is demonstrated, and do not treat the baseline as a measured playthrough. Keep image findings separate from game-authored trace claims, and recommend the next project Make-based evidence. Do not request an image or tell the coding agent to launch a frontend directly. For CD boot, give the Make target with both `PCE_RUN_IMAGE` set to the packaged image and `PCE_SYSTEM_CARD_BIOS` set to the user's BIOS.",
+    "context": "The generated project builds an 8 KiB `.pce` preview with `make PCE_CDROM2=0` and a 7,901-byte application `.bin` with `make PCE_CDROM2=1`. The CD Makefile has no disc-image packaging rule; no packaged disc image or System Card boot test exists. The `.bin` is a CD application binary, not a bootable disc.\n\nThe player starts at x=32 px; the flag is at tile column 490. Tiles are 8 pixels wide, walking speed is 2 px/frame, and the intended frame rate is 60 fps. The pure rightward run from spawn to flag is not a full playthrough and does not measure jumps or enemy delays. No full-route completion time was measured. Python calculator output is attached; its unit is seconds.\n\nA 120-frame project `make run` title capture was inspected: it is black except for a few sparse pixels, with no readable title or visible background, floor, HUD, or flag. The P2TR trace shows x movement and downward motion but has no collidable surfaces; it records death and an unsupported landing after the fall. No successful jump, enemy stomp/side-contact, goal, flag animation, end transition, or one-minute route was demonstrated. Trace data is authored by the game and cannot prove visible pixels or physical CD boot behavior.",
+    "calculation": "((490*8)-32)/(2*60)",
+    "references": [
+      "references/platformer-rules.md",
+      "references/headless-emulator.md",
+      "examples/25-platformer-integration/README.md",
+      "references/toolchain-setup.md"
+    ],
+    "checks": [
+      {
+        "id": "reports the pure-run time in seconds and says a full one-minute route was not demonstrated",
+        "all_terms": [
+          "162/5",
+          "seconds"
+        ],
+        "any_groups": [
+          [
+            "not demonstrated",
+            "unproven",
+            "not measured",
+            "no full-route time",
+            "no full route was measured"
+          ]
+        ]
+      },
+      {
+        "id": "distinguishes CD application binary from bootable packaged disc",
+        "any_groups": [
+          [
+            ".bin",
+            "application binary"
+          ],
+          [
+            "not bootable",
+            "no disc image",
+            "not a disc",
+            "not a bootable disc",
+            "neither"
+          ]
+        ]
+      },
+      {
+        "id": "identifies the .pce as a HuCard preview",
+        "all_terms": [
+          ".pce",
+          "HuCard"
+        ]
+      },
+      {
+        "id": "reports the inspected title capture is black/sparse and has no readable title",
+        "any_groups": [
+          [
+            "black",
+            "sparse"
+          ],
+          [
+            "no readable title",
+            "no title"
+          ]
+        ]
+      },
+      {
+        "id": "does not claim untested jump, enemy, goal, animation, or CD boot paths succeeded",
+        "any_groups": [
+          [
+            "not tested",
+            "not demonstrated",
+            "unproven",
+            "not verified",
+            "no evidence"
+          ],
+          [
+            "jump",
+            "enemy",
+            "goal",
+            "CD"
+          ]
+        ]
+      },
+      {
+        "id": "separates trace telemetry from visual and CD boot evidence and names Make targets",
+        "any_groups": [
+          [
+            "trace",
+            "telemetry"
+          ],
+          [
+            "pixels",
+            "image",
+            "screenshot"
+          ],
+          [
+            "make run",
+            "make trace"
+          ]
+        ]
+      },
+      {
+        "id": "uses PCE_RUN_IMAGE and user-supplied System Card BIOS in the CD Make run",
+        "all_terms": [
+          "PCE_RUN_IMAGE",
+          "PCE_SYSTEM_CARD_BIOS"
+        ],
+        "any_groups": [
+          [
+            "make",
+            "run"
+          ]
+        ]
+      }
+    ]
   }
 ]
