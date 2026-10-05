@@ -1,4 +1,5 @@
-/* SoftADPCM 2-bit software decoder, adapted from Saber Rider commit 3ade2d8.
+/* SoftADPCM is TurboXRay's original 2-bit software ADPCM decoder.
+ * This PCE runtime adaptation follows Saber Rider commit 3ade2d8.
  * Timer IRQ delivers two independent decoded streams to PSG DDA channels.
  * The decoder tables are bundled as source; no ROM is read at build time.
  * pce_softadpcm_irq is an RTI entry; pce_softadpcm_service is for an existing IRQ wrapper.

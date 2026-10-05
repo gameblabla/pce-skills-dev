@@ -16,7 +16,10 @@ The Saber Rider port permits one hardware ADPCM voice at a time. It applies prio
 
 ## SoftADPCM 2-bit codec feeding PSG DDA
 
-The bundled converter and player use the Build 14-compatible adaptive decoder tables included in `tools/pce/softadpcm_tables.py` and `softadpcm_tables.c`. The source ROM is not needed to encode audio, build the library, or run it:
+TurboXRay created the original SoftADPCM codec and decoder. The bundled
+converter and player use its adaptive decoder tables in
+`tools/pce/softadpcm_tables.py` and `softadpcm_tables.c`; the source ROM is not
+needed to encode audio, build the library, or run it:
 
     python3 pce-development/tools/pce/softadpcm.py effect.wav build/effect.softadpcm --rate 6991
 

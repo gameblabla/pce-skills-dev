@@ -1,7 +1,9 @@
 # Shared PC Engine asset and audio tools
 
 These tools are adapted from Saber Rider's PCE host pipeline and generalized
-for standalone projects. They contain no game assets, ROMs, BIOS files, or
+for standalone projects. The SoftADPCM codec and original decoder are by
+TurboXRay; the bundled tables support the ROM-independent converter and PCE
+runtime player. The tools contain no game assets, ROM images, BIOS files, or
 game-specific archive layout. They produce host-side data; a project's loader,
 VRAM allocation, and disc layout remain project-owned.
 

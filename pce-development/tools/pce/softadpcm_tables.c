@@ -1,4 +1,5 @@
-/* Bundled SoftADPCM tables derived for the public software ADPCM player.
+/* SoftADPCM decoder tables for TurboXRay's original decoder, bundled here for
+ * the public software ADPCM player.
  * No source ROM or runtime table extraction is required.
  * TABLE_SHA256: 52533fad4e107e6dab8828fb5af73bf262ba99f7bb7a889a87d27c8bf0699e39
  */

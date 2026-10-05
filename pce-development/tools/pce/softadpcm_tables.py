@@ -1,7 +1,8 @@
-"""Bundled SoftADPCM tables derived from the original ROM decoder.
+"""Bundled SoftADPCM tables for TurboXRay's original decoder.
 
-The compressed stream and runtime player use these fixed lookup tables; no
-ROM is needed to build or use this module.
+The compressed stream and runtime player use these fixed lookup tables. The
+tables were recovered from the original decoder ROM; no ROM is needed to
+build or use this module.
 """
 
 TABLE_SHA256 = "52533fad4e107e6dab8828fb5af73bf262ba99f7bb7a889a87d27c8bf0699e39"
