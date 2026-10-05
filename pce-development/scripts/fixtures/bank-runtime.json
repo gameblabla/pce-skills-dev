@@ -1,0 +1,7 @@
+{
+  "banks": [
+    {"bank": "0x70", "used": 8192, "free": 0, "capacity": 8192},
+    {"bank": "0x71", "used": 2048, "free": 6144, "capacity": 8192},
+    {"bank": "0x72", "used": 6144, "free": 2048, "capacity": 8192}
+  ]
+}
