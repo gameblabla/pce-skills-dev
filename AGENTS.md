@@ -28,3 +28,8 @@ Makefile/bootstrap and use only the LLVM-MOS `mos-pce-clang` driver; if no
 compiler is on PATH, the helper installs SDK 23.2.0 user-locally.
 `make bios-check` prints the user-local placement folder when CD firmware is
 absent.
+
+The shared PCE image/font/sprite converters, audio encoders, and BIOS ADPCM
+player wrapper are documented in
+`pce-development/tools/pce/README.md`. These tools are standalone and carry no
+Saber Rider art, ROM, BIOS, or game-specific archive data.

@@ -56,6 +56,32 @@ them into C calls until the target headers/source confirm the matching API.
   a local headless emulator or MCP server.
 - [`14-python-math.md`](14-python-math.md): use the included Python helpers
   for every calculation.
+- [`15-video-modes-320-and-512.md`](15-video-modes-320-and-512.md): configure
+  Saber Rider's 320-dot UI and 512-dot race modes.
+- [`16-static-picture-and-conversion.md`](16-static-picture-and-conversion.md):
+  convert and upload a static background.
+- [`17-scrollable-background.md`](17-scrollable-background.md): stream a
+  column-based scrolling map through a VBlank-safe cache.
+- [`18-scroll-player-and-collision.md`](18-scroll-player-and-collision.md):
+  combine world coordinates, camera scroll, and streamed collision data.
+- [`19-enemies-and-shooting.md`](19-enemies-and-shooting.md): structure actor
+  pools, projectiles, hit rules, and sprite admission.
+- [`20-palette-fades.md`](20-palette-fades.md): fade old and new palettes
+  efficiently through black.
+- [`21-text-and-bitmap-fonts.md`](21-text-and-bitmap-fonts.md): draw BAT text
+  from a converted bitmap font.
+- [`22-raster-parallax.md`](22-raster-parallax.md): create layered motion with
+  raster scroll bands.
+- [`23-memory-management.md`](23-memory-management.md): plan CPU, VRAM, Arcade
+  RAM, and audio memory lifetimes.
+- [`24-hardware-adpcm-and-psg-dda.md`](24-hardware-adpcm-and-psg-dda.md):
+  prepare and play BIOS ADPCM and timer-driven PSG DDA audio.
+
+## Shared converters and audio modules
+
+See [`../tools/pce/README.md`](../tools/pce/README.md) for the standalone PNG
+converters, ADPCM compressors, BIOS ADPCM player wrapper, dependencies, and
+asset output formats.
 
 ## Porting an existing base
 
