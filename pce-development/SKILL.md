@@ -48,8 +48,8 @@ the current code before repeating their numbers or assumptions.
 - For scratch projects and worked starter patterns, use the self-contained
   [examples folder](examples/README.md). Code there is marked as pseudocode
   whenever it needs adaptation to a project's SDK.
-- For reusable host converters, audio encoders, or the BIOS ADPCM player
-  wrapper, read the [shared PCE tools guide](tools/pce/README.md).
+- For reusable host converters, audio encoders, or the CD hardware and
+  SoftADPCM players, read the [shared PCE tools guide](tools/pce/README.md).
 - For a new project's Makefile, automatic LLVM-MOS SDK setup, or missing BIOS
   path guidance, use the [toolchain setup reference](references/toolchain-setup.md)
   and copy the shared files under [examples/starter](examples/starter/).

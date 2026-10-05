@@ -1,6 +1,6 @@
 # Example 24: hardware ADPCM and timer-driven PSG DDA
 
-**Build contract:** Copy the shared starter files. The host audio tools require ffmpeg. The Build 14 codec requires a compatible decoder ROM supplied by the project owner; this public bundle contains no game ROM or extracted sound samples.
+**Build contract:** Copy the shared starter files. The host audio tools require ffmpeg. The software ADPCM encoder and two-voice player include their lookup tables, so no source ROM is needed. This public bundle contains no game ROM or extracted sound samples.
 
 The PCE CD hardware ADPCM unit and PSG DDA output are different playback paths. Saber Rider uses the CD BIOS ADPCM unit for character voices and the PSG DDA channels for short samples and a looping gallop. CD-DA music is a third path. Keep their storage and ownership rules separate.
 
@@ -14,15 +14,17 @@ The raw stream does not contain a project-specific BIOS divider or CD sector tab
 
 The Saber Rider port permits one hardware ADPCM voice at a time. It applies priorities before stopping/restarting the voice, loads the selected hero's voice bank before playback, and avoids replacing code/data while music or a blocking loader owns the drive.
 
-## Build 14 2-bit codec feeding PSG DDA
+## SoftADPCM 2-bit codec feeding PSG DDA
 
-For the specific Build 14 adaptive decoder, provide a ROM that contains the compatible decoder tables. The ROM is an explicit input and is not downloaded or bundled:
+The bundled converter and player use the Build 14-compatible adaptive decoder tables included in `tools/pce/softadpcm_tables.py` and `softadpcm_tables.c`. The source ROM is not needed to encode audio, build the library, or run it:
 
-    python3 pce-development/tools/pce/adpcm_build14.py effect.wav build/effect.adpcm2 --rate 6991 --rom /path/to/user-supplied-compatible-decoder.pce
+    python3 pce-development/tools/pce/softadpcm.py effect.wav build/effect.softadpcm --rate 6991
 
-This writes a packed 2-bit stream, a signed decoded WAV preview, metadata, and a .dda file of 5-bit PSG DAC values. The .dda values use the Saber Rider conversion from the decoder's signed output to the PSG's 0..31 sample range. Preserve the metadata's sample count; the raw streams have no embedded length.
+This writes a packed 2-bit stream, a signed decoded WAV preview, metadata, and a `.dda` file of 5-bit PSG DAC values. The `.dda` values use the Saber Rider conversion from the decoder's signed output to the PSG's 0..31 sample range. Preserve the metadata's sample count; the raw streams have no embedded length.
 
-Saber Rider expands the packed stream during asset generation, so the timer IRQ does not decode predictors or read adaptation tables. Its IRQ selects PSG channel 0 and/or 1, writes each next DDA value, advances banked pointers/counts, restores MPR6, and stops the timer when both voices finish. Channel 0 is a replaceable one-shot; channel 1 can loop independently. This keeps decoding out of the raster handler and lets impact overlap the gallop.
+The common [SoftADPCM player library](../tools/pce/README.md#softadpcm-runtime-player) preserves the earlier runtime-decoder option: its IRQ decodes each packed code using the bundled tables and writes 5-bit DDA values. It supports two independent voices. Keep its 33-byte state in reserved direct-page RAM, its decoder and tables in fixed mapped memory, and each sample inside one bank visible through MPR6. CD-ROM² projects can use the included BIOS IRQ adapter; HuCard projects attach the RTI handler to their timer vector.
+
+Saber Rider later expanded the packed stream during asset generation, so the timer IRQ did not decode predictors or read adaptation tables. Its predecoded player still advanced banked pointers and counts, restored MPR6, and stopped the timer when both voices finished. The runtime decoder measured 31.24% of total CPU cycles for two voices (37.59% with its IRQ wrapper, excluding BIOS dispatch); predecoded DDA measured 17.30% for the sample service and 24.34% with the wrapper. Those are isolated project/emulator measurements, not console guarantees. The common player README records its memory and IRQ integration contract.
 
 ## Player ownership and timing
 
