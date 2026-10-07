@@ -69,6 +69,27 @@ and `status`. Inspect `tools/list` on the live server because client wrappers
 can vary. The project Make target `trace` is the standalone alternative when
 MCP has not been configured.
 
+For palette debugging, `read_palette` reads VCE PRAM through the `pram` address
+space and reports raw 9-bit words plus their three-bit red, green, and blue
+fields. Palette indices 0-15 are background palettes; 16-31 are sprite
+palettes. Read all 32 palettes by default, or select a range with
+`start_palette` and `palette_count`. Add a `snapshot` label to retain the read
+in the running MCP server, then call `compare_palette` with that label after
+the transition. The comparison lists changed words and counts background and
+sprite changes separately. Snapshots live only until that MCP server exits.
+
+For example, capture the complete palette before a cut-in and compare it after
+the game has returned to the scene:
+
+```json
+{"name":"read_palette","arguments":{"snapshot":"before-cut-in"}}
+{"name":"compare_palette","arguments":{"snapshot":"before-cut-in"}}
+```
+
+Palette reads are state evidence, not visual evidence. Pair them with a
+same-frame screenshot when deciding whether colors appeared correctly, and
+label emulator observations separately from physical-console results.
+
 Coverage is logical-PC coverage and can alias code in different banks mapped at
 the same address. Disassembly uses the current HuC6280 MPR mapping. PNG preserves
 per-scanline PCE width information; Y4M is video-only and scales to the core's

@@ -1,6 +1,7 @@
 """Greedy MSM5205 encoder: 12-bit wrapping predictor, high nibble first.
 
-Hardware semantics checked against Mednafen sound/okiadpcm.h and PCECD_Run.
+Hardware semantics cross-checked against the bundled PCE sound core and CD
+audio routine. Step sizes and index adjustments are fixed chip parameters.
 The step sizes and index adjustments are the chip's fixed coding parameters.
 """
 STEP=[int(16*1.1**i) for i in range(49)]

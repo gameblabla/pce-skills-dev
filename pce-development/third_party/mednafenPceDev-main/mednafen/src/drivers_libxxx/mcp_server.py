@@ -30,6 +30,49 @@ sys.path.insert(0, str(_trace_lib))
 from platformer_trace import BUTTON_BITS, TRACE_WINDOW_BYTES, analyze_platform_trace
 
 
+_PALETTE_SNAPSHOTS = {}
+
+
+def _palette_bytes(native, start_palette, palette_count):
+    if not isinstance(start_palette, int) or isinstance(start_palette, bool) or not 0 <= start_palette <= 31:
+        raise ValueError("start_palette must be an integer from 0 to 31")
+    if not isinstance(palette_count, int) or isinstance(palette_count, bool) or not 1 <= palette_count <= 32:
+        raise ValueError("palette_count must be an integer from 1 to 32")
+    if start_palette + palette_count > 32:
+        raise ValueError("the requested palette range must end at palette 31 or earlier")
+    address = start_palette * 32
+    length = palette_count * 32
+    raw = bytes.fromhex(native.call("asread", "pram", address, length)["hex"])
+    if len(raw) != length:
+        raise RuntimeError(f"VCE PRAM returned {len(raw)} bytes; expected {length}")
+    return raw
+
+
+def _palette_colors(raw, start_palette):
+    palettes = []
+    for p in range(len(raw) // 32):
+        palette_index = start_palette + p
+        colors = []
+        for entry in range(16):
+            offset = p * 32 + entry * 2
+            word = raw[offset] | (raw[offset + 1] << 8)
+            colors.append({
+                "entry": entry,
+                "word": f"0x{word & 0x1FF:03X}",
+                "channels_3bit": {
+                    "red": (word >> 3) & 7,
+                    "green": (word >> 6) & 7,
+                    "blue": word & 7,
+                },
+            })
+        palettes.append({
+            "index": palette_index,
+            "type": "background" if palette_index < 16 else "sprite",
+            "colors": colors,
+        })
+    return palettes
+
+
 class Native:
     def __init__(self, binary, rom, base_dir, bios=None, initial_frames=2):
         cmd = [binary, "--rom", rom, "--base-dir", base_dir, "--frames", str(initial_frames), "--rpc"]
@@ -128,6 +171,29 @@ def tool_defs():
                     "logical": {"type": "boolean", "default": True},
                 },
                 "required": ["address", "length"],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "read_palette",
+            "description": "Read PCE VCE palette RAM as 9-bit color words. Palettes 0-15 are background palettes and 16-31 are sprite palettes. Optionally save a named snapshot for a later comparison.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "start_palette": {"type": "integer", "minimum": 0, "maximum": 31, "default": 0},
+                    "palette_count": {"type": "integer", "minimum": 1, "maximum": 32, "default": 32},
+                    "snapshot": {"type": "string", "minLength": 1, "maxLength": 80},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "compare_palette",
+            "description": "Compare current VCE palette RAM with a named snapshot saved by read_palette. Reports changed color words grouped by background and sprite palette.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"snapshot": {"type": "string", "minLength": 1, "maxLength": 80}},
+                "required": ["snapshot"],
                 "additionalProperties": False,
             },
         },
@@ -234,6 +300,59 @@ def handle_tool(native, name, args, output_dir):
     if name == "read_memory":
         d = native.call("memread", as_native_int(args["address"]), int(args["length"]), 1 if args.get("logical", True) else 0)
         return [_text(d["hex"])]
+    if name == "read_palette":
+        start = args.get("start_palette", 0)
+        count = args.get("palette_count", 32)
+        raw = _palette_bytes(native, start, count)
+        label = args.get("snapshot")
+        if label is not None:
+            if not isinstance(label, str) or not label.strip() or len(label) > 80:
+                raise ValueError("snapshot must be a non-empty label of at most 80 characters")
+            _PALETTE_SNAPSHOTS[label] = (start, count, raw)
+        report = {
+            "source": "VCE PRAM",
+            "encoding": "little-endian 9-bit PCE color word; bits 0-2 blue, 3-5 red, 6-8 green",
+            "start_palette": start,
+            "palette_count": count,
+            "snapshot": label,
+            "palettes": _palette_colors(raw, start),
+        }
+        return [_text(json.dumps(report, separators=(",", ":")))]
+    if name == "compare_palette":
+        label = args.get("snapshot")
+        if label not in _PALETTE_SNAPSHOTS:
+            raise ValueError(f"unknown palette snapshot: {label!r}")
+        start, count, before = _PALETTE_SNAPSHOTS[label]
+        after = _palette_bytes(native, start, count)
+        changes = []
+        by_type = {"background": 0, "sprite": 0}
+        for palette_offset in range(count):
+            palette_index = start + palette_offset
+            palette_type = "background" if palette_index < 16 else "sprite"
+            for entry in range(16):
+                offset = palette_offset * 32 + entry * 2
+                old = (before[offset] | (before[offset + 1] << 8)) & 0x1FF
+                new = (after[offset] | (after[offset + 1] << 8)) & 0x1FF
+                if old != new:
+                    by_type[palette_type] += 1
+                    changes.append({
+                        "palette": palette_index,
+                        "type": palette_type,
+                        "entry": entry,
+                        "before": f"0x{old:03X}",
+                        "after": f"0x{new:03X}",
+                    })
+        report = {
+            "source": "VCE PRAM",
+            "snapshot": label,
+            "start_palette": start,
+            "palette_count": count,
+            "changed_colors": len(changes),
+            "changed_background_colors": by_type["background"],
+            "changed_sprite_colors": by_type["sprite"],
+            "changes": changes,
+        }
+        return [_text(json.dumps(report, separators=(",", ":")))]
     if name == "take_screenshot":
         path = args.get("path") or str(pathlib.Path(output_dir) / "mcp-screenshot.png")
         pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
