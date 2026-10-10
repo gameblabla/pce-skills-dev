@@ -98,6 +98,11 @@ def guidance(kind, request=""):
         lines+=['This is an instrumentation-only G2TR probe; it does NOT draw a playable game.',
                 'Run make trace with a headless emulator supporting run/input/memread; check source and graphics separately.',
                 'G2TR state[0..3] must be real game values; for modern platformer projects use compact P4TR with independent geometry.']
+    if kind=='raycaster_visual':
+        lines+=['Paired-BAT choices: make (128x128 progressive) or make atomic-rom (128x64 two-page VBlank flips).',
+                'To prove no mid-page changes run make atomic-bitmap-test; for sustained screenshots and swap counts run make atomic-stress.',
+                'Compare the modes with make presentation-compare; half-height atomic swaps are NOT full-height redraws. Never claim 256 native pixel colours.',
+                'Use the offline workflows/paired_bat_plan.py address proof. PCEdev references explain why full-resolution buffering costs more VRAM.']
     if kind=='visual_novel':
         lines+=['Edit assets/background.png and transparent 16x16 mouth overlays; make assets regenerates C and memory report.',
                 'Use make assets-multi for high-colour 16-background-palette mode (Pillow+numpy required).',

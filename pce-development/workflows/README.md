@@ -142,3 +142,13 @@ lookup for frame-critical drawing.
 software multiply/divide/modulo and libm symbols (as opposed to only the six
 frame-math lessons). It checks the exact ROM count so a missing binary cannot
 be mistaken for a clean audit.
+
+
+### Paired-BAT VRAM layout and atomic presentation
+
+Run `python3 paired_bat_plan.py --mode full` (128x128 progressive) or
+`python3 paired_bat_plan.py --mode atomic` (128x64 double-buffered). The
+checker enumerates all 8,192 BAT addresses; it rejects overlaps and illegal
+batch sizes. For actual VBlank front-page swaps, see
+`examples/34-rendered-raycaster/Makefile`: `make atomic-test`. This is not
+an automatic upgrade: halving vertical detail is an intentional user choice.

@@ -3,6 +3,7 @@ LLVM_MOS_CC ?= mos-pce-clang
 include tools/llvm-mos-sdk.mk
 PCE_FLAGS ?= -std=gnu11 -Os -Wall -Wextra -Werror -mlto-zp=0
 PCE_FLAGS += -DBAT_BITMAP_NATIVE_IRQ
+ATOMIC_FLAGS := -DBAT_BITMAP_DOUBLE_BUFFER=1 -DRAY_DOUBLE_BUFFER=1
 OUT := build/34-rendered-raycaster.pce
 .PHONY: interaction-test interaction-replay all run trace visual-test bitmap-test clean
 all: tables-check $(OUT)
@@ -44,3 +45,22 @@ bitmap-throughput: $(OUT) $(BASELINE_ROM)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(BASELINE_ROM) --elf $(BASELINE_ROM).elf --output build/bitmap-baseline.json
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(OUT) --elf $(OUT).elf --output build/bitmap-optimized.json
 	python3 tools/bitmap_compare.py --baseline build/bitmap-baseline.json --optimized build/bitmap-optimized.json --output build/bitmap-comparison.json
+
+# PCEdev-style two half-pages: atomic VBlank BXR flip at 128x64 logical
+# resolution, preserving 512x224 physical timing. Quality vs presentation
+# is a CHOICE; the default remains full-detail 128x128 progressive BAT.
+.PHONY: atomic-rom atomic-bitmap-test atomic-stress atomic-test
+ATOMIC_ROM := build/34-rendered-raycaster-atomic-64.pce
+$(ATOMIC_ROM): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h tools/genre_trace.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) $(ATOMIC_FLAGS) -Itools src/main.c src/bat_bitmap_irq.S -o $@ -Wl,-Map,$@.map
+atomic-rom: $(ATOMIC_ROM)
+atomic-bitmap-test: $(ATOMIC_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/atomic_present.py --rom $(ATOMIC_ROM) --elf $(ATOMIC_ROM).elf --output build/atomic-evidence.json --frames 160
+atomic-stress: $(ATOMIC_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(ATOMIC_ROM) --elf $(ATOMIC_ROM).elf --mode atomic --output build/atomic-stress.json
+atomic-test: atomic-bitmap-test atomic-stress
+
+.PHONY: presentation-compare
+presentation-compare: bitmap-stress atomic-stress
+	python3 tools/compare_presentation.py --full build/bitmap-stress.json --atomic build/atomic-stress.json --output build/presentation-comparison.json

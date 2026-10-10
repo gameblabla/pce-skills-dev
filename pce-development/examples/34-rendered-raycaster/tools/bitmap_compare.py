@@ -10,6 +10,8 @@ def compare(before,after):
         raise ValueError('both bitmap runs must pass screenshots and progress checks')
     if before.get('format')!='paired-bat-completed-pass-v1' or after.get('format')!=before['format']:
         raise ValueError('invalid bitmap report format')
+    if before.get('logical_pixels')!=after.get('logical_pixels') or not before.get('logical_pixels'):
+        raise ValueError('bitmap geometries differ or are missing; redraw counts are not equivalent pixel work')
     bs,ns=before['segments'],after['segments']
     if len(bs)!=len(ns) or any((a['segment'],a['buttons'],a['emulator_frames']) !=
                                (b['segment'],b['buttons'],b['emulator_frames'])

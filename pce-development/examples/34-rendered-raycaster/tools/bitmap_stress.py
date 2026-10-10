@@ -70,9 +70,13 @@ def validate(samples, min_completed=1):
             'emulator_frames':sum(step[0] for step in STEPS)}
 
 
-def run(rom,elf,out):
+def run(rom,elf,out,mode="full"):
     out=Path(out).resolve();out.parent.mkdir(parents=True,exist_ok=True)
     rom=Path(rom).resolve();elf=Path(elf).resolve()
+    if mode not in ('full','atomic'):
+        raise ValueError('unknown bitmap geometry')
+    if mode=='atomic':
+        platformer_trace.resolve_trace_address(elf,'bat_display_page')
     redraw_addr=platformer_trace.resolve_trace_address(elf,'ray_redraws')
     trace_addr=platformer_trace.resolve_trace_address(elf,'pce_genre_trace')
     exe=platformer_trace._find_binary(str(rom))
@@ -99,11 +103,15 @@ def run(rom,elf,out):
     counts=validate(captures)
     changed=check_pngs(captures[0]['screenshot'],captures[2]['screenshot'],
                        {'min_colors_each':6,'min_changed_pixels':7000})
+    rows=64 if mode=='atomic' else 128
+    counts['logical_pixels_per_completed_redraw']=128*rows
+    counts['total_completed_logical_pixels']=128*rows*counts['completed_redraws']
     report={'result':'passed','format':'paired-bat-completed-pass-v1',
+            'render_mode':mode,'logical_pixels':[128,rows],
             'rom':str(rom),'segments':captures,'totals':counts,
             'rotation_pixel_evidence':changed,
             'limitations':['HuC6280 emulation, not physical hardware',
-                           'Finished BAT passes, not atomic full-screen swaps',
+                           'Mode '+mode+': '+('VBlank page swaps, half-height logical image' if mode=='atomic' else 'progressive BAT writes, no atomic full-screen swaps'),
                            'Screenshots validate colours/textures, not all pixels']}
     out.write_text(json.dumps(report,indent=2)+'\n')
     return report
@@ -114,9 +122,10 @@ def main():
     p.add_argument('--rom',required=True)
     p.add_argument('--elf',required=True)
     p.add_argument('--output',required=True)
+    p.add_argument('--mode',choices=('full','atomic'),default='full')
     args=p.parse_args()
     try:
-        result=run(args.rom,args.elf,args.output)
+        result=run(args.rom,args.elf,args.output,args.mode)
         print(json.dumps({'result':result['result'],**result['totals'],
                           'changed_pixels':result['rotation_pixel_evidence']['changed_pixels']}))
     except (ValueError,RuntimeError,OSError) as exc:p.error(str(exc))

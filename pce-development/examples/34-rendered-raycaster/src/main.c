@@ -1,5 +1,6 @@
 /* Wolf3D-style 2.5D raycaster rendered through PCEdev's 512x224
- * paired-BAT pseudo-bitmap: 128x128 logical pixels, two 4-bit pixels per BAT
+ * paired-BAT pseudo-bitmap: default 128x128 logical pixels (optional
+ * 128x64 atomic double-page mode), two 4-bit pixels per BAT
  * word, 256 permanent patterns. NO per-frame planar tile uploads.
  * Rays, wall geometry, textures, ceiling and floor are all drawn as pixels.
  * LEFT/RIGHT turn, UP/DOWN walk, with independent solid-cell collision.
@@ -9,6 +10,17 @@
 #include "genre_trace.h"
 #include "ray_tables.h"
 #include "bat_bitmap.h"
+#ifndef RAY_DOUBLE_BUFFER
+#define RAY_DOUBLE_BUFFER 0
+#endif
+#if RAY_DOUBLE_BUFFER
+#ifndef BAT_BITMAP_DOUBLE_BUFFER
+#error "RAY_DOUBLE_BUFFER requires BAT_BITMAP_DOUBLE_BUFFER in the IRQ"
+#endif
+#define RAY_LOGICAL_ROWS 64u
+#else
+#define RAY_LOGICAL_ROWS 128u
+#endif
 volatile G2Trace pce_genre_trace[2];
 
 static const uint8_t map[8][8]={
@@ -58,6 +70,9 @@ static uint16_t scan_words[RAY_SLICE_ROWS][64];
 volatile uint16_t ray_redraws;
 static int16_t render_world_x,render_world_y;
 static uint8_t draw_row;
+#if RAY_DOUBLE_BUFFER
+static uint8_t draw_page;
+#endif
 
 static uint8_t material_at(int16_t x,int16_t y) {
     int16_t tx=x>>8,ty=y>>8;
@@ -161,6 +176,10 @@ static void render_slice(void) {
     }
     for(uint8_t i=0;i<RAY_SLICE_ROWS;++i) {
         uint8_t y=(uint8_t)(draw_row+i);
+#if RAY_DOUBLE_BUFFER
+        /* Vertical 2:1 downsampling buys the second BAT page. */
+        y=(uint8_t)(y<<1);
+#endif
         for(uint8_t pair=0;pair<64u;++pair)
             scan_words[i][pair]=(uint16_t)(0xf200u|bitmap_pair(pair,y));
     }
@@ -171,7 +190,11 @@ static void render_slice(void) {
     pce_cpu_irq_disable();
     for(uint8_t i=0;i<RAY_SLICE_ROWS;++i) {
         uint8_t y=(uint8_t)(draw_row+i);
+#if RAY_DOUBLE_BUFFER
+        uint16_t address=((uint16_t)y<<7)+(draw_page?64u:0u);
+#else
         uint16_t address=((uint16_t)(y&63u)<<7)+((y&64u)?64u:0u);
+#endif
         pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,address);
         *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
 
@@ -182,8 +205,18 @@ static void render_slice(void) {
 #endif
     }
     pce_cpu_irq_enable();
-    draw_row=(draw_row+RAY_SLICE_ROWS)&127u;
-    if(draw_row==0u)++ray_redraws;
+    draw_row=(draw_row+RAY_SLICE_ROWS)&(RAY_LOGICAL_ROWS-1u);
+    if(draw_row==0u) {
+#if RAY_DOUBLE_BUFFER
+        /* Stop until the IRQ has presented this entire back page at VBlank.
+         * Never write a partially rendered image to the visible half. */
+        bat_ready_page=draw_page;
+        while(bat_ready_page!=0xffu){}
+        draw_page^=1u;
+#else
+        ++ray_redraws;
+#endif
+    }
 }
 __attribute__((noinline))
 static void publish(uint32_t frame,uint16_t buttons,int16_t moved_x,int16_t moved_y) {
@@ -207,6 +240,9 @@ int main(void) {
     world_x=3*256+128;world_y=3*256+128;angle=0;
     bat_bitmap_display();
     draw_row=0;ray_redraws=0;
+#if RAY_DOUBLE_BUFFER
+    draw_page=1u;
+#endif
     uint32_t frame=0;
     for(;;) {
         uint8_t before=bat_frames;while(before==bat_frames){}

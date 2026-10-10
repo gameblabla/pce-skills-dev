@@ -77,3 +77,46 @@ stalled game loops and incomplete BAT passes, and compares the RAM counter
 Results and emulator PNGs are under `build/bitmap-{baseline,optimized}*`.
 `tools/bitmap_compare.py` refuses different controller scripts and incomplete
 visual evidence. Neither a passing compile nor G2TR-only state is accepted.
+
+## Alternate atomic presentation: trade vertical detail for two VRAM BAT pages
+
+**Default (`make`)** remains the original **128x128 logical pixels**, which
+fills all 8,192 BAT words: no second full-resolution BAT page exists. This is
+why the default displays gradual row writes, even with eight-row TIA updates.
+
+To **eliminate partial-page updates from the displayed image**, build a
+separate **128x64 logical pixel** variant with `make atomic-rom`. The physical
+VDC mode is still 512x224, but each logical row is vertically magnified
+3–4 scanlines. It divides the 128x64 BAT into two disjoint 64x64-word
+half-pages: display the current half with BXR=0 or BXR=512, render all 64 rows
+into the other half with eight bounded TIA slices, then flip BXR **only in the
+VBlank IRQ** after the last row has been uploaded. The IRQ owns the page
+handoff; the game never writes the visible page.
+
+`make atomic-bitmap-test` checks actual emulator screenshots and ROM-owned
+swap/page counters at 4-frame intervals, including a bounded screenshot
+capture latency. `make atomic-stress` performs the complete 1,080-frame
+input/visual test on this variant; `make atomic-test` runs both. This proves
+no visible changes *between complete page swaps* under the tested emulator;
+it does not certify physical hardware. Default raycaster tests still use
+128x128, not the lower-resolution mode.
+
+**Do not compare the number of 128x64 atomic swaps directly with the number
+of 128x128 full-resolution redraws as if equal quality/pixel work**: the
+atomic mode processes half as many logical pixels. The original articles
+also discuss VRAM-to-VRAM DMA and optional multi-palette dithering, but those
+are architectural observations, not implemented atomic 128x128 buffering
+or native 256-colour graphics here.
+
+See `../../workflows/paired_bat_plan.py`, which mechanically proves both
+BAT mappings and emits TIA transfer dimensions:
+
+```sh
+python3 ../../workflows/paired_bat_plan.py --mode full
+python3 ../../workflows/paired_bat_plan.py --mode atomic
+PCE_HEADLESS=/path/to/rpc-capable/pce-headless make atomic-test
+```
+
+Historic technical references:
+- https://pcedev.wordpress.com/2015/12/10/pce-bitmap-mode/
+- https://pcedev.wordpress.com/2015/11/25/wolfenstein-3d-on-the-pc-engine/

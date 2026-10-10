@@ -239,3 +239,17 @@ single-byte `.mlb` symbol. `cycle_profile.py` uses only the explicit
 `.pce.map` section length to label that routine; the emulator still charges
 some TIA transfer time to synthetic non-ROM PC values. Budget those as
 **unmapped ticks** rather than inventing a performance win or hiding them.
+
+
+### Paired-BAT bitmap modes (PCEdev's Wolf3D articles)
+
+For any raycaster/Mode 7 request, distinguish physical 512x224 display from
+128x128 or 128x64 *logical* pseudo-bitmap pixels. A full 128x128 image fills
+all 8192 BAT words and cannot be full-resolution double-buffered inside that
+BAT. The `34-rendered-raycaster` default is full-detail progressive; its
+`make atomic-rom` variant uses two 4096-word BAT halves at 128x64 and swaps
+only at VBlank. Do not silently substitute the atomic mode as a 128x128
+speedup; verify with `make atomic-test`, and state the loss of vertical detail.
+Use `pce-development/workflows/paired_bat_plan.py` for layout verification.
+PCEdev's speculative palette/dither expansions are NOT working implemented
+32- or 256-colour bitmap modes in this toolkit.

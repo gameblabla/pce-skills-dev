@@ -18,6 +18,11 @@
 #define BAT_BITMAP_TILE_BASE (BAT_BITMAP_TILE_WORD / 16u)
 
 volatile uint8_t bat_line, bat_source_y, bat_phase, bat_frames;
+#ifdef BAT_BITMAP_DOUBLE_BUFFER
+/* Two independent 64x64 BAT half-pages, selected by BXR during VBlank.
+ * $ff means no page is ready; the raster IRQ is the ONLY page presenter. */
+volatile uint8_t bat_display_page, bat_ready_page;
+#endif
 
 /* Each tile is a pair of horizontally solid four-pixel colour fields. */
 static void bat_bitmap_patterns(void) {
@@ -50,6 +55,10 @@ static void bat_bitmap_setup(const uint16_t colors[16]) {
      * Match the backdrop to this example's palette entry zero. */
     pce_vce_set_color(0, colors[0]);
     for (uint8_t i=0; i<16; ++i) pce_vce_set_color(240u+i, colors[i]);
+#ifdef BAT_BITMAP_DOUBLE_BUFFER
+    bat_display_page=0u;
+    bat_ready_page=0xffu;
+#endif
     bat_bitmap_patterns();
     /* Entire pseudo-bitmap BAT starts at VRAM $0000; use palette 15. */
     pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,0);

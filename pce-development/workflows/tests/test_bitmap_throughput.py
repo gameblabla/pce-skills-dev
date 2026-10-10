@@ -22,6 +22,7 @@ class BitmapThroughputTests(unittest.TestCase):
     def report(self,passes=10):
         samples=self.samples(passes)
         return {'result':'passed','format':'paired-bat-completed-pass-v1',
+                'render_mode':'full','logical_pixels':[128,128],
                 'segments':samples,'totals':s.validate(samples)}
 
     def test_rejects_bogus_redraws_or_stale_screenshots(self):
@@ -42,6 +43,12 @@ class BitmapThroughputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'scenarios differ'):c.compare(base,fast)
         fast=self.report(3);fast['result']='failed'
         with self.assertRaisesRegex(ValueError,'must pass'):c.compare(base,fast)
+
+    def test_mismatched_atomic_vs_full_redraws_are_not_comparable(self):
+        before=self.report(2);after=self.report(3)
+        after['render_mode']='atomic';after['logical_pixels']=[128,64]
+        with self.assertRaisesRegex(ValueError,'geometries differ'):
+            c.compare(before,after)
 
     def test_screen_checker_requires_real_wall_and_floor_without_forcing_bricks(self):
         with TemporaryDirectory() as td:
