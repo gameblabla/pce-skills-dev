@@ -49,6 +49,81 @@ def choose(buffer):
     return max(records, key=lambda r:(r['frame'], r['seq']))
 
 
+EVENTS = {
+    'shmup_enemy_hit', 'shmup_player_damage', 'ray_wall_blocked',
+    'racing_checkpoint', 'racing_lap', 'racing_traffic_hit'
+}
+
+
+def interaction_audit(samples, scenario):
+    """Verify *observable transitions*, not just changing telemetry numbers.
+
+    Every event is backed by adjacent sampled ticks (max 3-frame gap). Offline map validation
+    additionally guards against crossing a solid raycaster tile.
+    """
+    issues = []
+    observed = {name: [] for name in EVENTS}
+    required = scenario.get('require_events', [])
+    if not isinstance(required, list) or len(required) != len(set(required)) or any(
+            name not in EVENTS for name in required):
+        raise ValueError('require_events must be unique names from: ' + ', '.join(sorted(EVENTS)))
+    world = scenario.get('world_map')
+    if world is not None:
+        if not isinstance(world,list) or not world or len(world)>64 or not world[0] or any(
+                not isinstance(row,str) or len(row)!=len(world[0]) or len(row)>64 or
+                any(ch not in '.#' for ch in row) for row in world):
+            raise ValueError('world_map must be a rectangular array of . and # rows (<=64x64)')
+        for s in samples:
+            if s['genre'] != 'raycaster':continue
+            ix,iy=int(s['x']//1),int(s['y']//1)
+            if not (0<=iy<len(world) and 0<=ix<len(world[0])) or world[iy][ix]=='#':
+                issues.append({'frame':s['frame'],'code':'entered_solid_wall',
+                               'detail':f'raycaster position ({s["x"]},{s["y"]}) lies in wall/outside map'})
+    last_checkpoint_frame = None
+    for p,s in zip(samples,samples[1:]):
+        if not 0 < s['frame']-p['frame'] <= 3 or s['genre']!=p['genre'] or s['scene']!=p['scene']:
+            continue
+        colliding=bool(s['flags'] & 4)
+        transition=bool(s['flags'] & 8)
+        v,w=p['state'],s['state']
+        if s['genre']=='shmup':
+            if w[1]<v[1]:
+                if colliding and w[2]>0:
+                    observed['shmup_enemy_hit'].append(s['frame'])
+                else:
+                    issues.append({'frame':s['frame'],'code':'enemy_disappeared_without_hit',
+                                   'detail':'enemy count fell without recorded collision and player shot'})
+            if w[3]>v[3]:
+                if colliding:observed['shmup_player_damage'].append(s['frame'])
+                else:issues.append({'frame':s['frame'],'code':'damage_without_collision',
+                                    'detail':'damage increased without collision flag'})
+        if s['genre']=='raycaster' and colliding:
+            if s['buttons'] & ((1<<4)|(1<<6)):
+                observed['ray_wall_blocked'].append(s['frame'])
+        if s['genre']=='racing':
+            old_checkpoint=v[1]//(64*256)
+            new_checkpoint=w[1]//(64*256)
+            if new_checkpoint>old_checkpoint:
+                last_checkpoint_frame=s['frame']
+                if transition:observed['racing_checkpoint'].append(s['frame'])
+                else:issues.append({'frame':s['frame'],'code':'checkpoint_not_published',
+                                    'detail':'crossed 64-unit checkpoint without transition flag'})
+            elif transition and (last_checkpoint_frame is None or
+                                 s['frame']-last_checkpoint_frame>3):
+                issues.append({'frame':s['frame'],'code':'spurious_checkpoint',
+                               'detail':'transition flagged without a checkpoint in the last 3 game ticks'})
+            if w[1]//(256*256)>v[1]//(256*256) and transition:
+                observed['racing_lap'].append(s['frame'])
+            if colliding:
+                observed['racing_traffic_hit'].append(s['frame'])
+    for name in required:
+        if not observed[name]:
+            issues.append({'frame':None,'code':'required_event_missing',
+                           'detail':name+' was not observed in adjacent captured game frames'})
+    return issues, {k: {'count':len(v),'first_frame':v[0] if v else None}
+                    for k,v in sorted(observed.items()) if v or k in required}
+
+
 def validate(samples, scenario=None):
     """Verify genre invariants; issues are evidence of suspicious authored telemetry."""
     issues=[]
@@ -126,8 +201,12 @@ def validate(samples, scenario=None):
                 if len(vals)<2:
                     issues.append({'frame':None,'code':'state_not_changing',
                                    'detail':f'{name} state[{index}] stayed constant or was not sampled'})
+    events={}
+    if scenario:
+        extra,events=interaction_audit(samples,scenario)
+        issues.extend(extra)
     return {'trace_format':'G2TR v2','samples':len(samples),'genres':sorted(genres),
-            'issues':issues,'issue_counts':dict(Counter(i['code'] for i in issues)),
+            'interaction_evidence':events,'issues':issues,'issue_counts':dict(Counter(i['code'] for i in issues)),
             'note':'game-authored RAM telemetry, not independent evidence of rendered pixels, audio or actual hardware'}
 
 
@@ -138,7 +217,7 @@ def encode_for_test(genre,frame=1,scene=1,flags=1,buttons=0,sequence=2,
     return FORMAT.pack(b'G2TR',2,gid,scene,flags,frame,buttons,sequence,*q,*state)
 
 
-def run_emulator(rom,address,scenario,bios=None,base_dir=None,initial_frames=2):
+def run_emulator(rom,address,scenario,bios=None,base_dir=None,initial_frames=2,samples_output=None):
     import platformer_trace as old
     if address<0x2000 or address+128>0x4000:
         raise ValueError('128-byte window must fit within $2000..$3FFF')
@@ -170,6 +249,10 @@ def run_emulator(rom,address,scenario,bios=None,base_dir=None,initial_frames=2):
                     raise RuntimeError('G2TR frame did not advance within sixteen emulator frames; inspect publication, IRQ and heavy rendering')
     finally:
         client.close()
+    if samples_output:
+        target=pathlib.Path(samples_output)
+        target.parent.mkdir(parents=True,exist_ok=True)
+        target.write_text(json.dumps(samples,indent=2)+'\n')
     return validate(samples,scenario)
 
 
@@ -182,6 +265,7 @@ def main():
     p.add_argument('--address',help='main-RAM address, e.g. 0x2800')
     p.add_argument('--scenario',type=pathlib.Path)
     p.add_argument('--output',type=pathlib.Path)
+    p.add_argument('--samples-output',type=pathlib.Path,help='write decoded per-tick frames for offline replay/auditing')
     args=p.parse_args()
     try:
         spec=json.loads(args.scenario.read_text()) if args.scenario else None
@@ -191,7 +275,7 @@ def main():
             from platformer_trace import resolve_trace_address
             addr=int(args.address,0) if args.address else resolve_trace_address(args.elf or args.rom+'.elf',args.symbol)
             if addr>0xFFFF and addr>>16==0xF8: addr &= 0xFFFF
-            result=run_emulator(args.rom,addr,spec)
+            result=run_emulator(args.rom,addr,spec,samples_output=args.samples_output)
         else:
             if not args.trace:
                 raise ValueError('provide --trace JSON or --rom')

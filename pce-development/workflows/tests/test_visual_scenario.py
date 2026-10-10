@@ -32,4 +32,12 @@ class VisualAcceptanceTests(unittest.TestCase):
                                                             'min_region_changed_pixels':1})
             with self.assertRaisesRegex(ValueError,'bounds'):
                 visual_scenario.check_pngs(p/'a.png',p/'b.png',{'changed_region':[200,100,300,200]})
+    def test_state_change_must_be_backed_by_telemetry(self):
+        first=[2,3,0,0];last=[1,2,1,1]
+        result=visual_scenario.check_state_changes(first,last,{'1':'decrease','3':'increase'})
+        self.assertEqual(result['1']['after'],2)
+        with self.assertRaisesRegex(ValueError,'did not decrease'):
+            visual_scenario.check_state_changes(first,last,{'3':'decrease'})
+        with self.assertRaisesRegex(ValueError,'keys must'):
+            visual_scenario.check_state_changes(first,last,{'5':'decrease'})
 if __name__=='__main__':unittest.main()

@@ -12,3 +12,17 @@ from 256x224 and 64x16 PNG files (`make assets`).
 
 G2TR values are authored by the game and are **not** proof of pixels: use the
 independent screenshot test too. This is a tiny demonstrator, not a full game.
+
+## Game-rule acceptance
+
+Shooting a live enemy destroys it and removes its SAT entry; one deterministic hostile bullet can damage the player. Trace counters and collision flags must prove both events.
+
+Run `make interaction-test` for an input-driven native game scenario and
+`make interaction-replay` to revalidate the saved G2TR frames offline.
+Both targets are intentionally separate from the screenshot `make visual-test`.
+The rules and expected events are in `tools/interaction-scenario.json`.
+
+`make combat-visual-test` adds a two-capture test of enemy disappearance,
+player damage and shot counts. A held Fire step deliberately does not capture
+an intermediate image: the RPC emulator can process zero game ticks in a
+single host frame, and gameplay input must be sampled by the ROM first.

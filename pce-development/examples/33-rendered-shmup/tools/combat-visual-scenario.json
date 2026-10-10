@@ -1,0 +1,36 @@
+{
+  "genre": "shmup",
+  "steps": [
+    {
+      "frames": 10,
+      "buttons": []
+    },
+    {
+      "frames": 6,
+      "buttons": [
+        "i"
+      ],
+      "capture": false
+    },
+    {
+      "frames": 68,
+      "buttons": []
+    }
+  ],
+  "expect": {
+    "min_colors": 6,
+    "min_changed_pixels": 50,
+    "changed_region": [
+      115,
+      78,
+      167,
+      134
+    ],
+    "min_region_changed_pixels": 25,
+    "state_changes": {
+      "1": "decrease",
+      "2": "increase",
+      "3": "increase"
+    }
+  }
+}

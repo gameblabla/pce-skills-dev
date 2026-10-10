@@ -39,6 +39,24 @@ def check_pngs(before, after, require):
                 'bounding_box':list(diff.getbbox() or ())}
 
 
+def check_state_changes(first,last,expected):
+    """Check changes in captured G2TR state alongside independent PNG pixels."""
+    if not isinstance(expected,dict):raise ValueError('state_changes must be an object')
+    result={}
+    for key,kind in expected.items():
+        if not isinstance(key,str) or key not in ('0','1','2','3') or kind not in (
+            'increase','decrease','change','same'):
+            raise ValueError('state_changes keys must be 0..3 and values increase/decrease/change/same')
+        index=int(key)
+        a,b=first[index],last[index]
+        ok=(kind=='increase' and b>a or kind=='decrease' and b<a or
+            kind=='change' and b!=a or kind=='same' and b==a)
+        if not ok:
+            raise ValueError(f'G2TR state[{index}] did not {kind}: {a} -> {b}')
+        result[key]={'before':a,'after':b,'expected':kind}
+    return result
+
+
 def run(rom, scenario, output, elf=None):
     scenario=json.loads(Path(scenario).read_text())
     steps=scenario.get('steps')
@@ -51,6 +69,11 @@ def run(rom, scenario, output, elf=None):
             raise ValueError('invalid screenshot scenario steps')
     if sum(step['frames'] for step in steps)>1200:raise ValueError('scenario too long')
     out=Path(output).resolve();out.parent.mkdir(parents=True,exist_ok=True)
+    # Remove precisely this scenario's former captures, including steps that
+    # now use capture=false. Never accept stale PNGs as fresh evidence.
+    for index in range(len(steps)):
+        previous=out.parent/(out.stem+f'-{index}.png')
+        if previous.exists():previous.unlink()
     addr=platformer_trace.resolve_trace_address(elf or str(rom)+'.elf','pce_genre_trace')
     if addr>0xffff and addr>>16==0xF8:addr &=0xffff
     exe=platformer_trace._find_binary(str(rom))
@@ -81,7 +104,9 @@ def run(rom, scenario, output, elf=None):
     dx=captures[-1]['screen_x']-captures[0]['screen_x']
     if expect_dx=='positive' and dx<4:raise ValueError(f'player did not move right in trace: dx={dx}')
     if expect_dx=='negative' and dx>-4:raise ValueError(f'player did not move left in trace: dx={dx}')
+    state_proof=check_state_changes(captures[0]['state'],captures[-1]['state'],scenario.get('expect',{}).get('state_changes',{}))
     result={'result':'passed','genre':expected_genre,'screenshots':captures,'pixel_evidence':proof,
+            'state_evidence':state_proof,
             'trace_screen_dx':dx,'limits':'emulator pixels + game-authored G2TR; not physical-console proof'}
     out.write_text(json.dumps(result,indent=2)+'\n');return result
 

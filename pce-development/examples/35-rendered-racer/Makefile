@@ -4,7 +4,7 @@ include tools/llvm-mos-sdk.mk
 PCE_FLAGS ?= -std=gnu11 -Os -Wall -Wextra -Werror -mlto-zp=0
 OUT := build/35-rendered-racer.pce
 GEN := src/scene_assets.c src/scene_assets.h src/scene_manifest.json
-.PHONY: all assets assets-check run trace visual-test clean
+.PHONY: interaction-test interaction-replay all assets assets-check run trace visual-test clean
 all: $(OUT)
 assets: $(GEN)
 $(GEN) &: assets/background.png assets/sprites.png tools/scene_pack.py
@@ -22,3 +22,9 @@ visual-test: $(OUT)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/visual_scenario.py --rom "$(OUT)" --output build/visual-evidence.json --scenario tools/visual-scenario.json
 clean:
 	rm -rf build
+
+# Deterministic collision/checkpoint acceptance; stores decoded frame evidence.
+interaction-test: $(OUT)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/genre_trace.py --rom "$(OUT)" --elf "$(OUT).elf" --scenario tools/interaction-scenario.json --output build/interaction-report.json --samples-output build/interaction-frames.json
+interaction-replay:
+	python3 tools/genre_trace.py --trace build/interaction-frames.json --scenario tools/interaction-scenario.json --output build/interaction-replay.json

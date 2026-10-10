@@ -5,7 +5,7 @@ TOOL := $(ROOT)/workflows/offline.py
 EX := $(ROOT)/examples
 .PHONY: help doctor route project-check micro-lint micro-build games-build game-run hybrid-test trace-test test
 help:
-	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile standalone game and rendered genre projects' '  make agent-check  - reject hallucinated SDK symbols and large inline assets' '  make agent-assets - validate tilemap generator + level JSON' '  make agent-build  - compile generated-map example' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make genre-check  - offline G2TR schemas + visual-novel asset audits' '  make genre-build  - build G2TR probes + visual-novel example' '  make genre-test   - trace genres, rendered scenes and VN mouth in emulator' '  make visual-games-build - build actual shmup/raycaster/racing scenes' '  make visual-games-test - scripted input + screenshot evidence for 3 scenes' '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
+	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile standalone game and rendered genre projects' '  make agent-check  - reject hallucinated SDK symbols and large inline assets' '  make agent-assets - validate tilemap generator + level JSON' '  make agent-build  - compile generated-map example' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make genre-check  - offline G2TR schemas + visual-novel asset audits' '  make genre-build  - build G2TR probes + visual-novel example' '  make genre-test   - trace genres, rendered scenes and VN mouth in emulator' '  make visual-games-build - build actual shmup/raycaster/racing scenes' '  make visual-games-test - scripted input + screenshot evidence for 3 scenes' '  make interaction-test - exercise projectile hits, wall blocking and racing laps' '  make interaction-replay - offline recheck of captured per-tick G2TR evidence' '  make sat-check - offline VDC sprite admission limits / priority'  '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
 doctor:
 	$(PYTHON) $(TOOL) doctor
 project-check:
@@ -60,7 +60,7 @@ genre-check:
 genre-build:
 	$(MAKE) -C $(EX)/29-visual-novel
 	@for project in $(GENRE_PROBES); do $(MAKE) -C $(EX)/$$project || exit 1; done
-genre-test: genre-build visual-games-test
+genre-test: genre-build visual-games-test interaction-test
 	@for project in $(GENRE_PROBES); do $(MAKE) -C $(EX)/$$project trace || exit 1; done
 	$(MAKE) -C $(EX)/29-visual-novel trace
 	$(MAKE) -C $(EX)/29-visual-novel visual-test
@@ -72,3 +72,15 @@ visual-games-build:
 	@for project in $(VISUAL_GAMES); do $(MAKE) -C $(EX)/$$project || exit 1; done
 visual-games-test: visual-games-build
 	@for project in $(VISUAL_GAMES); do 	  $(MAKE) -C $(EX)/$$project trace || exit 1; 	  $(MAKE) -C $(EX)/$$project visual-test || exit 1; 	done
+
+# Input-driven game-rule acceptance: requires the RPC-capable headless emulator.
+.PHONY: interaction-test interaction-replay
+interaction-test: visual-games-build
+	@for project in $(VISUAL_GAMES); do $(MAKE) -C $(EX)/$$project interaction-test || exit 1; done
+	$(MAKE) -C $(EX)/33-rendered-shmup combat-visual-test
+interaction-replay:
+	@for project in $(VISUAL_GAMES); do $(MAKE) -C $(EX)/$$project interaction-replay || exit 1; done
+
+.PHONY: sat-check
+sat-check:
+	$(PYTHON) $(ROOT)/workflows/sat_budget.py $(ROOT)/workflows/specs/sat-admission.json --strict

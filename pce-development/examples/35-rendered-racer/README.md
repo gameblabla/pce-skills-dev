@@ -12,3 +12,12 @@ from 256x224 and 64x16 PNG files (`make assets`).
 
 G2TR values are authored by the game and are **not** proof of pixels: use the
 independent screenshot test too. This is a tiny demonstrator, not a full game.
+
+## Game-rule acceptance
+
+Traffic contact causes a short speed penalty. Forward progress crosses checkpoints every 64 units and laps every 256 units; the trace marks each threshold.
+
+Run `make interaction-test` for an input-driven native game scenario and
+`make interaction-replay` to revalidate the saved G2TR frames offline.
+Both targets are intentionally separate from the screenshot `make visual-test`.
+The rules and expected events are in `tools/interaction-scenario.json`.

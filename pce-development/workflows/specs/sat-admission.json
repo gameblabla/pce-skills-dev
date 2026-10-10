@@ -1,0 +1,9 @@
+{
+  "screen": [256, 224], "vdcs": 1,
+  "sprites": [
+    {"id": "player", "x": 120, "y": 188, "w": 16, "h": 16, "priority": 255},
+    {"id": "bullet-1", "x": 124, "y": 160, "w": 16, "h": 16, "priority": 200},
+    {"id": "enemy-left", "x": 42, "y": 48, "w": 16, "h": 16, "priority": 80},
+    {"id": "enemy-right", "x": 182, "y": 48, "w": 16, "h": 16, "priority": 80}
+  ]
+}

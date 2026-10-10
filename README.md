@@ -56,3 +56,22 @@ solid-colour distance-shaded walls rather than textured walls, and the racer
 uses a fixed perspective background rather than the separate paired-BAT Mode 7
 engine. The screenshot checks prove rendered changes in an emulator, not sound,
 collision completeness, performance guarantees, or physical hardware timing.
+
+
+### Verified gameplay interactions and offline SAT planning
+
+Rendered examples 33–35 now contain reproducible **gameplay rules**, not just
+movement: player shots destroy shmup enemies, hostile shots inflict damage,
+raycaster movement blocks on mapped walls, and the racer has checkpoints,
+laps and traffic contact with a speed penalty. `make interaction-test` drives
+these events on an actual RPC-capable emulator and saves per-tick G2TR data;
+`make interaction-replay` reruns the corresponding assertions offline. The
+shmup also runs a combat screenshot test with independent pixel-region changes
+and G2TR counter deltas. The
+old `make visual-games-test` remains independent screenshot evidence.
+
+`make sat-check` tests offline SAT priority/admission planning. Use
+[`sat_budget.py`](pce-development/workflows/sat_budget.py) before expanding
+sprite-heavy code and see
+[`interaction-and-sat-verification.md`](pce-development/references/interaction-and-sat-verification.md)
+for event names, map checks, budget limits and the evidence ladder.

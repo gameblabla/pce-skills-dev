@@ -13,22 +13,24 @@ __attribute__((interrupt)) void irq_vdc(void) {
 static uint8_t px, py, previous;
 static uint16_t shots;
 static uint8_t bx[4],by[4],live[4];
-static uint8_t ex[3],ey[3];
+static uint8_t ex[3],ey[3],enemy_live[3];
+static uint8_t hostile_x,hostile_y,hostile_live,damage,event_hold;
 static vdc_sprite_t sat[64];
 
-static void publish(uint32_t frame,uint16_t buttons,uint8_t count,int8_t dx,int8_t dy) {
+static void publish(uint32_t frame,uint16_t buttons,uint8_t count,uint8_t enemies,uint8_t collided,int8_t dx,int8_t dy) {
     volatile G2Trace *t=&pce_genre_trace[frame&1];
     uint16_t n=(uint16_t)(frame<<1);
     t->sequence=n|1;
     t->magic[0]='G';t->magic[1]='2';t->magic[2]='T';t->magic[3]='R';
     t->version=G2TR_VERSION;t->genre=G2TR_SHMUP;t->scene=1;
-    t->flags=G2TR_FLAG_VISIBLE|G2TR_FLAG_ACTIVE;
+    t->flags=G2TR_FLAG_VISIBLE|G2TR_FLAG_ACTIVE|
+             (collided?G2TR_FLAG_COLLIDING:0);
     t->frame=frame;t->buttons=buttons&0xffu;
     t->x_q8=G2TR_Q8(px);t->y_q8=G2TR_Q8(py);
     t->vx_q8=G2TR_Q8(dx);t->vy_q8=G2TR_Q8(dy);
     t->camera_x_q8=t->camera_y_q8=0;
     t->screen_x_q8=t->x_q8;t->screen_y_q8=t->y_q8;
-    t->state[0]=count;t->state[1]=3;t->state[2]=shots;t->state[3]=0;
+    t->state[0]=count;t->state[1]=enemies;t->state[2]=shots;t->state[3]=damage;
     t->sequence=n;
 }
 static void actor(uint8_t slot,uint8_t x,uint8_t y,uint8_t tile) {
@@ -58,6 +60,8 @@ int main(void) {
      * in minimal HuCard startup configurations. */
     px=120;py=188;ex[0]=40;ex[1]=120;ex[2]=199;
     ey[0]=41;ey[1]=74;ey[2]=55;
+    for(uint8_t i=0;i<3;++i)enemy_live[i]=1;
+    hostile_live=0;damage=0;shots=0;previous=0;event_hold=0;
     uint32_t frame=0;
     for(;;) {
         uint8_t before=ticks;while(before==ticks) {}
@@ -74,20 +78,47 @@ int main(void) {
         }
         previous=(uint8_t)buttons;
         actor(0,px,py,0);
-        for(uint8_t i=0;i<3;++i){
-            if((frame&3)==0) {if(++ey[i]>=207)ey[i]=16;}
-            actor(1+i,ex[i],ey[i],1);
+        uint8_t collided=0,enemies=0,count=0;
+        /* Enemy projectiles are independent of player shots; the fixed first
+         * spawn makes damage tests reproducible without a random generator. */
+        if(frame==12 && enemy_live[1]) {
+            hostile_x=ex[1]+4;hostile_y=ey[1]+12;hostile_live=1;
         }
-        uint8_t count=0;
+        if(hostile_live) {
+            if(hostile_y>205)hostile_live=0;
+            else hostile_y+=3;
+            if(hostile_live && hostile_x+8>px && hostile_x<px+16 &&
+               hostile_y+8>py && hostile_y<py+16) {
+                hostile_live=0;++damage;collided=1;
+            }
+        }
+        if(hostile_live)actor(8,hostile_x,hostile_y,3);
+        else sat[8]=(vdc_sprite_t){0};
         for(uint8_t i=0;i<4;++i) {
             if(live[i]) {
                 if(by[i]<6)live[i]=0;
                 else by[i]-=3;
             }
+            if(live[i]) for(uint8_t j=0;j<3;++j) {
+                if(enemy_live[j] && bx[i]+8>ex[j] && bx[i]<ex[j]+16 &&
+                   by[i]+12>ey[j] && by[i]<ey[j]+16) {
+                    live[i]=0;enemy_live[j]=0;collided=1;break;
+                }
+            }
             if(live[i]){actor(4+i,bx[i],by[i],2);++count;}
             else sat[4+i]=(vdc_sprite_t){0};
         }
-        pce_vdc_copy_to_vram(SCENE_SAT_WORD,sat,8u*sizeof(sat[0]));
-        publish(frame,buttons,count,dx,dy);++frame;
+        for(uint8_t i=0;i<3;++i){
+            if(enemy_live[i]) {
+                if((frame&3)==0 && ++ey[i]>=207)ey[i]=16;
+                actor(1+i,ex[i],ey[i],1);++enemies;
+            } else sat[1+i]=(vdc_sprite_t){0};
+        }
+        pce_vdc_copy_to_vram(SCENE_SAT_WORD,sat,9u*sizeof(sat[0]));
+        /* Latch an event briefly so an RPC read cannot miss a one-tick
+         * collision between two sampled emulator frames. */
+        if(collided)event_hold=3;
+        else if(event_hold)--event_hold;
+        publish(frame,buttons,count,enemies,event_hold!=0,dx,dy);++frame;
     }
 }

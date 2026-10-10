@@ -30,6 +30,7 @@ static uint16_t bat[32*28];
 static int16_t world_x,world_y;
 static uint8_t angle;
 static uint16_t near_depth,far_depth,hit_count;
+static uint8_t wall_blocked;
 
 static uint8_t is_wall(int16_t x,int16_t y) {
     int16_t tx=x>>8,ty=y>>8;
@@ -69,15 +70,16 @@ static void render(void) {
     }
     pce_vdc_copy_to_vram(0,bat,sizeof(bat));
 }
-static void publish(uint32_t frame,uint16_t buttons) {
+static void publish(uint32_t frame,uint16_t buttons,int16_t moved_x,int16_t moved_y) {
     volatile G2Trace *t=&pce_genre_trace[frame&1];
     uint16_t n=(uint16_t)(frame<<1);
     t->sequence=n|1;
     t->magic[0]='G';t->magic[1]='2';t->magic[2]='T';t->magic[3]='R';
     t->version=G2TR_VERSION;t->genre=G2TR_RAYCASTER;t->scene=1;
-    t->flags=G2TR_FLAG_VISIBLE|G2TR_FLAG_ACTIVE;
+    t->flags=G2TR_FLAG_VISIBLE|G2TR_FLAG_ACTIVE|
+             (wall_blocked?G2TR_FLAG_COLLIDING:0);
     t->frame=frame;t->buttons=buttons&0xffu;
-    t->x_q8=world_x;t->y_q8=world_y;t->vx_q8=t->vy_q8=0;
+    t->x_q8=world_x;t->y_q8=world_y;t->vx_q8=moved_x;t->vy_q8=moved_y;
     t->camera_x_q8=t->camera_y_q8=0;
     t->screen_x_q8=t->screen_y_q8=0;
     t->state[0]=32;t->state[1]=hit_count;
@@ -106,13 +108,20 @@ int main(void) {
             if(buttons&KEY_LEFT)angle=(angle+15)&15;
             if(buttons&KEY_RIGHT)angle=(angle+1)&15;
         }
+        int16_t old_x=world_x,old_y=world_y;
+        wall_blocked=0;
         if((buttons&(KEY_UP|KEY_DOWN))!=0) {
             int16_t step=(buttons&KEY_UP)?1:-1;
             int16_t x=world_x+step*cos16[angle]/6;
             int16_t y=world_y+step*sin16[angle]/6;
-            if(!is_wall(x,y)){world_x=x;world_y=y;}
+            /* Check X and Y independently: this permits sliding along walls,
+             * but never allows the camera centre to enter a solid map cell. */
+            if(is_wall(x,world_y))wall_blocked=1;
+            else world_x=x;
+            if(is_wall(world_x,y))wall_blocked=1;
+            else world_y=y;
         }
         if((frame&7)==0)render();
-        publish(frame,buttons);++frame;
+        publish(frame,buttons,world_x-old_x,world_y-old_y);++frame;
     }
 }

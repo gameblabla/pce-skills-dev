@@ -13,6 +13,7 @@ __attribute__((interrupt)) void irq_vdc(void) {
 }
 static uint8_t car_x;
 static uint16_t distance;
+static uint8_t crash_cooldown,checkpoint_hold,collision_hold;
 static vdc_sprite_t sat[64];
 static void actor(uint8_t slot,uint8_t x,uint8_t y,uint8_t sprite) {
     sat[slot].x=(uint16_t)x+32;
@@ -20,13 +21,15 @@ static void actor(uint8_t slot,uint8_t x,uint8_t y,uint8_t sprite) {
     sat[slot].pattern=SCENE_SPRITE_WORD/32u+sprite*2u;
     sat[slot].attr=VDC_SPRITE_FG;
 }
-static void publish(uint32_t frame,uint16_t buttons,uint8_t speed,int8_t dx) {
+static void publish(uint32_t frame,uint16_t buttons,uint8_t speed,int8_t dx,uint8_t collided,uint8_t checkpoint) {
     volatile G2Trace *t=&pce_genre_trace[frame&1];
     uint16_t n=(uint16_t)(frame<<1);
     t->sequence=n|1;
     t->magic[0]='G';t->magic[1]='2';t->magic[2]='T';t->magic[3]='R';
     t->version=G2TR_VERSION;t->genre=G2TR_RACING;t->scene=1;
-    t->flags=G2TR_FLAG_VISIBLE|G2TR_FLAG_ACTIVE;
+    t->flags=G2TR_FLAG_VISIBLE|G2TR_FLAG_ACTIVE|
+             (collided?G2TR_FLAG_COLLIDING:0)|
+             (checkpoint?G2TR_FLAG_TRANSITION:0);
     t->frame=frame;t->buttons=buttons&0xffu;
     t->x_q8=G2TR_Q8(car_x);t->y_q8=G2TR_Q8(181);
     t->vx_q8=G2TR_Q8(dx);t->vy_q8=G2TR_Q8(speed);
@@ -53,7 +56,7 @@ int main(void) {
     pce_vdc_poke(VDC_REG_DMA_CONTROL,VDC_DMA_REPEAT_SATB);
     pce_vdc_irq_vblank_enable();pce_irq_enable(IRQ_VDC);
     pce_vdc_bg_enable();pce_vdc_sprite_enable();pce_cpu_irq_enable();
-    car_x=120;
+    car_x=120;distance=0;crash_cooldown=0;checkpoint_hold=collision_hold=0;
     uint32_t frame=0;
     for(;;) {
         uint8_t before=ticks;while(before==ticks) {}
@@ -62,14 +65,28 @@ int main(void) {
         if((buttons&KEY_LEFT)&&car_x>80){car_x-=2;dx=-2;}
         if((buttons&KEY_RIGHT)&&car_x<160){car_x+=2;dx=2;}
         uint8_t speed=(buttons&KEY_UP)?3:((buttons&KEY_DOWN)?0:1);
+        if(crash_cooldown) {--crash_cooldown;if(speed>1)speed=1;}
+        uint16_t before_distance=distance;
         distance+=speed;
+        uint8_t checkpoint=(distance/64u != before_distance/64u);
+        uint8_t collided=0;
         actor(0,car_x,181,0);
         for(uint8_t i=0;i<3;++i){
-            uint8_t track_y=(uint8_t)(((distance/(5+i)+i*51)%150)+32);
-            uint8_t traffic_x=(uint8_t)(103+i*21);
+            /* Traffic approaches the player as world progress increases. */
+            uint8_t track_y=(uint8_t)(((distance/(1u+i)+i*55u)%176u)+25u);
+            uint8_t traffic_x=(uint8_t)(96u+i*24u);
             actor(1+i,traffic_x,track_y,(uint8_t)(1+i));
+            if(!crash_cooldown && (int16_t)traffic_x<(int16_t)car_x+13 &&
+               (int16_t)traffic_x+13>(int16_t)car_x &&
+               track_y<195 && track_y+13>181) {
+                collided=1;crash_cooldown=18;
+            }
         }
         pce_vdc_copy_to_vram(SCENE_SAT_WORD,sat,4u*sizeof(sat[0]));
-        publish(frame,buttons,speed,dx);++frame;
+        if(checkpoint)checkpoint_hold=3;
+        else if(checkpoint_hold)--checkpoint_hold;
+        if(collided)collision_hold=3;
+        else if(collision_hold)--collision_hold;
+        publish(frame,buttons,speed,dx,collision_hold!=0,checkpoint_hold!=0);++frame;
     }
 }

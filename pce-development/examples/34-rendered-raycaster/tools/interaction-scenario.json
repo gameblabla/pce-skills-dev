@@ -1,0 +1,42 @@
+{
+  "steps": [
+    {
+      "frames": 10,
+      "buttons": []
+    },
+    {
+      "frames": 55,
+      "buttons": [
+        "up"
+      ]
+    },
+    {
+      "frames": 16,
+      "buttons": [
+        "right"
+      ]
+    }
+  ],
+  "require_genres": [
+    "raycaster"
+  ],
+  "require_events": [
+    "ray_wall_blocked"
+  ],
+  "require_state_variation": {
+    "raycaster": [
+      2,
+      3
+    ]
+  },
+  "world_map": [
+    "########",
+    "#......#",
+    "#.#....#",
+    "#....#.#",
+    "#......#",
+    "#..#...#",
+    "#......#",
+    "########"
+  ]
+}

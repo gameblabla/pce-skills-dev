@@ -1,0 +1,33 @@
+{
+  "steps": [
+    {
+      "frames": 10,
+      "buttons": []
+    },
+    {
+      "frames": 1,
+      "buttons": [
+        "i"
+      ]
+    },
+    {
+      "frames": 65,
+      "buttons": []
+    }
+  ],
+  "require_genres": [
+    "shmup"
+  ],
+  "require_events": [
+    "shmup_enemy_hit",
+    "shmup_player_damage"
+  ],
+  "require_state_variation": {
+    "shmup": [
+      0,
+      1,
+      2,
+      3
+    ]
+  }
+}

@@ -8,3 +8,12 @@ loop. Rays hit walls on a quarter-cell step. The demo intentionally uses coarse
 
 `make`, `make trace`, and `make visual-test` separately prove it builds,
 reports plausible G2TR state under input, and changes visible pixels.
+
+## Game-rule acceptance
+
+Movement collides with walls and slides along unblocked axes. The interaction scenario supplies an independent ASCII wall map and requires blocked movement.
+
+Run `make interaction-test` for an input-driven native game scenario and
+`make interaction-replay` to revalidate the saved G2TR frames offline.
+Both targets are intentionally separate from the screenshot `make visual-test`.
+The rules and expected events are in `tools/interaction-scenario.json`.

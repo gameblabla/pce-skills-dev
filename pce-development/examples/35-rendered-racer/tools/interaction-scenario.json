@@ -1,0 +1,28 @@
+{
+  "steps": [
+    {
+      "frames": 10,
+      "buttons": []
+    },
+    {
+      "frames": 120,
+      "buttons": [
+        "up"
+      ]
+    }
+  ],
+  "require_genres": [
+    "racing"
+  ],
+  "require_events": [
+    "racing_checkpoint",
+    "racing_lap",
+    "racing_traffic_hit"
+  ],
+  "require_state_variation": {
+    "racing": [
+      1,
+      2
+    ]
+  }
+}

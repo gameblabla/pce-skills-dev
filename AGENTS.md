@@ -86,3 +86,23 @@ not invert it into `uint16_t` and interpret the high nibble as extra buttons.
 Initialize mutable gameplay globals explicitly in `main()` for minimal HuCard
 startup environments; do not assume initialized `.data` was copied as on a PC.
 See `pce-development/tools/pce/GENRE_TRACE.md` for the trace contract.
+
+
+## Interaction-complete testing and hardware sprite budgets
+
+Rendered movement is only the first gate. For a request involving combat,
+projectiles, blocked movement, checkpoints, laps or crashes, use the projects'
+`make interaction-test` **before** claiming gameplay works. It records the
+full decoded G2TR timeline (`build/interaction-frames.json`), and
+`make interaction-replay` runs offline assertions over those records. Preserve
+short collision/checkpoint event latches so the RPC sampler cannot skip a
+single-frame pulse. Ensure a required event is provably triggered by scripted
+input, not just present in a manually constructed trace. Run `make visual-test`
+separately to confirm a changed framebuffer; G2TR is game-authored state.
+
+Before increasing actors or SAT sprites, run
+`python3 pce-development/workflows/sat_budget.py YOUR-SAT-SPEC.json --strict`.
+This handles the 64-entry and 16-per-scanline VDC limits, prioritizes essential
+actors, and supports two independent SuperGrafx VDCs. Use the ordered accepted
+list for the game's SAT, not the unsorted source list. Read
+`pce-development/references/interaction-and-sat-verification.md`.
