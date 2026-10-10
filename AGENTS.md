@@ -305,3 +305,7 @@ bursts. Use `make tables-check`, `make codegen-benchmark`, and
 agreement and ROM-owned codegen word counters. Keep `make atomic-test`
 separate: it builds the independent 128x64 page-flipped mode, which has
 lower vertical detail. The C reference ROM remains `make codegen-reference`.
+
+- For Wolf textures, preserve the original 7x32x32 atlases in example 34's assets. Run `make raycaster-texture-sheets` and rebuild the packed paired-pixel table before claiming a texture change works.
+- Different C vs assembly page-switch screenshots can disagree on precisely one physical row; report it quantitatively. Never claim pixel-perfect equality when the comparison says `matched: false`.
+- SGX two-VDC plane conversion is currently offline-only; do not tell users it is a running 256-colour SGX ROM without a VPC-composited emulator capture.

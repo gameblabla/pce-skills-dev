@@ -34,7 +34,7 @@ class WallMicrocodeTests(unittest.TestCase):
         self.assertIn('pce_cpu_irq_disable();',src)
         self.assertIn('pce_cpu_irq_enable();',src)
         self.assertIn('ray_codegen_words=',src)
-        self.assertIn('background+=512u',src)
+        self.assertIn('ray_backdrop_row(yy)[pair]',src)
         self.assertIn('yy>=t && yy<end',src)
         self.assertIn('(yy-t)&7u',src)
         self.assertIn('RAY_WALL_CODEGEN=0', (PROJECT/'Makefile').read_text())

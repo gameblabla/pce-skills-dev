@@ -11,7 +11,7 @@ OUT := build/34-rendered-raycaster.pce
 FAST_ROM_LINK := -Wl,--defsym=__rom_bank0=0x8000,--defsym=__rom_bank0_size=0x8000
 .PHONY: interaction-test interaction-replay all run trace visual-test bitmap-test clean
 all: tables-check $(OUT)
-$(OUT): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/backdrop_words.h src/wall_codegen.S tools/genre_trace.h | toolchain
+$(OUT): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/backdrop_words.h src/wall_codegen.S src/sheet_pairs.h src/sheet_palette.h assets/wolftextures16.png tools/genre_trace.h | toolchain
 	@mkdir -p build
 	$(LLVM_MOS_CC) $(PCE_FLAGS) -Itools src/main.c src/bat_sparse_irq.S src/wall_codegen.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
 PCE_RUN_FRAMES ?= 180
@@ -38,6 +38,7 @@ tables-check:
 	python3 tools/gen_wall_pairs.py --check
 	python3 tools/gen_backdrop.py --check
 	python3 tools/gen_sparse_irq.py --check
+	python3 tools/gen_texture_sheet.py --check
 	python3 tools/gen_wall_codegen.py --check
 
 # Same-source 4-row and 8-row HuC6280 TIA upload benchmarks. Both runs
@@ -92,8 +93,8 @@ wall-lookup-throughput: column-benchmark
 # Bit-identical stationary emulator pixels from the two SAME-RESOLUTION builds;
 # a screenshot being "textured" alone is insufficient to prove equivalence.
 .PHONY: wall-lookup-visual
-wall-lookup-visual: $(OUT) $(WALL_REFERENCE_ROM) wall-lookup-check
-	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(WALL_REFERENCE_ROM) --optimized $(OUT) --output build/wall-lookup-exact.json
+wall-lookup-visual: $(OUT) codegen-reference wall-lookup-check
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(CODEGEN_REFERENCE) --optimized $(OUT) --output build/wall-lookup-exact.json
 
 # New full-detail VRAM-resident raycaster acceptance: verifies real changed
 # columns, render state, long controller exercise, and bounded raster IRQ.
@@ -108,9 +109,29 @@ column-regression: $(OUT) tables-check
 # writes vs the existing C/TIA loop. Atomic remains a separate build.
 .PHONY: codegen-reference codegen-benchmark
 CODEGEN_REFERENCE := build/34-rendered-raycaster-column-reference.pce
-$(CODEGEN_REFERENCE): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/backdrop_words.h tools/genre_trace.h | toolchain
+$(CODEGEN_REFERENCE): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/sheet_pairs.h src/sheet_palette.h src/backdrop_words.h tools/genre_trace.h | toolchain
 	@mkdir -p build
 	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_WALL_CODEGEN=0 -Itools src/main.c src/bat_sparse_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
 codegen-reference: $(CODEGEN_REFERENCE)
 codegen-benchmark: $(OUT) $(CODEGEN_REFERENCE)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/compare_codegen.py --reference $(CODEGEN_REFERENCE) --optimized $(OUT) --output build/codegen-comparison.json
+
+# Same artwork and code paths, only the native VDC address setup differs.
+# Do not compare against old synthetic textures as a speed claim.
+SHEET_SLOW_ROM := build/34-rendered-raycaster-sheet-legacy-setup.pce
+$(SHEET_SLOW_ROM): src/main.c src/bat_sparse_irq.S src/wall_codegen.S src/sheet_pairs.h src/sheet_palette.h src/backdrop_words.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_CODEGEN_FAST_SETUP=0 -Itools src/main.c src/bat_sparse_irq.S src/wall_codegen.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+.PHONY: sheet-textures-check sheet-fps-check
+sheet-textures-check:
+	python3 tools/gen_texture_sheet.py --check
+	python3 tools/sgx_texture_plan.py --check
+	python3 tools/gen_wall_codegen.py --check
+	python3 tools/gen_backdrop.py --check
+sheet-fps-check: $(OUT) $(SHEET_SLOW_ROM) sheet-textures-check
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/sheet_benchmark.py --reference $(SHEET_SLOW_ROM) --optimized $(OUT) --output build/sheet-native-setup-comparison.json
+
+.PHONY: sheet-native-fps sheet-art-sgx
+sheet-native-fps: sheet-fps-check
+sheet-art-sgx: sheet-textures-check
+	@echo "SGX preview/plane assets verified offline; there is NO tested SGX 2-VDC runtime ROM."

@@ -196,3 +196,7 @@ raycaster-wall-lookup:
 .PHONY: raycaster-codegen
 raycaster-codegen:
 	$(MAKE) -C $(EX)/34-rendered-raycaster codegen-benchmark
+
+.PHONY: raycaster-texture-sheets
+raycaster-texture-sheets:
+	$(MAKE) -C $(EX)/34-rendered-raycaster sheet-art-sgx

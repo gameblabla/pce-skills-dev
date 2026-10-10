@@ -28,8 +28,12 @@ def check(path):
     for key,minimum in [('ceiling',3),('walls',5),('floor',3)]:
         if len(counts[key])<minimum:
             raise ValueError(f'{key}: expected >= {minimum} colours, got {len(counts[key])}')
-    if max((n for (r,g,b),n in counts['walls'].items() if r>g and r>b),default=0)<1000:
-        raise ValueError('missing textured warm wall surface')
+    # A real 16-colour atlas may have gray metal as the nearest wall, not
+    # necessarily the red brick from the synthetic reference renderer.
+    # Require substantial non-sky wall coverage plus distinct texture values.
+    if sum(n for (r,g,b),n in counts['walls'].items()
+           if abs(r-g)<45 and abs(g-b)<45 and 25<max(r,g,b)<220)<2500:
+        raise ValueError('missing real textured wall surface')
     if sum(n for (r,g,b),n in counts['floor'].items() if r>g and g>=b)<2000:
         raise ValueError('missing checkerboard earth floor')
     if any(r<60 and g>120 and b>120 for r,g,b in all_pixels):

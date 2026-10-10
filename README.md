@@ -238,3 +238,12 @@ compares rendered pixels exactly, and measures actual ROM-authored dirty
 views and generated-code BAT words. The eight-row unrolled paths are
 interrupt-bounded and keep the separate 128×64 atomic renderer unchanged.
 See `pce-development/examples/34-rendered-raycaster/README.md` for tradeoffs.
+
+### Source texture atlases and measured raycaster writers
+
+The full-detail raycaster now ships with the supplied 16-colour Wolf texture
+atlas, offline generation of 14 material/shade paired-pixel classes, and a
+losslessly compressed 14-row backdrop. `make raycaster-texture-sheets` verifies
+the texture and SGX dual-plane *asset plan* offline; the SGX compositor itself
+is not implemented. The full-resolution assembly-vs-C/TIA benchmark is
+`make raycaster-codegen`. The atomic 128x64 renderer remains independent.

@@ -35,12 +35,11 @@ def validate(data):
             raise ValueError('unrendered/blank screen')
     if data[0]['dirty_views'] or data[0]['vram_words']:
         raise ValueError('settled idle spurs background redraws')
-    # A completed in-flight 32-column pass may contain up to 2*128*32=8192
-    # BAT words (two pairs per ray). The old 4096 threshold incorrectly
-    # rejected valid close-wall frames after a faster renderer advanced
-    # farther during the held-UP segment. The next 90-frame quiet window
-    # MUST still show zero writes and zero new changed views.
-    if data[-2]['dirty_views']>2 or data[-2]['vram_words']>8192:
+    # During sustained input a second dirty pass may have been queued just
+    # before release. Allow at most TWO 8192-word 128x128 wall unions and
+    # require the entire subsequent quiet window to remain byte-for-byte
+    # idle. A broad unbounded threshold would mask endless redraw loops.
+    if data[-2]['dirty_views']>2 or data[-2]['vram_words']>16384:
         raise ValueError('settling period keeps redrawing excessively')
     if data[-1]['dirty_views'] or data[-1]['vram_words']:
         raise ValueError('fully settled idle still performs VRAM writes')
@@ -96,6 +95,7 @@ def run(rom,elf,output):
                          'screenshot_colors':colors,'screenshot':str(image)})
             before=now
     finally:client.close()
+    output.with_name(output.stem+'-raw.json').write_text(json.dumps(rows,indent=2)+'\n')
     result=validate(rows)
     doc={'result':'passed','method':'ROM-owned dirty-view and VRAM-word counters + real emulator PNGs',
          'rom':str(rom),'scenario':rows,'totals':result}

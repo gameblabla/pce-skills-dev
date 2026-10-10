@@ -1,0 +1,405 @@
+{
+  "kind": "offline dual-VDC per-material layered colour allocation",
+  "runtime_implemented": false,
+  "runtime_verified": false,
+  "hardware_note": "Requires VPC overlay priorities and independent VDC bitmap/palette setup; preview is software composited.",
+  "reference": "PCEdev PCE bitmap mode: SGX 128x128x241 theoretical palette limit (not arbitrary true RGB 256).",
+  "source_unique_colours": 105,
+  "dual_layer_vce_colour_mae": 6.903,
+  "vdc_a_palette_sets": 7,
+  "vdc_b_palette_sets": 7,
+  "per_material": [
+    {
+      "material": 0,
+      "source_unique": 45,
+      "vdc_a_colors": 7,
+      "vdc_b_colors": 6,
+      "packed_pair_bytes_per_vdc": 512
+    },
+    {
+      "material": 1,
+      "source_unique": 25,
+      "vdc_a_colors": 4,
+      "vdc_b_colors": 4,
+      "packed_pair_bytes_per_vdc": 512
+    },
+    {
+      "material": 2,
+      "source_unique": 22,
+      "vdc_a_colors": 4,
+      "vdc_b_colors": 3,
+      "packed_pair_bytes_per_vdc": 512
+    },
+    {
+      "material": 3,
+      "source_unique": 18,
+      "vdc_a_colors": 4,
+      "vdc_b_colors": 4,
+      "packed_pair_bytes_per_vdc": 512
+    },
+    {
+      "material": 4,
+      "source_unique": 24,
+      "vdc_a_colors": 6,
+      "vdc_b_colors": 6,
+      "packed_pair_bytes_per_vdc": 512
+    },
+    {
+      "material": 5,
+      "source_unique": 8,
+      "vdc_a_colors": 3,
+      "vdc_b_colors": 2,
+      "packed_pair_bytes_per_vdc": 512
+    },
+    {
+      "material": 6,
+      "source_unique": 26,
+      "vdc_a_colors": 5,
+      "vdc_b_colors": 4,
+      "packed_pair_bytes_per_vdc": 512
+    }
+  ],
+  "vdc_a_palettes_rgb": [
+    [
+      [
+        72,
+        0,
+        72
+      ],
+      [
+        109,
+        109,
+        109
+      ],
+      [
+        72,
+        72,
+        72
+      ],
+      [
+        36,
+        36,
+        36
+      ],
+      [
+        145,
+        72,
+        0
+      ],
+      [
+        109,
+        0,
+        109
+      ],
+      [
+        255,
+        109,
+        0
+      ]
+    ],
+    [
+      [
+        182,
+        0,
+        0
+      ],
+      [
+        109,
+        0,
+        0
+      ],
+      [
+        72,
+        0,
+        0
+      ],
+      [
+        218,
+        0,
+        0
+      ]
+    ],
+    [
+      [
+        72,
+        72,
+        72
+      ],
+      [
+        182,
+        182,
+        182
+      ],
+      [
+        109,
+        109,
+        109
+      ],
+      [
+        255,
+        255,
+        255
+      ]
+    ],
+    [
+      [
+        0,
+        0,
+        182
+      ],
+      [
+        0,
+        0,
+        109
+      ],
+      [
+        0,
+        0,
+        72
+      ],
+      [
+        72,
+        72,
+        72
+      ]
+    ],
+    [
+      [
+        72,
+        72,
+        72
+      ],
+      [
+        36,
+        36,
+        36
+      ],
+      [
+        109,
+        109,
+        109
+      ],
+      [
+        218,
+        182,
+        0
+      ],
+      [
+        218,
+        218,
+        218
+      ],
+      [
+        218,
+        218,
+        0
+      ]
+    ],
+    [
+      [
+        72,
+        72,
+        36
+      ],
+      [
+        109,
+        72,
+        36
+      ],
+      [
+        72,
+        36,
+        36
+      ]
+    ],
+    [
+      [
+        72,
+        72,
+        72
+      ],
+      [
+        109,
+        72,
+        36
+      ],
+      [
+        36,
+        36,
+        36
+      ],
+      [
+        145,
+        145,
+        145
+      ],
+      [
+        182,
+        182,
+        182
+      ]
+    ]
+  ],
+  "vdc_b_palettes_rgb": [
+    [
+      [
+        182,
+        182,
+        182
+      ],
+      [
+        109,
+        0,
+        0
+      ],
+      [
+        72,
+        0,
+        0
+      ],
+      [
+        145,
+        145,
+        145
+      ],
+      [
+        182,
+        0,
+        0
+      ],
+      [
+        218,
+        218,
+        182
+      ]
+    ],
+    [
+      [
+        72,
+        72,
+        72
+      ],
+      [
+        145,
+        0,
+        0
+      ],
+      [
+        36,
+        36,
+        36
+      ],
+      [
+        109,
+        109,
+        109
+      ]
+    ],
+    [
+      [
+        145,
+        145,
+        145
+      ],
+      [
+        36,
+        36,
+        36
+      ],
+      [
+        218,
+        218,
+        218
+      ]
+    ],
+    [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        145
+      ],
+      [
+        36,
+        36,
+        36
+      ],
+      [
+        0,
+        0,
+        218
+      ]
+    ],
+    [
+      [
+        145,
+        145,
+        145
+      ],
+      [
+        182,
+        182,
+        182
+      ],
+      [
+        182,
+        182,
+        0
+      ],
+      [
+        145,
+        145,
+        0
+      ],
+      [
+        109,
+        109,
+        0
+      ],
+      [
+        72,
+        72,
+        0
+      ]
+    ],
+    [
+      [
+        145,
+        109,
+        36
+      ],
+      [
+        36,
+        36,
+        0
+      ]
+    ],
+    [
+      [
+        72,
+        72,
+        36
+      ],
+      [
+        109,
+        109,
+        109
+      ],
+      [
+        72,
+        36,
+        36
+      ],
+      [
+        145,
+        72,
+        36
+      ]
+    ]
+  ],
+  "total_rom_plane_bytes": 7168
+}

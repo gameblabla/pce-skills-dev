@@ -15,7 +15,12 @@ class ColumnStreamTests(unittest.TestCase):
     def test_background_is_precomputed_and_deterministic(self):
         self.assertEqual((ROOT/'src/backdrop_words.h').read_text(),gen_backdrop.generate())
         # Exactly 8192 physical BAT words = complete 128x128 logical image.
-        self.assertEqual(gen_backdrop.generate().count('0xf2'),8192)
+        rows=gen_backdrop.original_rows()
+        unique,indices=gen_backdrop.compress(rows)
+        self.assertEqual(len(rows)*len(rows[0]),8192)
+        self.assertEqual(len(unique),14)
+        self.assertEqual([unique[i] for i in indices],rows)
+        self.assertLess(len(unique)*64+128,8192)
 
     def test_sparse_irq_is_host_generated_and_schedules_127_changes(self):
         self.assertEqual((ROOT/'src/bat_sparse_irq.S').read_text(),gen_sparse_irq.gen())

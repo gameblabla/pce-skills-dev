@@ -1,0 +1,21 @@
+{
+  "source_16_sha256": "2956a53e36afb7e3e86034bb7bde5c20b8bb6c09efcebbbc2b7835824c8e4cd9",
+  "source_256_sha256": "cb7ccbf30c9fd09a5b8339b022bdd58f2b5803b0b632047aab73e16bd80c2fd5",
+  "tile_count": 7,
+  "source_tile_px": [
+    32,
+    32
+  ],
+  "pce_tile_px": [
+    16,
+    16
+  ],
+  "source_pce_unique_colours": 15,
+  "pce_palette_slots": 16,
+  "pce_pair_variants": 224,
+  "pce_lookup_bytes": 3584,
+  "sgx_source_unique_colours": 105,
+  "sgx_implementation": "RGB reference/art input only; requires separate two-VDC compositing implementation and visual validation",
+  "sgx_limit": "SGX paired-BAT pseudo-bitmap is described as up to 241 colours, not arbitrary true 256-colour pixels",
+  "no_sgx_runtime_claim": true
+}

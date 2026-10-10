@@ -188,3 +188,65 @@ PCE_HEADLESS=/path/to/rpc-capable/pce-headless make atomic-test
 Historic technical references:
 - https://pcedev.wordpress.com/2015/12/10/pce-bitmap-mode/
 - https://pcedev.wordpress.com/2015/11/25/wolfenstein-3d-on-the-pc-engine/
+
+## Wolf texture sheets: real source art, packed at build time
+
+Both user-provided source atlases are vendored as `assets/wolftextures16.png`
+(7 textures of 32x32, with 15 actual RGB colours) and
+`assets/wolftextures256.png` (7 textures of 32x32, 105 actual RGB colours).
+No art generation or web access is required.
+
+`python3 tools/gen_texture_sheet.py` reads the **16-colour** sheet and emits
+`src/sheet_pairs.h` and `src/sheet_palette.h`. The 128x128 full-detail HuCard
+uses all 15 source colours plus an independent VCE backdrop entry. Each tile
+is sampled down to **16x16 logical texels** (not 32x32 on screen). Seven
+materials and two distance/orientation shades become 14 material styles,
+with 16 horizontal phases and 16 vertical phases. The 3,584 paired-BAT
+values are precomputed; there is no per-pixel quantization or multiply in
+runtime C. The generated assembly reads the same packed values.
+
+`tools/gen_backdrop.py` losslessly reduces the 128x64 background's 8,192
+BAT words to **14 unique 64-word rows plus 128 row indices**, keeping the
+32 KiB HuCard layout possible. The ROM stores these row templates and
+uploads the full image to VRAM only at boot. This saves ROM, not active
+frame time. `src/wall_codegen.S` now embeds the 14 material/shade styles
+and can select the VDC word address with native ST0/STA writes; the C/TIA
+variant is kept for a fair same-art performance comparison.
+
+To regenerate or verify every offline input:
+
+```sh
+make sheet-art-sgx       # verifies PCE and SGX asset converters, no compiler
+make sheet-fps-check     # compares native VDC setup to legacy with same textures
+make codegen-benchmark  # compares generated wall writing to C/TIA (same art)
+make atomic-test        # separate 128x64 mode, not claimed same resolution
+```
+
+The benchmark that uses the user texture sheet and the same 540-video-frame
+script records **6.0 changed views/s for generated assembly versus 5.0 for
+C/TIA**, with 73.2% of uploaded BAT words passing through generated code.
+This is a same-scene comparison of two rendering paths, **not proof of an
+improvement over the previous synthetic-texture release or 60fps**. The
+native VDC-setup change alone delivered no measurable changed-view gain in
+its separate 960-video-frame benchmark (25 versus 25 turning views).
+There is a single physical scanline difference at the 64-row BAT page latch
+between the C/TIA and assembly ROM captures (492 of 135,520 RGB pixels),
+which is reported instead of being hidden by an "exact screenshot" claim.
+
+### SuperGrafx: honest two-VDC asset preparation, not yet a runtime engine
+
+`python3 tools/sgx_texture_plan.py` produces `src/sgx_texture_planes.h`,
+`assets/sgx_dual_plan.json` and `assets/sgx_dual_preview.png`. It quantizes
+seven source textures into at most **15 opaque base colours plus 15 overlay
+colours per texture**, allocating independent colour-0 transparent slots.
+The 7,168 bytes of packed nibble planes cover 32x32 texels per texture and
+would be mapped to the two independent VDCs. The preview is composited on
+the host and has an average 3:3:3-quantized RGB-channel absolute error of
+6.903 against the richer source artwork.
+
+**No SuperGrafx ROM or VPC compositing has been implemented or tested in
+this update.** The SGX paired-BAT trick is discussed as approximately
+128x128x241, rather than arbitrary true 256-colour pixels. The real dual-VDC
+engine still needs palette selection per BAT entry, VPC priority, independent
+scroll interrupts, and an emulator/hardware capture proving the blend. The
+256-colour source file itself has 105 distinct source colours.
