@@ -33,6 +33,9 @@ python3 pce-development/scripts/eval_local_ai.py
 ```
 
 Read `pce-development/scripts/README.md` for evaluation options and limits.
+Run `python3 pce-development/examples/micro/check.py --lint-only` to guard
+sound-only versus graphics-only examples when changing them.
+
 Use `pce-development/examples/` for project recipes; each recipe identifies
 where SDK-specific adaptation is required. Scratch projects copy the starter
 Makefile and tools, then select the LLVM-MOS driver for the requested HuCard or

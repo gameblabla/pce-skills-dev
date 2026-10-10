@@ -57,6 +57,7 @@ With the pinned LLVM-MOS SDK on PATH:
 ```sh
 cd pce-development/examples/micro
 python3 check.py
+python3 check.py --lint-only # separation tests without the compiler
 cd ../05-sound-samples
 make
 ```

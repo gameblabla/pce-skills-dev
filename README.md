@@ -7,7 +7,7 @@ I recommend that you get the strongest local AI model that you can possibly
 use for your PC.
 ## Single-purpose C examples
 
-The small examples are in [`pce-development/examples/micro/`](pce-development/examples/micro/README.md).
+The 55 small examples are in [`pce-development/examples/micro/`](pce-development/examples/micro/README.md).
 Each ROM has one `main.c` and shared compiler rules. Sound examples produce
 sound without video initialization, and debugger examples expose volatile
 state instead of displaying unrelated text or graphics. The full historical

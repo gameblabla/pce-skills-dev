@@ -1,10 +1,10 @@
 # Small, single-purpose PC Engine examples
 
-25 separate LLVM-MOS HuCard C projects. Each contains **one `main.c` and one two-line Makefile**; the build rules and optional tiny helpers are shared at this level. Audio examples never touch the VDC, VCE, screen, graphics, fonts or sprites. No commercial ROM or BIOS is needed to build these.
+55 separate LLVM-MOS HuCard C projects. Each contains **one `main.c` and one one-line Makefile**; the build rules and optional tiny helpers are shared at this level. Audio examples never touch the VDC, VCE, screen, graphics, fonts or sprites. No commercial ROM or BIOS is needed to build these.
 
 Build one: `cd 03-psg-tone && make`. Run through the configured headless frontend via
 `make run` or `make debug`; both forward to the standard project wrapper.
-Or build/test all: `python3 check.py`.
+Or build/test all: `python3 check.py`. Use `python3 check.py --lint-only` for static separation checks without the toolchain.
 
 **Scope:** HuCard by default; these are not bootable CD image files. Memory outputs are observable via emulator debugger rather than by rendering status text. Sound output needs audio capture/listening for runtime verification; compilation alone cannot prove audible playback.
 
@@ -35,6 +35,37 @@ Or build/test all: `python3 check.py`.
 - [22-vdc-vblank-irq](22-vdc-vblank-irq/README.md) — Graphics: Count VDC VBlank interrupts for frame timing; no text.
 - [23-psg-melody](23-psg-melody/README.md) — Audio: Play three notes on PSG channel zero, changing only the pitch register.
 - [24-psg-noise-sweep](24-psg-noise-sweep/README.md) — Audio: Change noise divider on PSG channel 5 without relying on visuals.
+
+- [25-joypad-release](25-joypad-release/README.md) — Input: Detect buttons released since the previous poll.
+- [26-joypad-multitap](26-joypad-multitap/README.md) — Input: Read a second controller when a multitap is connected. No display.
+- [27-joypad-press-counter](27-joypad-press-counter/README.md) — Input: Count new presses of button I; inspect the value in a debugger.
+- [28-psg-triangle-wave](28-psg-triangle-wave/README.md) — Audio: Write a rising/falling 32-sample PSG waveform, then play it.
+- [29-psg-saw-wave](29-psg-saw-wave/README.md) — Audio: Load a rising 32-sample sawtooth; no screen output.
+- [30-psg-channel-selection](30-psg-channel-selection/README.md) — Audio: Demonstrate that channel selection affects subsequent PSG register writes.
+- [31-psg-master-balance](31-psg-master-balance/README.md) — Audio: Alternate left/right master PSG balance without touching video.
+- [32-psg-note-table](32-psg-note-table/README.md) — Audio: Read a small note table and write only the PSG period register.
+- [33-psg-tone-and-noise](33-psg-tone-and-noise/README.md) — Audio: Use channel 0 for tone and channel 5 for noise simultaneously.
+- [34-psg-channel-mute](34-psg-channel-mute/README.md) — Audio: Silence only the chosen PSG channel after a brief busy wait.
+- [35-psg-noise-burst](35-psg-noise-burst/README.md) — Audio: Play a short noise burst on PSG channel 4, then stop it.
+- [36-psg-dda-ramp](36-psg-dda-ramp/README.md) — Audio: Write a repeating 5-bit ramp in PSG DDA mode; rate is CPU-dependent.
+- [37-vce-color-readback](37-vce-color-readback/README.md) — Graphics: Write one VCE palette entry and read it back without text.
+- [38-vce-palette-upload](38-vce-palette-upload/README.md) — Graphics: Upload a complete 16-color VCE background palette.
+- [39-vdc-vram-copy](39-vdc-vram-copy/README.md) — Graphics: Upload exactly one 8x8, 4bpp tile (32 bytes) to VDC VRAM.
+- [40-vdc-vram-clear](40-vdc-vram-clear/README.md) — Graphics: Clear a small VRAM region using a zero-filled CPU buffer.
+- [41-vdc-register-readback](41-vdc-register-readback/README.md) — Graphics: Read the VDC background scroll register into a debugger-visible variable.
+- [42-vdc-bat-write](42-vdc-bat-write/README.md) — Graphics: Write one BAT entry that points to character pattern at VRAM word 0x0800.
+- [43-vdc-reset-scroll](43-vdc-reset-scroll/README.md) — Graphics: Reset both VDC background scroll registers to zero.
+- [44-vdc-bg-toggle](44-vdc-bg-toggle/README.md) — Graphics: Toggle the VDC background layer without touching audio hardware.
+- [45-vdc-dma-copy](45-vdc-dma-copy/README.md) — Graphics: Copy a tile between two VDC VRAM addresses using VRAM-to-VRAM DMA.
+- [46-supergrafx-vdc2-vram](46-supergrafx-vdc2-vram/README.md) — SuperGrafx: Access VDC2 VRAM independently, only after detecting SuperGrafx hardware.
+- [47-arcade-card-port-one](47-arcade-card-port-one/README.md) — Arcade Card: Exercise data port 1 (0x1a10) with its own 16-bit address register.
+- [48-arcade-card-boundary](48-arcade-card-boundary/README.md) — Arcade Card: Test Arcade Card automatic address carry across the 64 KiB boundary.
+- [49-timer-irq-stop](49-timer-irq-stop/README.md) — CPU/IRQ: Stop the timer after 100 IRQ callbacks; no VBlank or video dependency.
+- [50-cpu-block-copy](50-cpu-block-copy/README.md) — CPU: Use the HuC6280 block transfer helper to copy RAM; inspect success in debugger.
+- [51-cpu-block-pattern](51-cpu-block-pattern/README.md) — CPU: Use the alternating-source HuC6280 transfer mode to repeat two RAM bytes.
+- [52-cpu-bank-map](52-cpu-bank-map/README.md) — CPU: Read the currently mapped MPR3 bank without remapping executable code.
+- [53-cpu-irq-mask](53-cpu-irq-mask/README.md) — CPU/IRQ: Show explicit CPU IRQ masking around one byte update.
+- [54-vce-color-zero-toggle](54-vce-color-zero-toggle/README.md) — Graphics: Switch only VCE backdrop color; no fonts, BAT or sprites.
 
 ## Code origin and constraints
 

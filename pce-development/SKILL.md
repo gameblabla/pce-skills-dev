@@ -53,7 +53,7 @@ the current code before repeating their numbers or assumptions.
   through its source layout, camera/scroll, renderer, and display publication.
 - For lessons from recurring regressions and measured fixes, read
   [incident patterns](references/incident-patterns.md).
-- For first-time, single-function learning, use the [25 micro examples](examples/micro/README.md)
+- For first-time, single-function learning, use the [55 micro examples](examples/micro/README.md)
   (audio without graphics, input, VDC/VCE, SuperGrafx, Arcade Card, timer).
 - For scratch projects and worked starter patterns, use the self-contained
   [examples folder](examples/README.md). Code there is marked as pseudocode

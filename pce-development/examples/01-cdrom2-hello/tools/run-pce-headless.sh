@@ -21,6 +21,8 @@ frames=${PCE_RUN_FRAMES:-120}
 screenshot=$(absolute_path "${PCE_RUN_SCREENSHOT:-build/headless.png}")
 base_dir=$(absolute_path "${PCE_HEADLESS_BASE_DIR:-build/headless-base}")
 mkdir -p "$(dirname "$screenshot")" "$base_dir"
+# The headless frontend creates output files exclusively; make reruns idempotent.
+rm -f -- "$screenshot"
 
 emulator=${PCE_HEADLESS:-}
 if [ -z "$emulator" ]; then
@@ -73,6 +75,7 @@ fi
 if [ "$mode" = debug ]; then
   coverage=$(absolute_path "${PCE_COVERAGE:-build/coverage.json}")
   mkdir -p "$(dirname "$coverage")"
+  rm -f -- "$coverage"
   set -- "$@" --cov "$coverage"
   if [ -n "${PCE_DEBUG_DISASM:-}" ]; then
     set -- "$@" --disasm "$PCE_DEBUG_DISASM"
