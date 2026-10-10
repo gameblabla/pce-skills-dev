@@ -31,12 +31,20 @@ class RayTableTests(unittest.TestCase):
                 self.assertEqual(xx[angle*32+column],r.truncdiv(dx,2))
                 self.assertEqual(yy[angle*32+column],r.truncdiv(dy,2))
 
-    def test_height_and_shade_exact(self):
-        data=r.generate();heights=get_table(data,'wall_height',33)
-        shades=get_table(data,'wall_shade',33)
-        for depth in range(33):
-            self.assertEqual(heights[depth],max(2,26//(1+depth//5)))
-            self.assertEqual(shades[depth],14-min(5,depth//5))
+    def test_bitmap_height_and_texel_lookup(self):
+        data=r.generate()
+        heights=get_table(data,'wall_height',33)
+        texels=get_table(data,'wall_tex_v',33*64)
+        self.assertEqual(get_table(data,'floor_shift',128)[:66],[0]*66)
+        for depth,h in enumerate(heights):
+            self.assertEqual(h,max(12,min(116,360//(depth+2))))
+            self.assertLessEqual(h,116)
+            self.assertGreaterEqual(h,12)
+            row=texels[depth*64:(depth+1)*64]
+            self.assertTrue(all(0<=v<=15 for v in row))
+            for sample in range(64):
+                self.assertEqual(row[sample],(sample*32)//h if sample*2<h else 0)
+        self.assertTrue(all(heights[i]>=heights[i+1] for i in range(32)))
 
     def test_traffic_accumulator_matches_integer_divide(self):
         phase=[0,0,0];rem=[0,0,0];distance=0

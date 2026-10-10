@@ -3,13 +3,16 @@ LLVM_MOS_CC ?= mos-pce-clang
 include tools/llvm-mos-sdk.mk
 PCE_FLAGS ?= -std=gnu11 -Os -Wall -Wextra -Werror -mlto-zp=0
 OUT := build/34-rendered-raycaster.pce
-.PHONY: interaction-test interaction-replay all run trace visual-test clean
+.PHONY: interaction-test interaction-replay all run trace visual-test bitmap-test clean
 all: tables-check $(OUT)
-$(OUT): src/main.c src/ray_tables.h tools/genre_trace.h | toolchain
+$(OUT): src/main.c src/bat_bitmap.h src/ray_tables.h tools/genre_trace.h | toolchain
 	@mkdir -p build
 	$(LLVM_MOS_CC) $(PCE_FLAGS) -Itools src/main.c -o $@ -Wl,-Map,$@.map
+PCE_RUN_FRAMES ?= 180
 run: $(OUT)
-	@PCE_RUN_FRAMES=90 PCE_HEADLESS="$(PCE_HEADLESS)" tools/run-pce-headless.sh run "$(OUT)"
+	@PCE_RUN_FRAMES="$(PCE_RUN_FRAMES)" PCE_HEADLESS="$(PCE_HEADLESS)" tools/run-pce-headless.sh run "$(OUT)"
+bitmap-test: run
+	python3 tools/check_bitmap.py build/headless.png
 trace: $(OUT)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/genre_trace.py --rom "$(OUT)" --elf "$(OUT).elf" --scenario tools/genre-scenario.json --output build/genre-trace.json
 visual-test: $(OUT)

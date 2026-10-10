@@ -32,9 +32,16 @@ def generate():
         out.append('};')
     for axis,source in (('x',COS),('y',SIN)):
         out.append(f'static const int8_t player_step_{axis}[16] = '+'{'+','.join(str(truncdiv(v,6)) for v in source)+'};')
-    out.append('static const uint8_t wall_height[33] = {'+','.join(str(max(2,26//(1+d//5))) for d in range(33))+'};')
-    out.append('static const uint8_t wall_shade[33] = {'+','.join(str(14-min(5,d//5)) for d in range(33))+'};')
-    out.append('static const uint8_t sky_bat[28] = {'+','.join(str(0x80+(1+y//3 if y<12 else 7)) for y in range(28))+'};')
+    # Logical 128-pixel-high wall; texture V is an indexed 16-pixel pattern.
+    heights=[max(12,min(116,360//(d+2))) for d in range(33)]
+    out.append('static const uint8_t wall_height[33] = {'+','.join(map(str,heights))+'};')
+    out.append('static const uint8_t wall_tex_v[33][64] = {')
+    for h in heights:
+        out.append('    {'+','.join(str((k*32)//h if (k*2)<h else 0) for k in range(64))+'},')
+    out.append('};')
+    out.append('static const uint8_t floor_shift[128] = {'+','.join(
+        str(0 if y<66 else 4 if y<73 else 3 if y<82 else 2 if y<101 else 1)
+        for y in range(128))+'};')
     out.extend(['#endif',''])
     return '\n'.join(out)
 

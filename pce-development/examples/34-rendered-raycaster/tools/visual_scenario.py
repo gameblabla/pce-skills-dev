@@ -18,6 +18,13 @@ def check_pngs(before, after, require):
     with Image.open(before) as a, Image.open(after) as b:
         a=a.convert('RGB');b=b.convert('RGB')
         if a.size!=b.size:raise ValueError('captured image sizes differ')
+        first_colors=len(set(a.get_flattened_data()))
+        last_colors=len(set(b.get_flattened_data()))
+        each_limit=require.get('min_colors_each',0)
+        if not isinstance(each_limit,int) or each_limit<0 or each_limit>256:
+            raise ValueError('min_colors_each must be an integer in 0..256')
+        if each_limit and (first_colors<each_limit or last_colors<each_limit):
+            raise ValueError(f'one screenshot is incomplete/blank: colour counts {first_colors}, {last_colors}, expected >= {each_limit} each')
         colors=len(set(a.get_flattened_data()) | set(b.get_flattened_data()))
         if colors<require.get('min_colors',2):
             raise ValueError(f'only {colors} visible colours; expected at least {require.get("min_colors",2)}')
@@ -34,7 +41,7 @@ def check_pngs(before, after, require):
             region_changed=sum(any(pixel) for pixel in sub.get_flattened_data())
             if region_changed<require.get('min_region_changed_pixels',1):
                 raise ValueError(f'only {region_changed} pixels changed inside the gameplay region')
-        return {'size':list(a.size),'colors':colors,'changed_pixels':changed,
+        return {'size':list(a.size),'colors':colors,'colors_each':[first_colors,last_colors],'changed_pixels':changed,
                 'changed_region':region,'region_changed_pixels':region_changed,
                 'bounding_box':list(diff.getbbox() or ())}
 

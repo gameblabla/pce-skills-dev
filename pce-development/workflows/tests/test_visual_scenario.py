@@ -32,6 +32,21 @@ class VisualAcceptanceTests(unittest.TestCase):
                                                             'min_region_changed_pixels':1})
             with self.assertRaisesRegex(ValueError,'bounds'):
                 visual_scenario.check_pngs(p/'a.png',p/'b.png',{'changed_region':[200,100,300,200]})
+    def test_each_capture_must_be_nonblank(self):
+        with tempfile.TemporaryDirectory() as td:
+            p=Path(td)
+            a=Image.new('RGB',(256,224),(0,0,0))
+            b=a.copy()
+            # Union has three colours, but the before image is still blank.
+            b.putpixel((10,10),(180,80,30))
+            b.putpixel((20,20),(40,90,140))
+            a.save(p/'a.png');b.save(p/'b.png')
+            with self.assertRaisesRegex(ValueError,'incomplete/blank'):
+                visual_scenario.check_pngs(p/'a.png',p/'b.png',
+                    {'min_colors':3,'min_colors_each':2,'min_changed_pixels':2})
+            self.assertEqual(visual_scenario.check_pngs(p/'a.png',p/'b.png',
+                {'min_colors':3,'min_changed_pixels':2})['colors_each'],[1,3])
+
     def test_state_change_must_be_backed_by_telemetry(self):
         first=[2,3,0,0];last=[1,2,1,1]
         result=visual_scenario.check_state_changes(first,last,{'1':'decrease','3':'increase'})

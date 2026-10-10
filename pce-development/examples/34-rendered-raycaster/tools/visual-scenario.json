@@ -2,18 +2,19 @@
   "genre": "raycaster",
   "steps": [
     {
-      "frames": 18,
+      "frames": 240,
       "buttons": []
     },
     {
-      "frames": 35,
+      "frames": 240,
       "buttons": [
         "right"
       ]
     }
   ],
   "expect": {
-    "min_colors": 5,
-    "min_changed_pixels": 200
+    "min_colors": 9,
+    "min_changed_pixels": 8000,
+    "min_colors_each": 9
   }
 }

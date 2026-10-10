@@ -7,7 +7,7 @@ I recommend that you get the strongest local AI model that you can possibly
 use for your PC.
 ## Single-purpose C examples
 
-The 95 small examples are in [`pce-development/examples/micro/`](pce-development/examples/micro/README.md).
+The 99 small examples are in [`pce-development/examples/micro/`](pce-development/examples/micro/README.md).
 Each ROM has one `main.c` and shared compiler rules. Sound examples produce
 sound without video initialization, and debugger examples expose volatile
 state instead of displaying unrelated text or graphics. The full historical
@@ -49,10 +49,13 @@ palette-safe, deduplicated PCE tiles, BAT, and sprite data, with manifest and
 VRAM overlap checks. `visual_scenario.py` couples scripted input, framebuffer
 captures, trace input latching, and movement/diff thresholds. These tools and
 assets are bundled inside the standalone example projects. The raycaster is
-an actual coarse 32-column ray stepper, *not* a static image labelled raycast.
+an actual 32-ray renderer writing two independent four-bit pixels per BAT
+entry, *not* a static image or 8px solid-colour BAT columns. Run
+`PCE_HEADLESS=... make raycaster-bitmap-test` for its independent 512×224
+bitmap screenshot audit. Game traces remain separate from visual evidence.
 
 These teaching ROMs are not fully featured commercial games; the raycaster has
-solid-colour distance-shaded walls rather than textured walls, and the racer
+textured stone/brick/metal walls through the 512×224 paired-BAT bitmap backend, and the racer
 uses a fixed perspective background rather than the separate paired-BAT Mode 7
 engine. The screenshot checks prove rendered changes in an emulator, not sound,
 collision completeness, performance guarantees, or physical hardware timing.
