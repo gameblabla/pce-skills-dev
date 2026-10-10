@@ -17,7 +17,7 @@
 #define BAT_BITMAP_TILE_WORD 0x2000u
 #define BAT_BITMAP_TILE_BASE (BAT_BITMAP_TILE_WORD / 16u)
 
-static volatile uint8_t bat_line, bat_source_y, bat_phase, bat_frames;
+volatile uint8_t bat_line, bat_source_y, bat_phase, bat_frames;
 
 /* Each tile is a pair of horizontally solid four-pixel colour fields. */
 static void bat_bitmap_patterns(void) {
@@ -72,6 +72,7 @@ static __attribute__((unused)) void bat_bitmap_pair(uint8_t left, uint8_t right)
  * as 128 logical scanlines. Each virtual row is (roughly) 7/4 scanlines high.
  * Writes inside the IRQ take effect on the following scanline.
  */
+#ifndef BAT_BITMAP_NATIVE_IRQ
 __attribute__((interrupt)) void irq_vdc(void) {
     uint8_t status = *IO_VDC_STATUS;
     if (status & VDC_FLAG_VBLANK) {
@@ -89,8 +90,13 @@ __attribute__((interrupt)) void irq_vdc(void) {
             if (phase>=7u) {phase-=7u; ++bat_source_y;}
             bat_phase=phase;
             uint8_t y=bat_source_y;
-            *IO_VDC_INDEX=VDC_REG_BG_SCROLL_X;
-            *IO_VDC_DATA=(y & 64u)?512u:0u;
+            /* BXR changes only at the boundary between the two 64-row
+             * BAT pages. Writing it on all 223 raster events wastes VDC
+             * bus cycles and IRQ time. VBlank already restores BXR=0. */
+            if (y==64u) {
+                *IO_VDC_INDEX=VDC_REG_BG_SCROLL_X;
+                *IO_VDC_DATA=512u;
+            }
             *IO_VDC_INDEX=VDC_REG_BG_SCROLL_Y;
             /* Background Y auto-advances at line end: compensate for it. */
             *IO_VDC_DATA=(uint16_t)((((uint16_t)(y & 63u))<<3)-1u);
@@ -99,6 +105,10 @@ __attribute__((interrupt)) void irq_vdc(void) {
         }
     }
 }
+
+#else
+extern void irq_vdc(void);
+#endif
 
 static void bat_bitmap_display(void) {
     bat_line=bat_source_y=bat_phase=0;

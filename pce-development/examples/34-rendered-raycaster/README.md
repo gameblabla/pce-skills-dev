@@ -18,11 +18,23 @@ stale tables. `make`, `make trace`, `make visual-test`, and
 `make interaction-test` exercise compilation, state and collision, and
 independent rendered-pixel changes.
 
-A *readable starter*, not a high-frame-rate Wolf3D engine: The renderer stages four logical rows per update in a 512-byte RAM buffer,
-then uploads them ONLY during the next VBlank. This avoids starvation of
-the scanline raster IRQ. The display stays enabled; a complete 128-row
-redraw spans 32 game updates and appears progressively. Faster bitmap engines need dirty-strip tracking, tighter assembly samplers,
-and HuC6280 cycle-level profiling.
+The bitmap uses `src/bat_bitmap_irq.S`, an interrupt-safe native HuC6280
+handler with direct ST0/ST1/ST2 register writes. It replaces the costly C
+ISR; `libcommon/src/bat_bitmap_irq.S` is the same implementation for Mode 7.
+The handler preserves CPU registers and owns only VDC raster registers.
+Its `.type`/`.size` declarations are essential for accurate ROM cycle maps.
+
+A *working textured starter*, not a high-frame-rate Wolf3D engine: the
+renderer stages four logical rows per game update in a 512-byte RAM buffer,
+then uploads them on the following VBlank. The display stays enabled and a
+complete 128-row redraw spans **32 updates**, displayed progressively.
+`make visual-test`, `make bitmap-test`, and `make interaction-test` are
+mandatory regressions when editing this driver: an alternative sparse
+scanline schedule looked faster, but missed IRQs produced sky-only frames
+under sustained controller input, so that experiment was rejected.
+
+Measured emulator master-clock raster-IRQ savings are documented in
+`../../workflows/CYCLE_PROFILING.md`; they do not establish hardware FPS.
 
 ## Independent visual check
 
@@ -30,5 +42,5 @@ and HuC6280 cycle-level profiling.
 for distinct ceiling, wall and floor colours, visibly textured wall regions,
 and absence of the cyan palette holes seen in earlier Mode 7 prototypes.
 The game emits G2TR telemetry separately: wall collision tests validate
-actual map movement. The renderer's BAT writes are sliced across 16 game
+actual map movement. The renderer's BAT writes are sliced across 32 game
 updates, so a complete new viewpoint is progressive rather than instant.

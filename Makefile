@@ -168,3 +168,4 @@ cycles-all: cycles-ray
 	$(PYTHON) $(CYCLE_TOOL) run --emulator "$(PCE_HEADLESS)" --rom $(EX)/26-platformer-starter/build/26-platformer-starter.pce --mlb $(EX)/26-platformer-starter/build/26-platformer-starter.mlb --scenario $(CYCLE_SPECS)/platformer.json --out build/cycles/platformer
 	$(PYTHON) $(CYCLE_TOOL) run --emulator "$(PCE_HEADLESS)" --rom $(EX)/35-rendered-racer/build/35-rendered-racer.pce --mlb $(EX)/35-rendered-racer/build/35-rendered-racer.mlb --scenario $(CYCLE_SPECS)/racer.json --out build/cycles/racer
 	$(PYTHON) $(CYCLE_TOOL) run --emulator "$(PCE_HEADLESS)" --rom $(EX)/micro/86-mode7-bitmap-floor/build/86-mode7-bitmap-floor.pce --mlb $(EX)/micro/86-mode7-bitmap-floor/build/86-mode7-bitmap-floor.mlb --scenario $(CYCLE_SPECS)/mode7.json --out build/cycles/mode7
+	$(PYTHON) $(CYCLE_TOOL) gate --report build/cycles/mode7/report.json --budget $(CYCLE_SPECS)/mode7-budget.json

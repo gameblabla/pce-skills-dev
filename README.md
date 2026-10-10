@@ -173,3 +173,17 @@ See `pce-development/workflows/CYCLE_PROFILING.md` for method, actual emulator
 results, measurement caveats, per-routine budgets and regression instructions.
 **These are cycle costs in the emulator, not physical-hardware benchmarks or
 host CPU wall time.** Real screenshot and input trace validation remain required.
+
+### Faster native bitmap raster IRQ
+
+The 512x224 paired-BAT **Mode 7** and **raycaster** now use an opt-in,
+register-preserving HuC6280 raster IRQ from `libcommon/src/bat_bitmap_irq.S`
+(the standalone raycaster vendors the same assembly). This retains all 223
+scheduled scanline events while making IRQ register updates much cheaper:
+about 49% fewer emulated raster-IRQ master ticks in Mode 7 and
+56–58% fewer in the raycaster, with the full ROM symbol range accounted for. The raycaster
+also advances more game updates under matched controller inputs; update
+counts differ from baseline, so this is *not* a same-work timing comparison.
+Use `make cycles-ray`, `make raycaster-bitmap-test` and `make test` before
+claiming a performance improvement. See
+[`CYCLE_PROFILING.md`](pce-development/workflows/CYCLE_PROFILING.md).

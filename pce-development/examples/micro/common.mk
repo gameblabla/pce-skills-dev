@@ -14,14 +14,20 @@ LIBCOMMON_DIR := $(abspath ../../../libcommon)
 ARITH_GUARD := ../../../workflows/arith_guard.py
 endif
 LIBCOMMON_A := $(LIBCOMMON_DIR)/build/libpcecommon.a
+# Opt-in bitmap interrupt: not part of libcommon.a, because a strong IRQ
+# symbol in a generic archive could be extracted by an unrelated program.
+ifeq ($(NATIVE_BITMAP_IRQ),1)
+PCE_FLAGS += -DBAT_BITMAP_NATIVE_IRQ
+NATIVE_BITMAP_SRC := $(LIBCOMMON_DIR)/src/bat_bitmap_irq.S
+endif
 $(LIBCOMMON_A): $(wildcard $(LIBCOMMON_DIR)/src/*.c) $(wildcard $(LIBCOMMON_DIR)/src/*_lut.h) $(wildcard $(LIBCOMMON_DIR)/include/*.h)
 	$(MAKE) --no-print-directory -C $(LIBCOMMON_DIR) all
 
 .PHONY: all clean
 all: $(OUT)
-$(OUT): main.c $(wildcard ../*.h) $(wildcard $(LIBCOMMON_DIR)/include/*.h) $(LIBCOMMON_A) | toolchain
+$(OUT): main.c $(wildcard ../*.h) $(wildcard $(LIBCOMMON_DIR)/include/*.h) $(NATIVE_BITMAP_SRC) $(LIBCOMMON_A) | toolchain
 	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) -I$(LIBCOMMON_DIR)/include $< $(LIBCOMMON_A) -o $@ -Wl,-Map,$@.map
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -I$(LIBCOMMON_DIR)/include $< $(NATIVE_BITMAP_SRC) $(LIBCOMMON_A) -o $@ -Wl,-Map,$@.map
 clean:
 	@rm -rf build
 

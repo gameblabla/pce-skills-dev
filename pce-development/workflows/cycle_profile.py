@@ -45,6 +45,11 @@ def rom_labels(path):
         if not m: continue
         lo=int(m[1],16);hi=int(m[2],16) if m[2] else lo
         if lo>hi or hi>=MAX_PHYSICAL:raise ValueError('invalid physical ROM span')
+        # LLVM-MOS assembly exports a singleton label unless both .type and
+        # .size are declared. Treating that as a one-byte IRQ once made an
+        # optimization falsely appear to save 99% of its cycle budget.
+        if m[3]=='irq_vdc' and lo==hi:
+            raise ValueError('irq_vdc has no ROM span: assembly handler needs .type and .size for cycle attribution')
         spans.append((lo,hi,m[3]))
     if not spans:raise ValueError('no PcePrgRom symbols: require an LLVM-MOS .mlb file')
     spans.sort(key=lambda x:(x[0],x[1]-x[0]))
@@ -250,6 +255,12 @@ def check_budget(report,limits):
         if name not in report['segments']:raise ValueError(f'budget segment missing from trace: {name}')
         if not isinstance(b,dict):raise ValueError('segment budget must be an object')
         s=report['segments'][name]
+        if 'min_attributed_pct' in b:
+            bound=b['min_attributed_pct']
+            if not isinstance(bound,(int,float)) or not 0<bound<=100:
+                raise ValueError('min_attributed_pct must be in (0,100]')
+            if s.get('attributed_pct',0)<bound:
+                issues.append(f'{name}: only {s.get("attributed_pct",0):.2f}% of cycles have a ROM symbol; require >= {bound}%')
         if 'min_game_updates' in b:
             bound=b['min_game_updates']
             if not isinstance(bound,int) or bound<1:raise ValueError('min_game_updates must be positive integer')

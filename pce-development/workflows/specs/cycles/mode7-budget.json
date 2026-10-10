@@ -1,0 +1,22 @@
+{
+  "segments": {
+    "idle": {
+      "min_attributed_pct": 99,
+      "max_ticks_per_frame_by_symbol": {
+        "irq_vdc": 150000
+      }
+    },
+    "turn": {
+      "min_attributed_pct": 99,
+      "max_ticks_per_frame_by_symbol": {
+        "irq_vdc": 70000
+      }
+    },
+    "forward": {
+      "min_attributed_pct": 99,
+      "max_ticks_per_frame_by_symbol": {
+        "irq_vdc": 70000
+      }
+    }
+  }
+}

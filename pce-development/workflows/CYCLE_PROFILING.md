@@ -89,3 +89,51 @@ symbol names, incomplete G2TR publication, invalid scenarios, regression
 budgets and inequivalent comparisons are in `tests/test_cycle_profile.py`.
 No internet access, package installation, LLM calls or private transcripts
 are involved.
+
+## Native 512x224 bitmap raster IRQ (2026-10-10)
+
+The Mode 7 lesson and rendered raycaster now opt into a shared HuC6280
+`irq_vdc` written with ST0/ST1/ST2, eliminating the compiler's extensive
+interrupt prologue, pointer writes and redundant BXR updates. Source:
+`pce-development/libcommon/src/bat_bitmap_irq.S`, vendored identically in
+the standalone raycaster as `src/bat_bitmap_irq.S`.
+
+**Measured per 60 emulated video frames, identical input masks and warmup:**
+
+| ROM / segment | C raster IRQ ticks / video frame | native IRQ ticks / video frame |
+|---|---:|---:|
+| Raycaster idle | 197,893 | 83,248 |
+| Raycaster turn right | 219,656 | 96,593 |
+| Raycaster walk forward | 206,598 | 87,696 |
+| Mode 7 idle | 263,181 | 134,407 |
+| Mode 7 turn | 114,060 | 58,249 |
+| Mode 7 forward | 114,060 | 58,249 |
+
+These are *emulated master ticks attributed to the IRQ*, **not** game-update
+CPU cost or a direct 60 Hz frame-rate claim. Raycaster updates per 60
+emulator frames changed from 15/10/13 (C) to 23/17/21 (native IRQ), so the
+profiler correctly marks per-routine run-to-run speedup comparisons as
+**non-equivalent work**. The IRQ itself is materially cheaper in both
+scenarios; further improvements need equal-work benchmarks and hardware
+confirmation. Mode 7 redraws with the display paused, so the IRQ is active
+for different proportions of each segment.
+
+**Important profiler trap:** LLVM-MOS will export an assembly `irq_vdc`
+as a singleton physical address unless both `.type irq_vdc,@function` and
+`.size irq_vdc, .-irq_vdc` are supplied. The profiler used to charge most
+of those cycles to `<unmapped>`, implying a false ~99% savings. `rom_labels`
+now rejects that incomplete map and the raycaster budgets require >=99%
+ROM attribution. Never benchmark from an incomplete symbol map.
+
+**Rejected experiment:** scheduling raster IRQs only on logical-pixel row
+transitions reduced cycle cost but caused long-held VRAM writes to miss the
+first comparator and intermittently show a sky-only screen during rotation.
+The working native handler retains the known-good per-physical-scanline
+schedule, and is checked with both long-duration screenshots and G2TR
+collision scenarios.
+
+The native ISR's BYR high byte must borrow at **each multiple of 32**
+logical rows: `((y & 63) << 3) - 1` has a borrow for `y` of 0, 32, 64,
+and 96. A prior assembly attempt borrowed only when `y & 63 == 0`,
+which created two dark lines in the Mode 7 sky. The micro screenshot smoke
+and `test_native_bitmap_irq.py` now catch this regression.

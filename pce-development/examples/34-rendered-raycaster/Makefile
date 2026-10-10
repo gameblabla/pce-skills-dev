@@ -2,12 +2,13 @@
 LLVM_MOS_CC ?= mos-pce-clang
 include tools/llvm-mos-sdk.mk
 PCE_FLAGS ?= -std=gnu11 -Os -Wall -Wextra -Werror -mlto-zp=0
+PCE_FLAGS += -DBAT_BITMAP_NATIVE_IRQ
 OUT := build/34-rendered-raycaster.pce
 .PHONY: interaction-test interaction-replay all run trace visual-test bitmap-test clean
 all: tables-check $(OUT)
-$(OUT): src/main.c src/bat_bitmap.h src/ray_tables.h tools/genre_trace.h | toolchain
+$(OUT): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h tools/genre_trace.h | toolchain
 	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) -Itools src/main.c -o $@ -Wl,-Map,$@.map
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -Itools src/main.c src/bat_bitmap_irq.S -o $@ -Wl,-Map,$@.map
 PCE_RUN_FRAMES ?= 180
 run: $(OUT)
 	@PCE_RUN_FRAMES="$(PCE_RUN_FRAMES)" PCE_HEADLESS="$(PCE_HEADLESS)" tools/run-pce-headless.sh run "$(OUT)"

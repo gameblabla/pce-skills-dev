@@ -192,3 +192,21 @@ intermittent incomplete frames. The current working renderer keeps that loop
 inline, preserving the existing bitmap, rotation and collision tests. If a
 profiling change modifies output, reject it even if the profiler is cleaner.
 Hardware stopwatch/logic-analyzer measurements remain a separate requirement.
+
+## Paired-BAT raster IRQ performance policy
+
+For 512x224 BAT-backed bitmap examples, use the **opt-in** native
+`libcommon/src/bat_bitmap_irq.S` (Mode 7) or the identical vendored
+`34-rendered-raycaster/src/bat_bitmap_irq.S`. Never link a strong
+`irq_vdc` by default into audio-only examples. The native assembly must
+save/restore A/X/Y, finish with RTI, and publish `.type` + `.size` so
+cycle attribution covers the complete function. Keep the safe per-physical-
+scanline comparator schedule: experimentally skipping raster events made the
+raycaster occasionally render sky-only during sustained rotation.
+
+After changing video timing or SAT/BAT updates, run `make test`, the
+raycaster's `make visual-test` and `make interaction-test`, Mode 7's smoke
+capture, and `make cycles-ray` / `make cycles-all`. Reject faster versions
+with blank/incomplete frames. Report emulator *master ticks per frame* and
+game-update counts separately, and don't call per-routine before/after
+costs comparable when the counts of completed updates differ.

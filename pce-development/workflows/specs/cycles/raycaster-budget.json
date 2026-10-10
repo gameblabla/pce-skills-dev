@@ -1,26 +1,29 @@
 {
   "segments": {
     "idle": {
-      "min_game_updates": 5,
+      "min_game_updates": 17,
       "max_ticks_per_frame_by_symbol": {
-        "irq_vdc": 225000,
+        "irq_vdc": 110000,
         "wall_pixel": 55000,
         "cast_scene": 15000
-      }
+      },
+      "min_attributed_pct": 99
     },
     "turn": {
-      "min_game_updates": 5,
+      "min_game_updates": 12,
       "max_ticks_per_frame_by_symbol": {
-        "irq_vdc": 250000,
+        "irq_vdc": 125000,
         "wall_pixel": 55000
-      }
+      },
+      "min_attributed_pct": 99
     },
     "walk": {
-      "min_game_updates": 5,
+      "min_game_updates": 15,
       "max_ticks_per_frame_by_symbol": {
-        "irq_vdc": 250000,
+        "irq_vdc": 115000,
         "cast_scene": 15000
-      }
+      },
+      "min_attributed_pct": 99
     }
   }
 }

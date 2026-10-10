@@ -34,8 +34,11 @@ def lint(project):
 
     source = main.read_text()
     doc = readme.read_text()
-    if makefile.read_text().strip() != 'include ../common.mk':
-        problems.append('Makefile must use the shared one-line build rule')
+    build_recipe=makefile.read_text().strip()
+    standard='include ../common.mk'
+    bitmap_native='NATIVE_BITMAP_IRQ := 1\ninclude ../common.mk'
+    if build_recipe!=standard and not (project.name=='86-mode7-bitmap-floor' and build_recipe==bitmap_native):
+        problems.append('Makefile must use shared build rule (only Mode 7 may opt in to native bitmap IRQ)')
     if any(project.glob('*.h')) or len(list(project.glob('*.c'))) != 1:
         problems.append('project must have just main.c; place reusable helpers beside common.mk')
     if len(source.splitlines()) > 45:

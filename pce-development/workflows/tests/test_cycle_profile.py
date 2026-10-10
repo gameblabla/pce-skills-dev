@@ -21,6 +21,12 @@ class ProfileTests(unittest.TestCase):
             self.assertEqual(unknown,19)
             self.assertEqual(c.find_ram_symbol(f,'frame'),(0x2210,2))
             with self.assertRaisesRegex(ValueError,'cannot find'):c.find_ram_symbol(f,'bogus')
+            # A one-byte IRQ label is *not* evidence of a one-byte handler.
+            # Require assembly .type/.size so costly instructions are counted.
+            f.write_text('PcePrgRom:24:irq_vdc\nPcePrgRom:50-70:main\n')
+            with self.assertRaisesRegex(ValueError,'no ROM span'):c.rom_labels(f)
+            f.write_text('PcePrgRom:24-b3:irq_vdc\nPcePrgRom:50-70:main\n')
+            self.assertEqual(c.rom_labels(f)[0],(0x24,0xb3,'irq_vdc'))
     def test_duplicate_and_malformed_raw_profiles(self):
         with tempfile.TemporaryDirectory() as d:
             f=Path(d)/'raw.txt'
@@ -72,6 +78,12 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(fail['result'],'failed');self.assertEqual(len(fail['issues']),3)
         ok=c.check_budget(r,{'segments':{'turn':{'min_game_updates':4,'max_ticks_per_frame_by_symbol':{'render_slice':110000},'max_pct_by_category':{'interrupt':80}}}})
         self.assertEqual(ok['result'],'passed')
+        s['attributed_pct']=75.0
+        partial=c.check_budget(r,{'segments':{'turn':{'min_attributed_pct':99}}})
+        self.assertEqual(partial['result'],'failed')
+        self.assertIn('only 75.00%',partial['issues'][0])
+        with self.assertRaisesRegex(ValueError,'min_attributed_pct'):
+            c.check_budget(r,{'segments':{'turn':{'min_attributed_pct':120}}})
         missing=c.check_budget(r,{'segments':{'turn':{'max_ticks_per_frame_by_symbol':{'nonexistent_render':100}}}})
         self.assertEqual(missing['result'],'failed')
     def test_compare_does_not_claim_speedup_when_game_updates_differ(self):
