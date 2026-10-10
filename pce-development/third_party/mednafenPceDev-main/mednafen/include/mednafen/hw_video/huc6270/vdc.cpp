@@ -25,6 +25,7 @@
 #include <math.h>
 #include "vdc.h"
 
+extern "C" { extern uint32_t mdfn_dbg_pc; }
 namespace Mednafen
 {
 
@@ -1422,6 +1423,8 @@ void VDC::CheckAndCommitPending(void)
   {
    if(pending_write_addr < VRAM_Size)
    {
+    if(getenv("SATTRACE") && pending_write_addr >= 0x7f00u && pending_write_addr < 0x8000u)
+     fprintf(stderr, "SATW %04x=%04x pc=%04x vphase=%d vcnt=%d MAWR=%04x\n", pending_write_addr, pending_write_latch, mdfn_dbg_pc & 0xffff, (int)VPhase, (int)VPhaseCounter, MAWR);
     VRAM[pending_write_addr] = pending_write_latch;
     FixTileCache(pending_write_addr);
    }

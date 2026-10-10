@@ -237,11 +237,13 @@ static DECLFR(IORead)
  return(0xFF);
 }
 
+extern "C" { uint32_t mdfn_dbg_pc; }
 static DECLFW(IOWrite)
 {
  switch(A & 0x1c00)
  {
   case 0x0000: HuCPU.StealCycle();
+	       mdfn_dbg_pc = HuCPU.GetRegister(HuC6280::GSREG_PC);
 	       vce->WriteVDC(A & 0x80001FFF, V);
 	       break;
 
@@ -1017,6 +1019,9 @@ static void Emulate(EmulateSpecStruct *espec)
   vce->ResetTS(end_timestamp_mod12);
 
   HuCPU.SyncAndResetTimestamp(end_timestamp_mod12);
+  // Flush the pending opcode before the HuC6280 clock wraps at VBlank.
+  // Keep the PC across frames for an in-progress block transfer.
+  PCE_CycleProfFrameEnd(end_timestamp, end_timestamp_mod12);
 
   //
   //

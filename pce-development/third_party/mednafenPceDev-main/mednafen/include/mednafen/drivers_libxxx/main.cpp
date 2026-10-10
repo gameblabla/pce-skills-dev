@@ -10,6 +10,7 @@
 #include <mednafen/state-driver.h>
 #include <mednafen/movie-driver.h>
 
+namespace MDFN_IEN_PCE { extern uint64 *PCE_CycleProf; void PCE_CycleProfReset(void); }
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
@@ -52,6 +53,11 @@ struct HeadlessState
  std::vector<int32> line_widths;
  MDFN_Rect last_rect = {0, 0, 0, 0};
  uint64_t frame_count = 0;
+ uint64_t audio_samples = 0, audio_nonzero = 0;
+ unsigned audio_peak = 0;
+ bool capture_audio = false;
+ std::vector<int16> captured_audio;
+ std::vector<int16> audio_buffer = std::vector<int16>(8192);
  std::ofstream y4m;
  int y4m_w = 0;
  int y4m_h = 0;
@@ -59,6 +65,8 @@ struct HeadlessState
 };
 
 HeadlessState* g_state = nullptr;
+// PCE pad data: I, II, Select, Run, Up, Right, Down, Left, then III-VI.
+static uint8* g_pad_data = nullptr;
 
 static std::string JsonEscape(const std::string& s)
 {
@@ -127,9 +135,18 @@ static int ParseInt(const std::string& s)
  return (int)v;
 }
 
+static std::vector<uint64_t> g_prof(1 << 21);
 static void CoverageCPUCallback(uint32 pc, bool)
 {
  pc &= 0xFFFF;
+ static const bool trace_bios = getenv("PCE_TRACE_BIOS") != nullptr;
+ if(trace_bios && (pc == 0xEC05 || pc == 0xEB8F))
+ {
+  std::cerr << "BIOS " << std::hex << pc << " args";
+  for(unsigned i = 0; i < 8; i++)
+   std::cerr << " " << MDFNGameInfo->Debugger->MemPeek(0x20F8 + i, 1, true, true);
+  std::cerr << std::dec << '\n';
+ }
  g_cov[pc]++;
  g_cov_total++;
 }
@@ -202,7 +219,7 @@ static void SaveCoverage(const std::string& path)
 {
  std::ofstream f(path.c_str(), std::ios::binary | std::ios::trunc);
  if(!f) throw std::runtime_error("could not open coverage output: " + path);
- f << "{\n  \"format\": \"mednafen-pce-logical-pc-coverage-v1\",\n";
+ f << "{\n  \"format\": \"pce-logical-pc-coverage-v1\",\n";
  f << "  \"frames\": " << (g_state ? g_state->frame_count : 0) << ",\n";
  f << "  \"total_instructions\": " << g_cov_total << ",\n";
  f << "  \"unique_logical_pcs\": " << CoverageUnique() << ",\n";
@@ -313,12 +330,21 @@ static void RunFrames(unsigned count)
   espec.surface = g_state->surface.get();
   espec.LineWidths = g_state->line_widths.data();
   espec.skip = false;
-  espec.SoundRate = 0;
-  espec.SoundBuf = nullptr;
-  espec.SoundBufMaxSize = 0;
+  espec.SoundRate = 44100;
+  espec.SoundBuf = g_state->audio_buffer.data();
+  espec.SoundBufMaxSize = g_state->audio_buffer.size() / 2;
   espec.SoundVolume = 1.0;
   espec.soundmultiplier = 1.0;
   MDFNI_Emulate(&espec);
+  for(int32 s = 0; s < espec.SoundBufSize * 2; ++s)
+  {
+   int sample = espec.SoundBuf[s];
+   g_state->audio_samples++;
+   if(sample) g_state->audio_nonzero++;
+   g_state->audio_peak = std::max(g_state->audio_peak, (unsigned)std::abs(sample));
+  }
+  if(g_state->capture_audio)
+   g_state->captured_audio.insert(g_state->captured_audio.end(), espec.SoundBuf, espec.SoundBuf + espec.SoundBufSize * 2);
   g_state->last_rect = espec.DisplayRect;
   g_state->frame_count++;
   Y4MWriteFrame();
@@ -366,6 +392,14 @@ static void RPCLoop()
     RunFrames(ParseInt(a[1]));
     RPCReplyOK(",\"frame\":" + std::to_string(g_state->frame_count));
    }
+   else if(op == "input")
+   {
+    if(a.size() != 2 || !g_pad_data) throw std::runtime_error("input requires a PCE pad bitmask");
+    uint32 mask = ParseU32(a[1]);
+    if(mask > 0xFFF) throw std::runtime_error("PCE pad mask exceeds 12 buttons");
+    g_pad_data[0] = mask; g_pad_data[1] = mask >> 8;
+    RPCReplyOK();
+   }
    else if(op == "disasm")
    {
     if(a.size() != 3) throw std::runtime_error("disasm requires address and count");
@@ -381,11 +415,134 @@ static void RPCLoop()
     auto data = MemRead(ParseU32(a[1]), len, ParseInt(a[3]) != 0);
     RPCReplyOK(",\"hex\":\"" + HexBytes(data) + "\"");
    }
+   else if(op == "trace_frames")
+   {
+    if(a.size() != 4) throw std::runtime_error("trace_frames requires address, length, frame count");
+    uint32 address = ParseU32(a[1]);
+    unsigned len = (unsigned)ParseInt(a[2]);
+    unsigned frames = (unsigned)ParseInt(a[3]);
+    if(address > 0xFFFF || len != 432 || address + len > 0x10000 || !frames || frames > 3600)
+     throw std::runtime_error("trace_frames requires two consecutive 216-byte P2TR v1 records and 1-3600 samples within logical memory");
+    auto valid_record = [](const std::vector<uint8_t>& data, size_t offset) {
+     return data.size() >= offset + 216 && data[offset] == 'P' && data[offset + 1] == '2' &&
+            data[offset + 2] == 'T' && data[offset + 3] == 'R' && data[offset + 4] == 1 &&
+            !(data[offset + 18] & 1) && data[offset + 19] == 0;
+    };
+    auto latest_record = [&](const std::vector<uint8_t>& pair) {
+     const bool first_valid = valid_record(pair, 0);
+     const bool second_valid = valid_record(pair, 216);
+     if(!first_valid && !second_valid) return std::vector<uint8_t>();
+     size_t offset = 0;
+     if(!first_valid) offset = 216;
+     else if(second_valid)
+     {
+      const uint8_t first_sequence = pair[18];
+      const uint8_t second_sequence = pair[216 + 18];
+      const uint8_t difference = (uint8_t)(first_sequence - second_sequence);
+      if(difference && difference >= 128) offset = 216;
+     }
+     return std::vector<uint8_t>(pair.begin() + offset, pair.begin() + offset + 216);
+    };
+    auto read_trace = [&]() { return latest_record(MemRead(address, len, true)); };
+    std::vector<uint8_t> latest = read_trace();
+    if(latest.empty())
+     throw std::runtime_error("no complete P2TR v1 record is ready before input; increase initial frames or publish two records in mapped main RAM");
+    uint8_t last_sequence = latest[18];
+    std::ostringstream out;
+    out << ",\"start_frame\":" << g_state->frame_count << ",\"samples\":[";
+    for(unsigned i = 0; i < frames; i++)
+    {
+     if(i) out << ',';
+     bool published = false;
+     for(unsigned attempt = 0; attempt < 4; attempt++)
+     {
+      RunFrames(1);
+      latest = read_trace();
+      if(!latest.empty() && latest[18] != last_sequence)
+      {
+       last_sequence = latest[18];
+       published = true;
+       break;
+      }
+     }
+     if(!published)
+      throw std::runtime_error("P2TR publication did not advance within four emulator frames; update the trace once per gameplay frame");
+     out << "{\"frame\":" << g_state->frame_count << ",\"hex\":\""
+         << HexBytes(latest) << "\"}";
+    }
+    out << ']';
+    RPCReplyOK(out.str());
+   }
+   else if(op == "loadstate")
+   {
+    if(a.size() != 2) throw std::runtime_error("loadstate requires path");
+    std::string p = PercentDecode(a[1]);
+    if(!MDFNI_LoadState(p.c_str(), nullptr)) throw std::runtime_error("loadstate failed");
+    RPCReplyOK();
+   }
    else if(op == "screenshot")
    {
     if(a.size() != 2) throw std::runtime_error("screenshot requires path");
     std::string p = PercentDecode(a[1]); SaveScreenshot(p);
     RPCReplyOK(",\"path\":\"" + JsonEscape(p) + "\"");
+   }
+   else if(op == "asread")
+   {
+    if(a.size() != 4) throw std::runtime_error("asread requires space, address, length");
+    bool found = false;
+    for(const auto& space : *MDFNGameInfo->Debugger->AddressSpaces)
+     if(space.name == a[1])
+     {
+      std::vector<uint8_t> data(std::min(65536, ParseInt(a[3])));
+      space.GetAddressSpaceBytes(space.name.c_str(), ParseU32(a[2]), data.size(), data.data());
+      RPCReplyOK(",\"hex\":\"" + HexBytes(data) + "\""); found = true; break;
+     }
+    if(!found) throw std::runtime_error("unknown address space");
+   }
+   else if(op == "aswrite")
+   {
+    if(a.size() != 4 || a[3].size() % 2) throw std::runtime_error("aswrite requires space, address, hex bytes");
+    std::vector<uint8_t> data;
+    for(size_t i = 0; i < a[3].size(); i += 2)
+    {
+     const std::string pair = a[3].substr(i, 2);
+     if(pair.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos)
+      throw std::runtime_error("invalid hex byte");
+     data.push_back(static_cast<uint8_t>(std::stoul(pair, nullptr, 16)));
+    }
+    if(data.size() > 65536) throw std::runtime_error("aswrite exceeds 65536 bytes");
+    bool found = false;
+    for(const auto& space : *MDFNGameInfo->Debugger->AddressSpaces)
+     if(space.name == a[1] && space.PutAddressSpaceBytes)
+     {
+      space.PutAddressSpaceBytes(space.name.c_str(), ParseU32(a[2]), data.size(), 1, true, data.data());
+      RPCReplyOK(); found = true; break;
+     }
+    if(!found) throw std::runtime_error("unknown or read-only address space");
+   }
+   else if(op == "register_set")
+   {
+    if(a.size() != 3) throw std::runtime_error("register_set requires name, value");
+    bool found = false;
+    for(const auto* group : *MDFNGameInfo->Debugger->RegGroups)
+     for(const RegType* reg = group->Regs; reg->bsize; ++reg)
+      if(reg->bsize != 0xFFFF && a[1] == reg->name && group->SetRegister)
+      { group->SetRegister(reg->id, ParseU32(a[2])); found = true; }
+    if(!found) throw std::runtime_error("unknown or read-only register");
+    RPCReplyOK();
+   }
+   else if(op == "registers")
+   {
+    std::ostringstream out; out << ",\"registers\":{";
+    bool first = true;
+    for(const auto* group : *MDFNGameInfo->Debugger->RegGroups)
+     for(const RegType* reg = group->Regs; reg->bsize; ++reg)
+      if(reg->bsize != 0xFFFF)
+      {
+       if(!first) out << ','; first = false;
+       out << '"' << reg->name << "\":" << group->GetRegister(reg->id, nullptr, 0);
+      }
+    out << '}'; RPCReplyOK(out.str());
    }
    else if(op == "record_start")
    {
@@ -394,12 +551,68 @@ static void RPCLoop()
     RPCReplyOK(",\"path\":\"" + JsonEscape(p) + "\"");
    }
    else if(op == "record_stop") { Y4MStop(); RPCReplyOK(); }
+   else if(op == "prof_start")
+   {
+    if(a.size() != 1) throw std::runtime_error("prof_start takes no arguments");
+    MDFN_IEN_PCE::PCE_CycleProf = nullptr;
+    std::fill(g_prof.begin(), g_prof.end(), 0);
+    MDFN_IEN_PCE::PCE_CycleProfReset();
+    MDFN_IEN_PCE::PCE_CycleProf = g_prof.data();
+    RPCReplyOK();
+   }
+   else if(op == "prof_dump")
+   {
+    if(a.size() != 2 || a[1].empty()) throw std::runtime_error("prof_dump requires path");
+    if(!MDFN_IEN_PCE::PCE_CycleProf)
+     throw std::runtime_error("prof_dump requires an active prof_start");
+    MDFN_IEN_PCE::PCE_CycleProf = nullptr;
+    const std::string path = PercentDecode(a[1]);
+    std::ofstream f(path);
+    if(!f) throw std::runtime_error("cannot open profile output: " + path);
+    uint64_t sum = 0;
+    size_t records = 0;
+    for(unsigned i = 0; i < g_prof.size(); i++)
+     if(g_prof[i])
+     {
+      f << std::hex << i << ' ' << std::dec << g_prof[i] << '\n';
+      sum += g_prof[i];
+      records++;
+     }
+    f.flush();
+    if(!f) throw std::runtime_error("failed to write profile output: " + path);
+    RPCReplyOK(",\"path\":\"" + JsonEscape(path) + "\",\"records\":" + std::to_string(records) +
+               ",\"master_ticks\":" + std::to_string(sum));
+   }
    else if(op == "cov_clear") { CoverageClear(); RPCReplyOK(); }
    else if(op == "cov_dump")
    {
     if(a.size() != 2) throw std::runtime_error("cov_dump requires path");
     std::string p = PercentDecode(a[1]); SaveCoverage(p);
     RPCReplyOK(",\"path\":\"" + JsonEscape(p) + "\",\"unique_pcs\":" + std::to_string(CoverageUnique()) + ",\"instructions\":" + std::to_string(g_cov_total));
+   }
+   else if(op == "sound_capture")
+   {
+    if(a.size() != 3) throw std::runtime_error("sound_capture requires frames, WAV path");
+    unsigned frames = ParseU32(a[1]);
+    if(frames > 3600) throw std::runtime_error("audio capture limited to 3600 frames");
+    g_state->captured_audio.clear(); g_state->capture_audio = true;
+    RunFrames(frames); g_state->capture_audio = false;
+    std::string path = PercentDecode(a[2]); std::ofstream wav(path, std::ios::binary);
+    if(!wav) throw std::runtime_error("cannot open WAV output");
+    auto word = [&](uint32_t v, int bytes) { while(bytes--) { wav.put(v & 255); v >>= 8; } };
+    uint32_t bytes = g_state->captured_audio.size() * 2;
+    wav.write("RIFF",4); word(bytes+36,4); wav.write("WAVEfmt ",8);
+    word(16,4); word(1,2); word(2,2); word(44100,4); word(176400,4); word(4,2); word(16,2);
+    wav.write("data",4); word(bytes,4);
+    for(int16 v : g_state->captured_audio) word((uint16_t)v,2);
+    if(!wav) throw std::runtime_error("WAV output failed");
+    RPCReplyOK(",\"samples\":" + std::to_string(g_state->captured_audio.size()));
+   }
+   else if(op == "sound_status")
+   {
+    RPCReplyOK(",\"samples\":" + std::to_string(g_state->audio_samples) +
+               ",\"nonzero\":" + std::to_string(g_state->audio_nonzero) +
+               ",\"peak\":" + std::to_string(g_state->audio_peak));
    }
    else if(op == "reset") { MDFNI_Reset(); RPCReplyOK(); }
    else if(op == "status")
@@ -424,7 +637,7 @@ static void RPCLoop()
 struct Options
 {
  std::string rom;
- std::string base_dir = ".mednafen-headless";
+ std::string base_dir = ".pce-headless";
  std::string bios;
  std::string screenshot;
  std::string y4m;
@@ -523,13 +736,24 @@ int main(int argc, char** argv)
   MDFNGI* gi = MDFNI_LoadGame("pce", &NVFS, opt.rom.c_str());
   if(!gi) throw std::runtime_error("failed to load ROM/game");
 
+  // A headless frontend must apply the media defaults just like rmdui.
+  // LoadCD leaves the emulated drive open until the frontend inserts a disc.
+  if(gi->RMD)
+   for(uint32 d = 0; d < gi->RMD->DrivesDefaults.size(); d++)
+   {
+    const auto& media = gi->RMD->DrivesDefaults[d];
+    if(!MDFNI_SetMedia(d, media.State, media.Media, media.Orientation))
+     throw std::runtime_error("failed to apply default removable media");
+   }
+
   // Initialize all PCE input ports to their declared default device.
   for(uint32 p = 0; p < gi->PortInfo.size(); p++)
   {
    uint32 di = 0;
    for(uint32 j = 0; j < gi->PortInfo[p].DeviceInfo.size(); j++)
     if(!strcmp(gi->PortInfo[p].DeviceInfo[j].ShortName, gi->PortInfo[p].DefaultDevice)) { di = j; break; }
-   MDFNI_SetInput(p, di);
+   uint8* input_data = MDFNI_SetInput(p, di);
+   if(p == 0) g_pad_data = input_data;
   }
 
   HeadlessState hs;

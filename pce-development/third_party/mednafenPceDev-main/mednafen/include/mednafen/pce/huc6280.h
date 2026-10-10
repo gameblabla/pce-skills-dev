@@ -7,6 +7,11 @@ using namespace Mednafen;
 
 namespace MDFN_IEN_PCE
 {
+// Called by the headless RPC and the PCE video-frame timestamp reset.
+extern uint64 *PCE_CycleProf;
+void PCE_CycleProfReset(void);
+void PCE_CycleProfFrameEnd(uint32 end_timestamp, uint32 next_timestamp);
+
 class alignas(128) HuC6280
 {
 	public:
