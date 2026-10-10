@@ -14,6 +14,23 @@ __attribute__((interrupt)) void irq_vdc(void) {
 static uint8_t car_x;
 static uint16_t distance;
 static uint8_t crash_cooldown,checkpoint_hold,collision_hold;
+/* Three traffic parallax speeds: 1x, 1/2x, 1/3x. A tiny remainder
+ * accumulator replaces per-frame variable 16-bit divide/modulo.
+ * Every phase is bounded to 0..175; all target arithmetic is 8/16 bit. */
+static uint8_t traffic_phase[3],traffic_remainder[3];
+static const uint8_t traffic_offset[3]={0,55,110};
+static void advance_traffic(uint8_t speed) {
+    for(uint8_t i=0;i<3;++i) {
+        uint8_t remainder=(uint8_t)(traffic_remainder[i]+speed);
+        uint8_t denom=(uint8_t)(i+1u);
+        while(remainder>=denom) {
+            remainder=(uint8_t)(remainder-denom);
+            if(++traffic_phase[i]==176u)traffic_phase[i]=0;
+        }
+        traffic_remainder[i]=remainder;
+    }
+}
+
 static vdc_sprite_t sat[64];
 static void actor(uint8_t slot,uint8_t x,uint8_t y,uint8_t sprite) {
     sat[slot].x=(uint16_t)x+32;
@@ -57,6 +74,7 @@ int main(void) {
     pce_vdc_irq_vblank_enable();pce_irq_enable(IRQ_VDC);
     pce_vdc_bg_enable();pce_vdc_sprite_enable();pce_cpu_irq_enable();
     car_x=120;distance=0;crash_cooldown=0;checkpoint_hold=collision_hold=0;
+    for(uint8_t i=0;i<3;++i) traffic_phase[i]=traffic_remainder[i]=0;
     uint32_t frame=0;
     for(;;) {
         uint8_t before=ticks;while(before==ticks) {}
@@ -68,13 +86,16 @@ int main(void) {
         if(crash_cooldown) {--crash_cooldown;if(speed>1)speed=1;}
         uint16_t before_distance=distance;
         distance+=speed;
-        uint8_t checkpoint=(distance/64u != before_distance/64u);
+        advance_traffic(speed);
+        uint8_t checkpoint=(distance>>6 != before_distance>>6);
         uint8_t collided=0;
         actor(0,car_x,181,0);
         for(uint8_t i=0;i<3;++i){
             /* Traffic approaches the player as world progress increases. */
-            uint8_t track_y=(uint8_t)(((distance/(1u+i)+i*55u)%176u)+25u);
-            uint8_t traffic_x=(uint8_t)(96u+i*24u);
+            uint16_t phase=(uint16_t)traffic_phase[i]+traffic_offset[i];
+            if(phase>=176u)phase-=176u;
+            uint8_t track_y=(uint8_t)(phase+25u);
+            uint8_t traffic_x=(uint8_t)(96u+(i==1u?24u:(i==2u?48u:0u)));
             actor(1+i,traffic_x,track_y,(uint8_t)(1+i));
             if(!crash_cooldown && (int16_t)traffic_x<(int16_t)car_x+13 &&
                (int16_t)traffic_x+13>(int16_t)car_x &&

@@ -91,3 +91,33 @@ lookups. `make arith-build` compiles/link-audits the BAT circle, Mode7 road and
 four new arithmetic micro demos, refusing `__mul*`, `__div*`, `__mod*` or
 `libm` symbols in those ELF files. The checker is based on actual ELF symbols;
 LLVM-MOS software integer helpers are *not* GCC libm functions.
+
+### Frame-transfer budgets and arithmetic on HuC6280
+
+Before adding a scrolling scene, run `make vram-check`. The sample
+`pce-development/workflows/specs/vram-streaming.json` describes a layout in
+**VRAM words** and transfers in **bytes**, models BAT front/back pages and an
+SAT shadow, and checks the upload queue against *explicitly supplied* per-frame
+byte and IRQ-block budgets. `vram_budget.py` refuses overlaps, visible BAT
+writes without a declared VBlank restriction, and block moves longer than 16
+bytes with raster interrupts enabled. It also works with two separate
+SuperGrafx VDCs. `scene_vram.py examples/33-rendered-shmup` and the matching
+racer command check **actual generated** `scene_assets.h` array sizes against
+`scene_manifest.json` VRAM allocations, rejecting overlapping or stale assets. The byte budget is an **assumption**, not a measured VBlank
+cycle count; follow it with G2TR and emulator screenshot acceptance tests.
+
+`make arith-games` now link-audits the three graphical shmup/raycaster/racer
+starters as well as `make arith-audit-all` covering all micro ROMs. The
+raycaster's 32 rays use generated 8-bit signed sample steps plus wall-height
+lookup tables (`34-rendered-raycaster/tools/gen_ray_tables.py`), removing
+runtime generic multiplication/division. The racer uses small modular phase
+accumulators for traffic scroll positions and a shift for checkpoints.
+`make performance-check` validates the generated tables and VRAM budget
+without fetching a compiler. These are deterministic *functional* speedups:
+actual frame times or CPU-cycle improvements have **not** been measured.
+
+The original P2TR world-coordinate code and G2TR wire ABI still contain
+frozen, reviewed 32-bit compatibility exceptions. Do not copy those wide
+integer types into new gameplay. This toolkit's strict ELF math gate now
+covers the three rendered genre starters; the two legacy platformer demos
+still need an isolated narrow-physics migration.

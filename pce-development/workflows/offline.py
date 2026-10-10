@@ -107,7 +107,9 @@ def guidance(kind, request=""):
         lines+=['This is a minimal *rendered* gameplay lesson, not a complete game or a Super CD image.',
                 'Run make trace AND make visual-test to compare input-driven telemetry with emulator screenshots.',
                 'Edit the validated 256x224 PNG/64x16 atlas and run make assets for shmup/racing; raycaster draws actual BAT walls.',
-                'Keep the nonvisual G2TR probes for hardware-independent state debugging.']
+                'Keep the nonvisual G2TR probes for hardware-independent state debugging.',
+                'Run the VRAM manifest audit on PNG-packed scenes and split raster-active uploads into <=16-byte bursts.',
+                'Run a strict linked-ELF arithmetic audit; the rendered genre examples require zero software divide/multiply helpers.']
     if kind=='level': lines+=['Edit assets/level.json, run make assets-check then make. Each cell is an 8x8 tile, not a pixel.',
                              'The rendered level has no playable enemies or goal logic: link it to example 26, then test actual events.']
     if is_micro: lines+=['Micro recipe scaffolds the shared micro and starter build helpers.']

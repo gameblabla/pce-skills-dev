@@ -119,3 +119,32 @@ allowing the linker to pull in `__mulhi3`/`__divhi3`. The frozen compatibility
 manifest must not be enlarged automatically to silence a warning. A user
 request for true 24-bit Arcade Card addresses or P2TR/G2TR 32-bit wire fields
 needs reviewed narrow byte/word helpers or an explicit, justified exception.
+
+## Raster-safe upload budgets and narrow genre math
+
+For new graphics streaming, first create a JSON plan matching
+`pce-development/workflows/specs/vram-streaming.json` and run:
+
+    python3 pce-development/workflows/vram_budget.py PATH_TO_PLAN.json --strict
+
+Layout uses VRAM **words** (0..0x7fff) but upload sizes are **bytes**.
+A budgeted transfer is not evidence that timing succeeds on real hardware.
+If raster interrupts are active, split TIA/TAI into <=16-byte bursts with
+interrupts allowed between them; never claim a long block transfer is safe.
+Do not write visible BAT rows outside a documented VBlank publication step.
+
+Before submitting rendered racing, shmup or raycaster projects run
+`make arith-games` and `make genre-test` with the input-capable emulator.
+For the raycaster use `tools/gen_ray_tables.py` to precompute signed ray steps
+on the *host*. Never reintroduce per-column `/40`, `/5` or `*side` expressions
+into its HuC6280 render loop. For parallax race traffic prefer bounded 8-bit
+phase+remainder accumulators, not divide and modulo each frame.
+`make performance-check` performs the offline checks; `make arith-games`
+verifies actual linked ELF symbols. P2TR/G2TR ABI 32-bit fields are not a
+license to use 32-bit arithmetic in new gameplay. No unmeasured FPS claims.
+
+For `scene_pack.py` projects, run `python3
+pce-development/workflows/scene_vram.py pce-development/examples/33-rendered-shmup`
+(or the relevant project). It validates generated tile/sprite array sizes
+against the scene manifest and boot transfer budget, rather than trusting a
+hand-written VRAM JSON plan.

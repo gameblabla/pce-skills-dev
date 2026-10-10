@@ -1,0 +1,20 @@
+{
+  "system": "pce",
+  "raster_irqs": true,
+  "max_chunk_bytes": 16,
+  "bytes_per_frame": 320,
+  "max_frames": 4,
+  "regions": [
+    {"id": "bat-front", "start_word": 0, "words": 2048, "visibility": "front"},
+    {"id": "bat-back", "start_word": 2048, "words": 2048, "visibility": "back"},
+    {"id": "tiles", "start_word": 4096, "words": 16384, "visibility": "static"},
+    {"id": "sprite-patterns", "start_word": 24576, "words": 4096, "visibility": "static"},
+    {"id": "sat-shadow", "start_word": 32512, "words": 256, "visibility": "back"}
+  ],
+  "uploads": [
+    {"id": "sat-actors", "region": "sat-shadow", "bytes": 96, "deadline_frame": 0},
+    {"id": "scrolling-bat", "region": "bat-back", "bytes": 192, "deadline_frame": 1},
+    {"id": "animated-patterns", "region": "sprite-patterns", "bytes": 256, "deadline_frame": 2},
+    {"id": "vblank-hud", "region": "bat-front", "bytes": 64, "deadline_frame": 3, "vblank_only": true}
+  ]
+}

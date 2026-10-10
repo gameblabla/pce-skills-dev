@@ -5,6 +5,7 @@
 #include <pce.h>
 #include <stdint.h>
 #include "genre_trace.h"
+#include "ray_tables.h"
 volatile G2Trace pce_genre_trace[2];
 static volatile uint8_t ticks;
 __attribute__((interrupt)) void irq_vdc(void) {
@@ -20,8 +21,6 @@ static const uint8_t map[8][8]={
  {1,0,0,0,0,0,0,1},
  {1,1,1,1,1,1,1,1}
 };
-static const int8_t cos16[16]={127,117,90,49,0,-49,-90,-117,-127,-117,-90,-49,0,49,90,117};
-static const int8_t sin16[16]={0,49,90,117,127,117,90,49,0,-49,-90,-117,-127,-117,-90,-49};
 static const uint16_t colors[16]={
  0x001,0x041,0x042,0x08b,0x0d4,0x11c,0x11d,0x08a,0x051,0x092,0x09a,0x0e2,0x12b,0x174,0x1bd,0x1bd
 };
@@ -40,31 +39,28 @@ static uint8_t is_wall(int16_t x,int16_t y) {
 /* A quarter-cell DDA in Q8. One step is approximately 64/256 map unit.
  * Both columns and trace depths are computed from these same ray results. */
 static uint8_t ray_hit(uint8_t col) {
-    int16_t side=(int16_t)col-16;
-    int16_t dx=cos16[angle] - (int16_t)sin16[angle]*side/40;
-    int16_t dy=sin16[angle] + (int16_t)cos16[angle]*side/40;
+    const int8_t dx=ray_step_x[angle][col];
+    const int8_t dy=ray_step_y[angle][col];
     int16_t x=world_x,y=world_y;
     for(uint8_t n=1;n<=32;++n) {
-        x+=dx/2;y+=dy/2;
+        x+=dx;y+=dy;
         if(is_wall(x,y))return n;
     }
     return 0; /* no wall reached within ray budget */
 }
 static void render(void) {
     for(uint8_t y=0;y<28;++y)for(uint8_t x=0;x<32;++x)
-        bat[(uint16_t)y*32+x]=0x0080u+(y<12?1u+y/3u:7u);
+        bat[(uint16_t)y*32+x]=sky_bat[y];
     near_depth=0xffff;far_depth=0;hit_count=0;
     for(uint8_t x=0;x<32;++x) {
         uint8_t depth=ray_hit(x);
         if(depth)++hit_count;else depth=32;
         if(depth<near_depth)near_depth=depth;
         if(depth>far_depth)far_depth=depth;
-        uint8_t height=(uint8_t)(26u/(1u+depth/5u));
-        if(height<2)height=2;
+        uint8_t height=wall_height[depth];
         uint8_t top=(uint8_t)(14u-height/2u);
         uint8_t bottom=top+height;
-        uint8_t shade=(uint8_t)(depth/5u);
-        uint16_t tile=(uint16_t)(14u-(shade>5u?5u:shade));
+        uint16_t tile=wall_shade[depth];
         for(uint8_t y=top;y<bottom && y<28;++y)
             bat[(uint16_t)y*32+x]=0x0080u+tile;
     }
@@ -111,9 +107,9 @@ int main(void) {
         int16_t old_x=world_x,old_y=world_y;
         wall_blocked=0;
         if((buttons&(KEY_UP|KEY_DOWN))!=0) {
-            int16_t step=(buttons&KEY_UP)?1:-1;
-            int16_t x=world_x+step*cos16[angle]/6;
-            int16_t y=world_y+step*sin16[angle]/6;
+            int16_t x=world_x, y=world_y;
+            if (buttons&KEY_UP) { x+=player_step_x[angle]; y+=player_step_y[angle]; }
+            else { x-=player_step_x[angle]; y-=player_step_y[angle]; }
             /* Check X and Y independently: this permits sliding along walls,
              * but never allows the camera centre to enter a solid map cell. */
             if(is_wall(x,world_y))wall_blocked=1;
