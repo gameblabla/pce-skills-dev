@@ -21,3 +21,7 @@ Bitmap/old Mode 7 floor lessons: [`85-bitmap-128-circle`](pce-development/exampl
 A deterministic workflow router is in [`pce-development/workflows/`](pce-development/workflows/README.md). It selects a suitable *runnable* recipe rather than prompting a weaker coding model to synthesize hardware details. It includes JSON game-rule validation/generation, offline X/Y/gravity/scene simulation, no-overwrite scaffolding, ROM and image audits, native-ROM scene probes for a newer headless frontend, and unit tests. None of these require network/API access. Raw transcripts are not distributed.
 
 Use `make help` and `make test` at repository root. Runnable full-project starters are [`26-platformer-starter`](pce-development/examples/26-platformer-starter/README.md) and [`27-platformer-racer`](pce-development/examples/27-platformer-racer/README.md). The 512×224 paired-BAT Mode 7 lesson remains a separate renderer recipe and is **not** quietly replaced by the phase-transition demo's road art.
+
+### Hardening from further local-AI failure transcripts
+
+See [local-model failure fixes](pce-development/references/local-ai-transcript-fixes.md). The new `model_guard.py` catches hallucinated SDK names, relays actionable compile/ROM overflow and headless RPC diagnostics, and gates unverified gameplay/CD claims. `assetpack.py` generates safe 4bpp planar tiles and BAT maps from JSON, with a new standalone **example 28**. Root `make agent-check agent-assets agent-build` runs the related checks and build. Original private transcripts are not included.

@@ -32,7 +32,7 @@ From the repo root, `make help` enumerates supported orchestration targets. Run 
 | `map_audit.py MANIFEST` | Shared drawn/collidable bounds and pixel-to-tile spans | Actual collision engine or on-screen alignment |
 | `hybrid_runtime.py --rom ... --elf ... --out ...` | Real ROM scene flag transitions after held controller input; screenshots | Complete P2TR physics analysis, 60 FPS, hardware |
 | `transcript_lessons.py sessions.zip` | Aggregate category presence per exported text session (no raw excerpts) | Failure severity, human intent or the validity of solutions |
-| `tests/test_offline.py` | Invalid spec cases, no overwrite, full loop oracle, recipe routing | Emulator or gameplay execution |
+| `tests/test_offline.py` and `tests/test_model_guard.py` | Invalid game rules, wrong SDK symbols, array/VRAM bounds, missing evidence | Emulator or gameplay execution |
 
 ## Hybrid game contract
 
@@ -57,3 +57,20 @@ Change the spec at `examples/27-platformer-racer/tools/hybrid.json`. The generat
 ## Transcript-derived incident checklist
 
 Review of the supplied exported conversations informed these recurring checks, without embedding or republishing transcript text: direction of camera movement, preserving fractional gravity, collidable tile indices versus pixel coordinates, sprite disappearance during transitions, stale generated art, sprite budget/SAT presentation, bank/overlay lifetimes, framerate versus emulator frame count, and confusing a HuCard binary with a bootable Super CD-ROM² disc. Those symptoms become independent lint/physics/trace/evidence gates rather than generic advice to “test everything.”
+
+## New local-AI transcript hardening (four further sessions)
+
+Read `../references/local-ai-transcript-fixes.md` for the incident classes, API corrections, and explicit acceptance stages. These sessions are private and are not packaged. The new tools are pure Python with no LLM calls or online access:
+
+```sh
+python3 pce-development/workflows/model_guard.py scan pce-development/examples/26-platformer-starter
+python3 pce-development/workflows/model_guard.py symbol VDC_SPRITE_HFLIP
+python3 pce-development/workflows/model_guard.py diagnose compile.log
+python3 pce-development/workflows/assetpack.py pce-development/workflows/specs/pce-level.json --check
+python3 pce-development/workflows/offline.py new --recipe level --out ./standalone-map
+cd standalone-map && make assets-check && make && make run
+```
+
+`model_guard.py evidence specs/evidence-template.json` is an intentionally failing starting gate: a compiled ROM must not count as tested input/gameplay. `make agent-check agent-assets agent-build` runs source checks, validates data, and builds the new JSON-generated tilemap example. Both game-starter Makefiles now have `model-check`, `diagnose LOG=...`, and `acceptance-check` targets (the last fails until evidence is entered).
+
+`assetpack.py` uses **8x8 tile pixel** strings, a 32/64/128-tile physical BAT row stride, 0..15 pixel colour values, and one full 16-entry palette. It enforces word alignment and BAT-versus-pattern non-overlap, produces the correct PC Engine four-plane 32-byte pattern format, and checks solid map glyphs/entity positions. Generated `.h` declarations and `.c` definitions are kept separate and regenerated automatically by project Makefile prerequisites. It does not invent gameplay around entity metadata.

@@ -1,6 +1,6 @@
 # PC Engine / CD-ROM² example projects
 
-Runnable examples 00–24, 26 and 27 are standalone project folders containing a Makefile,
+Runnable examples 00–24, 26, 27 and 28 are standalone project folders containing a Makefile,
 README, and C source under `src/`, with graphics assets only where needed. Run
 `make` to build a HuCard `.pce` ROM; graphics examples have headless screenshot
 captures, while non-visual examples do not. Example 25 is
@@ -11,7 +11,7 @@ path. The examples include `make run` for a bounded headless capture and
 `make debug` for a capture plus execution coverage; CD examples require their
 packaged disc image and System Card to be configured first.
 
-Graphics-focused projects use the PCE screen fixture in `src/demo_video.c` and `assets/demo_assets.h`. Boot, CPU, I/O, CD, bank, diagnostic, and audio examples intentionally do not initialize or render graphics. Their results are observable through the debugger, hardware state, or sound. Every topic-specific entry point is in `src/main.c`.
+Graphics-focused projects use the PCE screen fixture in `src/demo_video.c` and `assets/demo_assets.h`. Boot, CPU, I/O, CD, bank, diagnostic, and audio examples intentionally do not initialize or render graphics. Their results are observable through the debugger, hardware state, or sound. Every topic-specific entry point is in `src/main.c`. Example 28 is the exception to the usual handwritten graphics fixture: its map, patterns, collision mask, and entity metadata are generated from checked JSON.
 
 **Small examples:** The [`micro/`](micro/README.md) collection adds 95 much smaller, single-topic HuCard projects. Each has one C file, a one-line Makefile, and minimal shared build helpers. The audio projects never use a graphics fixture. Run `cd micro && python3 check.py` to build all.
 
@@ -45,6 +45,7 @@ Graphics-focused projects use the PCE screen fixture in `src/demo_video.c` and `
 - [Example 25: integrate platformer collision, scrolling, and HUD](25-platformer-integration/README.md)
 - [Example 26: runnable platformer starter and real P2TR telemetry](26-platformer-starter/README.md)
 - [Example 27: platformer/racing phase transition with explicit X/Y rules](27-platformer-racer/README.md)
+- [Example 28: offline JSON -> validated 4bpp tiles and BAT](28-generated-level/README.md)
 
 ## Shared converters and audio modules
 

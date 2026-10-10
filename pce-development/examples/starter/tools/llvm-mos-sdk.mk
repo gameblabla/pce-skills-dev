@@ -8,7 +8,7 @@ LLVM_MOS_CC ?= mos-pce-clang
 # Avoid downloading the SDK just to clean or print help. The default goal is a
 # build, so a plain `make` prepares the compiler before any recipe runs.
 PCE_SDK_GOALS := $(if $(strip $(MAKECMDGOALS)),$(MAKECMDGOALS),all)
-PCE_SDK_BUILD_GOALS := $(filter-out clean help bios-check,$(PCE_SDK_GOALS))
+PCE_SDK_BUILD_GOALS := $(filter-out clean help bios-check assets-check model-check acceptance-check diagnose,$(PCE_SDK_GOALS))
 
 ifneq ($(strip $(PCE_SDK_BUILD_GOALS)),)
 PCE_LLVM_MOS_BIN := $(shell LLVM_MOS_CC='$(LLVM_MOS_CC)' "$(PCE_SDK_BOOTSTRAP)" --ensure-bin)

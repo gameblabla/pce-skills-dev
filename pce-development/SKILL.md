@@ -151,3 +151,9 @@ assembly syntax. Consult PCE hardware references for CPU/VDC/Arcade Card
 behavior, then confirm instruction support, calling convention, and generated
 code with the installed LLVM-MOS target. Project linker scripts, SDK headers,
 drivers, and tests are authoritative for the active build.
+
+## Small local AI guardrails and compiled maps
+
+For local models generating a game from scratch, **route the full user prompt first** with `python3 workflows/offline.py route ...`. The new [failure-mode playbook](references/local-ai-transcript-fixes.md) covers SDK macro hallucinations (`KEY_START` versus `KEY_RUN`, `VDC_SPRITE_HFLIP` versus `VDC_SPRITE_FLIP_X`), bad C initializers, ROM bank overflow, GUI emulator timeouts and misleading Super CD-ROM² completion reports. `python3 workflows/model_guard.py symbol KEY_RUN` searches the actual installed SDK headers when available; `scan PROJECT` catches common mistakes; `diagnose BUILD_LOG` gives targeted remediation; `evidence MANIFEST` fails closed on missing runtime/target validation. These are aids, not substitutes for compilation and emulator input tests.
+
+For original, reproducible 4bpp graphics/levels without long inline arrays, use `examples/28-generated-level` (JSON -> validated 8x8 tiles, BAT, collision mask and entity metadata -> generated C -> HuCard ROM), or `python3 workflows/assetpack.py specs/pce-level.json --check`. Map/entity coordinates are **tile coordinates**; physics uses world pixels or Q8 positions. This map renderer does **not** implement enemy behavior, title/death/flag events, a one-minute level, or Super CD-ROM² boot.

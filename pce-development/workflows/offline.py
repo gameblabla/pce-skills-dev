@@ -23,6 +23,7 @@ RECIPES = {
     'cd': '01-cdrom2-hello',
     'sgx': '18-supergrafx-vdc2',
     'base': '00-project-template',
+    'level': '28-generated-level',
 }
 
 
@@ -40,7 +41,8 @@ def choose(prompt):
         return 'platformer'
     if has_race:
         return 'racer'
-    for key, pat in [('audio', r'psg|sound|music|tone|audio'),
+    for key, pat in [('level', r'asset.?pack|tile.?map|tile.?set|level.?generator|level.?editor|generated map'),
+                     ('audio', r'psg|sound|music|tone|audio'),
                      ('cd', r'cd.?rom|system card|disc|ipl'),
                      ('sgx', r'supergrafx|sgx|vdc2'),
                      ('sprite', r'sprite|satb|animation'),
@@ -49,30 +51,47 @@ def choose(prompt):
     return 'base'
 
 
-def guidance(kind):
+def guidance(kind, request=""):
     proj=RECIPES[kind]
+    requested_cd=bool(re.search(r'super\s*cd|cd.?rom|disc|system card|\bcd\b',request,re.I))
     is_micro = kind in ('audio','racer','graphics','sprite','sgx')
     path=('examples/micro/' if is_micro else 'examples/')+proj
     lines=['Inspect AGENTS.md and SKILL.md before editing.',
            f'Copy {path} through offline.py new; never edit a reference example in place.',
            'Run make, then make run (or make trace for the P2TR platformer).',
            'Use real game state and fresh emulator captures; compiler success is not gameplay proof.',
-           'Check linker map, RAM, IRQ/PSG channel ownership before combining subsystems.']
-    if kind in ('hybrid','platformer'):
-        lines+=['Run offline.py validate and offline.py simulate first.',
+           'Check linker map, RAM, IRQ/PSG channel ownership before combining subsystems.',
+           'Run model_guard.py scan on src before building; classify compiler errors with model_guard.py diagnose LOG.',
+           'Do not claim a working CD, player controls, or 60-second level based on a HuCard screenshot.']
+    if kind=='hybrid':
+        lines+=['Run make rules-check and make simulate for the hybrid JSON spec.',
                 'Keep collision/world coordinates independent of camera and art.',
                 'Trace jump/landing/input edges via P2TR; audit transitions separately.']
+    if kind=='platformer':
+        lines+=['Use make trace for P2TR walk/jump/landing; do not run hybrid-only simulate/validate here.',
+                'Keep collision/world coordinates independent of camera and art.']
     if kind=='audio': lines+=['Never add VDC/VCE/font/sprite drawing to an audio recipe.']
+    if kind=='level': lines+=['Edit assets/level.json, run make assets-check then make. Each cell is an 8x8 tile, not a pixel.',
+                             'The rendered level has no playable enemies or goal logic: link it to example 26, then test actual events.']
     if is_micro: lines+=['Micro recipe scaffolds the shared micro and starter build helpers.']
     if kind=='cd': lines+=['A .bin is not a bootable CD image; cold-boot with IPL and user-provided BIOS.']
-    return {'recipe':kind,'project':path,'instructions':lines,
+    if kind=='platformer': lines+=['Example 26 is a physics baseline, NOT a complete title/enemy/stomp/flag/fade game.',
+                                  'Use generated assets (example 28) and an explicit scene-state acceptance checklist before claiming a full game.']
+    if requested_cd and kind!='cd':
+        lines+=['TARGET WARNING: The selected game starter is a HuCard preview, not a Super CD-ROM2 disc.',
+                'Build and cold-boot an IPL + CD image with user-provided BIOS before claiming a Super CD game.']
+    return {'recipe':kind,'project':path,
+            'requested_target':'supercd' if requested_cd else 'hucard',
+            'starter_target':'hucard',
+            'target_matches_request':not requested_cd,
+            'instructions':lines,
             'first_commands':[f'python3 pce-development/workflows/offline.py new --recipe {kind} --out ./my-pce-project',
                               'cd my-pce-project && make',
                               'make run']}
 
 
 def agent_brief(prompt):
-    plan=guidance(choose(prompt)); rules=plan['instructions']
+    plan=guidance(choose(prompt), prompt); rules=plan['instructions']
     return ('# PC Engine local-model implementation brief\n\n'
             'Requested behavior: '+prompt.strip().replace('\n',' ')+'\n\n'
             'Use the existing verified recipe: `'+plan['project']+'`.\n\n'
@@ -217,7 +236,9 @@ def main():
                     'checked_without_download':True}
             result['ready_hucard']=all(result['tools'][x] for x in ('mos-pce-clang','make','python3'))
             print(json.dumps(result,indent=2))
-        elif a.cmd=='route':print(json.dumps(guidance(choose(' '.join(a.request))),indent=2))
+        elif a.cmd=='route':
+            request=' '.join(a.request)
+            print(json.dumps(guidance(choose(request),request),indent=2))
         elif a.cmd=='brief':
             result=agent_brief(' '.join(a.request))
             if a.out:Path(a.out).write_text(result)

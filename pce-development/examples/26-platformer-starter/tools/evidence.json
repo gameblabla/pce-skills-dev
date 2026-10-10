@@ -1,0 +1,5 @@
+{
+  "target": "hucard",
+  "artifact": "build/game.pce",
+  "evidence": {"compiled": false, "neutral_emulator": false, "input_scenario": false, "visual_review": false, "real_cd_boot": false, "hardware": false}
+}

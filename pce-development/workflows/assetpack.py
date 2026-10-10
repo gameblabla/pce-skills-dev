@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Offline, deterministic 4bpp PCE tile/map compiler (no PIL, LLM, or downloads).
+
+A level spec uses ASCII glyphs for cells, 8x8 hex pixels for each tile, and
+explicit entity positions in tile coordinates. Generates separate .c/.h files
+so no multiple-definition or incomplete-array errors arise from hand-made C.
+"""
+import argparse
+import json
+from pathlib import Path
+import re
+import sys
+
+
+def require(ok, why):
+    if not ok:raise ValueError(why)
+
+
+def load(path):
+    raw=json.loads(Path(path).read_text(encoding='utf-8'))
+    require(isinstance(raw,dict) and raw.get('version')==1,'version must be 1')
+    tiles=raw.get('tiles'); symbols=raw.get('symbols'); rows=raw.get('map')
+    require(isinstance(tiles,dict) and 1<=len(tiles)<=64,'tiles must have 1..64 definitions')
+    require(isinstance(symbols,dict) and isinstance(rows,list) and len(rows)>0,'symbols/map missing')
+    width=len(rows[0]);height=len(rows)
+    require(width in (32,64,128) and 1<=height<=32,
+            'PCE BAT row stride must be 32, 64 or 128 tiles; map height must be 1..32')
+    require(all(isinstance(s,str) and len(s)==width for s in rows),'map row length mismatch')
+    require(width*height*2<=8192,'BAT size over 8192 bytes; split into streamed regions instead')
+    require(all(isinstance(key,str) and re.fullmatch(r'[a-z_][a-z_0-9]*',key) and
+                isinstance(data,list) and len(data)==8 and
+                all(isinstance(row,str) and re.fullmatch('[0-9a-fA-F]{8}',row) for row in data)
+                for key,data in tiles.items()),'each tile is 8 strings of 8 hex pixels')
+    require(all(len(k)==1 and isinstance(v,str) and v in tiles for k,v in symbols.items()),
+            'symbols must map single glyphs to tile names')
+    for y,row in enumerate(rows):
+        for x,ch in enumerate(row):
+            require(ch in symbols,f'unknown map glyph {ch!r} at ({x},{y})')
+    solids=raw.get('solid',[])
+    require(isinstance(solids,list) and all(isinstance(s,str) and s in symbols for s in solids),
+            'solid must be a list of known map glyphs')
+    entities=raw.get('entities',[])
+    require(isinstance(entities,list) and len(entities)<=64,'entities must be a list (max 64)')
+    for e in entities:
+        require(isinstance(e,dict),'entity must be object')
+        require(e.get('type') in ('spawn','enemy','flag','platform','checkpoint'), 'invalid entity type')
+        x=e.get('x');y=e.get('y')
+        require(type(x) is int and type(y) is int and 0<=x<width and 0<=y<height,
+                'entity x/y must be tile coordinates within map')
+    if entities:
+        require(sum(e['type']=='spawn' for e in entities)==1,'exactly one spawn needed')
+        if any(e['type']=='flag' for e in entities):
+            require(len([e for e in entities if e['type']=='flag'])==1,'only one goal flag allowed')
+            spawn=next(e for e in entities if e['type']=='spawn')
+            flag=next((e for e in entities if e['type']=='flag'),None)
+            if flag: require(flag['x']>spawn['x'],'goal flag must be after spawn')
+    palette=raw.get('palette',[])
+    require(len(palette)==16 and all(type(x) is int and 0<=x<=511 for x in palette),
+            'palette must contain exactly sixteen 9-bit VCE values (0..511)')
+    origin=raw.get('pattern_word',0x800)
+    require(type(origin) is int and origin%16==0 and origin>=0x800,'pattern_word must be >= 0x800 and aligned to 16 words')
+    require(origin>=width*32,'pattern words overlap BAT storage (height rounds to 32 rows)')
+    require(origin+16*len(tiles)<0x7f00,'patterns collide with sprite SAT VRAM')
+    return raw
+
+
+def encode_pattern(rows):
+    out=[]
+    for plane in (0,2):
+        for row in rows:
+            vals=[int(char,16) for char in row]
+            for bit in (plane,plane+1):
+                word=sum(((v>>bit)&1) << (7-i) for i,v in enumerate(vals))
+                out.append(word)
+    assert len(out)==32
+    return out
+
+
+def compiled(doc):
+    names=list(doc['tiles']);ids={name:i for i,name in enumerate(names)}
+    patterns=[b for name in names for b in encode_pattern(doc['tiles'][name])]
+    width=len(doc['map'][0]);height=len(doc['map'])
+    base=doc['pattern_word']//16
+    bat=[(base+ids[doc['symbols'][c]]) for row in doc['map'] for c in row]
+    solid_bits=[]
+    for row in doc['map']:
+        for off in range(0,width,8):
+            solid_bits.append(sum((c in doc['solid'])<<(7-i) for i,c in enumerate(row[off:off+8])))
+    return dict(width=width,height=height,patterns=patterns,bat=bat,solid_bits=solid_bits,
+                palette=doc['palette'],entities=doc.get('entities',[]),
+                tile_count=len(names),pattern_word=doc['pattern_word'])
+
+
+def c_array(data,cols,formatting):
+    return '\n'.join('    '+','.join(formatting.format(x) for x in data[i:i+cols])+',' for i in range(0,len(data),cols))
+
+
+def produce(info,output):
+    output=Path(output);output.mkdir(parents=True,exist_ok=True)
+    header='''/* Generated by workflows/assetpack.py. Edit JSON, not this file. */
+#ifndef PCE_GENERATED_LEVEL_H
+#define PCE_GENERATED_LEVEL_H
+#include <stdint.h>
+#define LEVEL_MAP_WIDTH {width}u
+#define LEVEL_MAP_HEIGHT {height}u
+#define LEVEL_PATTERN_WORD {pattern_word}u
+#define LEVEL_TILE_COUNT {tile_count}u
+#define LEVEL_SOLID_STRIDE ((LEVEL_MAP_WIDTH+7u)/8u)
+typedef struct {{uint8_t type, x, y;}} LevelEntity;
+extern const uint8_t level_patterns[{np}];
+extern const uint16_t level_bat[{nb}];
+extern const uint8_t level_solids[{ns}];
+extern const uint16_t level_palette[16];
+extern const LevelEntity level_entities[{ne}];
+#define LEVEL_ENTITY_COUNT {ne}u
+#endif
+'''.format(width=info['width'],height=info['height'],pattern_word=info['pattern_word'],
+           tile_count=info['tile_count'],np=len(info['patterns']),nb=len(info['bat']),
+           ns=len(info['solid_bits']),ne=max(1,len(info['entities'])))
+    type_ids={'spawn':1,'enemy':2,'flag':3,'platform':4,'checkpoint':5}
+    entities=[(type_ids[e['type']],e['x'],e['y']) for e in info['entities']] or [(0,0,0)]
+    source=('#include "level_art.h"\n'+
+      'const uint8_t level_patterns[] = {\n'+c_array(info['patterns'],16,'0x{:02x}')+'\n};\n'+
+      'const uint16_t level_bat[] = {\n'+c_array(info['bat'],12,'0x{:04x}')+'\n};\n'+
+      'const uint8_t level_solids[] = {\n'+c_array(info['solid_bits'],16,'0x{:02x}')+'\n};\n'+
+      'const uint16_t level_palette[16] = {\n'+c_array(info['palette'],8,'0x{:03x}')+'\n};\n'+
+      'const LevelEntity level_entities[] = {\n'+''.join(f'    {{{a},{b},{c}}},\n' for a,b,c in entities)+'};\n')
+    (output/'level_art.h').write_text(header)
+    (output/'level_art.c').write_text(source)
+    return {'patterns_bytes':len(info['patterns']), 'bat_bytes':2*len(info['bat']),
+            'collision_bytes':len(info['solid_bits']),'entity_count':len(info['entities']),
+            'tile_count':info['tile_count'],'map_pixels':[info['width']*8,info['height']*8],
+            'generated':[str(output/'level_art.h'),str(output/'level_art.c')]}
+
+
+def main():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument('spec');p.add_argument('--out',default='build/generated');p.add_argument('--check',action='store_true')
+    a=p.parse_args()
+    try:
+        info=compiled(load(a.spec))
+        report={'ok':True,'map_pixels':[info['width']*8,info['height']*8],
+                'static_rom_bytes_approx':len(info['patterns'])+len(info['bat'])*2+len(info['solid_bits'])+32,
+                'asset_word_end':info['pattern_word']+info['tile_count']*16}
+        if not a.check: report.update(produce(info,a.out))
+        print(json.dumps(report,indent=2));return 0
+    except (OSError,ValueError,KeyError,TypeError,json.JSONDecodeError) as e:
+        print(f'error: {e}',file=sys.stderr);return 2
+
+if __name__=='__main__':raise SystemExit(main())

@@ -5,7 +5,7 @@ TOOL := $(ROOT)/workflows/offline.py
 EX := $(ROOT)/examples
 .PHONY: help doctor route project-check micro-lint micro-build games-build game-run hybrid-test trace-test test
 help:
-	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile two standalone game projects' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
+	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile two standalone game projects' '  make agent-check  - reject hallucinated SDK symbols and large inline assets' '  make agent-assets - validate tilemap generator + level JSON' '  make agent-build  - compile generated-map example' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
 doctor:
 	$(PYTHON) $(TOOL) doctor
 project-check:
@@ -19,6 +19,7 @@ micro-lint:
 micro-build:
 	$(PYTHON) $(EX)/micro/check.py
 games-build:
+	$(MAKE) -C $(EX)/28-generated-level
 	$(MAKE) -C $(EX)/26-platformer-starter
 	$(MAKE) -C $(EX)/27-platformer-racer
 game-run: games-build
@@ -29,5 +30,19 @@ hybrid-test: games-build
 trace-test: games-build
 	$(MAKE) -C $(EX)/26-platformer-starter trace
 	$(MAKE) -C $(EX)/27-platformer-racer trace
-test: project-check micro-lint
+test: project-check micro-lint agent-check agent-assets
 	$(PYTHON) -m unittest discover -s $(ROOT)/workflows/tests -v
+
+# Offline local-AI failure gates (no download, API calls, or firmware).
+.PHONY: agent-check agent-assets agent-build logs-help
+agent-check:
+	$(PYTHON) $(ROOT)/workflows/model_guard.py scan $(EX)/26-platformer-starter
+	$(PYTHON) $(ROOT)/workflows/model_guard.py scan $(EX)/27-platformer-racer
+	$(PYTHON) $(ROOT)/workflows/model_guard.py scan $(EX)/28-generated-level
+agent-assets:
+	$(PYTHON) $(ROOT)/workflows/assetpack.py $(ROOT)/workflows/specs/pce-level.json --check
+	$(MAKE) -C $(EX)/28-generated-level assets-check
+agent-build: agent-check agent-assets
+	$(MAKE) -C $(EX)/28-generated-level
+logs-help:
+	@echo 'python3 pce-development/workflows/model_guard.py diagnose build.log'

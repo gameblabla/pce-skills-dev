@@ -10,7 +10,7 @@ SOURCES := $(wildcard src/*.c) $(wildcard src/*.S)
 PCE_FLAGS ?= -std=gnu11 -Os -Wall -Wextra -Werror -mlto-zp=0
 
 .PHONY: all clean
-all: $(OUT)
+all: model-check $(OUT)
 
 $(OUT): $(SOURCES) $(wildcard src/*.h) $(wildcard tools/*.h) $(filter-out assets/screenshot.png,$(wildcard assets/*)) | toolchain
 	@mkdir -p $(dir $@)
@@ -78,3 +78,14 @@ assets:
 	python3 tools/build_race_art.py
 hybrid-test: $(OUT)
 	python3 tools/hybrid_runtime.py --rom $(OUT) --elf $(OUT).elf --out build/hybrid-scenario
+
+# Transcript-derived local-model guardrails. Build the game only after checking
+# API spellings and target scope; generated C is still compiled with -Werror.
+.PHONY: model-check diagnose acceptance-check
+model-check:
+	python3 tools/model_guard.py scan .
+diagnose:
+	@if [ -z "$(LOG)" ]; then echo 'Usage: make diagnose LOG=build/compile.log' >&2; exit 2; fi
+	python3 tools/model_guard.py diagnose "$(LOG)"
+acceptance-check:
+	python3 tools/model_guard.py evidence tools/evidence.json
