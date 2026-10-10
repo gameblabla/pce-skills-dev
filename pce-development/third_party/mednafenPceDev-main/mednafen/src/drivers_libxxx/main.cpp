@@ -10,7 +10,7 @@
 #include <mednafen/state-driver.h>
 #include <mednafen/movie-driver.h>
 
-namespace MDFN_IEN_PCE { extern uint64 *PCE_CycleProf; }
+namespace MDFN_IEN_PCE { extern uint64 *PCE_CycleProf; void PCE_CycleProfReset(void); }
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
@@ -551,14 +551,37 @@ static void RPCLoop()
     RPCReplyOK(",\"path\":\"" + JsonEscape(p) + "\"");
    }
    else if(op == "record_stop") { Y4MStop(); RPCReplyOK(); }
-   else if(op == "prof_start") { std::fill(g_prof.begin(), g_prof.end(), 0); MDFN_IEN_PCE::PCE_CycleProf = g_prof.data(); RPCReplyOK(); }
+   else if(op == "prof_start")
+   {
+    if(a.size() != 1) throw std::runtime_error("prof_start takes no arguments");
+    MDFN_IEN_PCE::PCE_CycleProf = nullptr;
+    std::fill(g_prof.begin(), g_prof.end(), 0);
+    MDFN_IEN_PCE::PCE_CycleProfReset();
+    MDFN_IEN_PCE::PCE_CycleProf = g_prof.data();
+    RPCReplyOK();
+   }
    else if(op == "prof_dump")
    {
-    if(a.size() != 2) throw std::runtime_error("prof_dump requires path");
+    if(a.size() != 2 || a[1].empty()) throw std::runtime_error("prof_dump requires path");
+    if(!MDFN_IEN_PCE::PCE_CycleProf)
+     throw std::runtime_error("prof_dump requires an active prof_start");
     MDFN_IEN_PCE::PCE_CycleProf = nullptr;
-    std::ofstream f(PercentDecode(a[1]));
-    for(unsigned i = 0; i < g_prof.size(); i++) if(g_prof[i]) f << std::hex << i << ' ' << std::dec << g_prof[i] << '\n';
-    RPCReplyOK();
+    const std::string path = PercentDecode(a[1]);
+    std::ofstream f(path);
+    if(!f) throw std::runtime_error("cannot open profile output: " + path);
+    uint64_t sum = 0;
+    size_t records = 0;
+    for(unsigned i = 0; i < g_prof.size(); i++)
+     if(g_prof[i])
+     {
+      f << std::hex << i << ' ' << std::dec << g_prof[i] << '\n';
+      sum += g_prof[i];
+      records++;
+     }
+    f.flush();
+    if(!f) throw std::runtime_error("failed to write profile output: " + path);
+    RPCReplyOK(",\"path\":\"" + JsonEscape(path) + "\",\"records\":" + std::to_string(records) +
+               ",\"master_ticks\":" + std::to_string(sum));
    }
    else if(op == "cov_clear") { CoverageClear(); RPCReplyOK(); }
    else if(op == "cov_dump")

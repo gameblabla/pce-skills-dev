@@ -2,7 +2,11 @@
 
 This folder contains the supplied PCE headless source snapshot, its build
 scripts, headless frontend notes, MCP wrapper, upstream documentation, and
-component license notices. Preserve all source licenses and notices. Locally
+component license notices. Preserve all source licenses and notices.
+The profiler enhancements (physical-PC master-tick sampling, frame-boundary
+clock accounting, and headless `prof_start`/`prof_dump` RPC validation) are
+tracked in this repository. `make headless-build` rebuilds the frontend and
+`make cycles-check` exercises native and report-side profiler logic. Locally
 generated object files, libraries, configured build files, and executables are
 not part of the skill bundle.
 

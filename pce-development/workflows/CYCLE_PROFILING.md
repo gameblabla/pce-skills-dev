@@ -2,13 +2,26 @@
 
 This extends `perf_pair.py` (which counts executed instructions) with the
 **actual CPU timestamp deltas** from the Mednafen-derived PCE core. The
-headless RPC already supports `prof_start` / `prof_dump`; no ROM debugger
-hooks or CPU-cycle approximations are needed. Use the RPC-capable rebuilt
-headless emulator, not the older prebuilt binary which lacks these calls.
+vendored headless RPC implements `prof_start` / `prof_dump`; no ROM debugger
+hooks or CPU-cycle approximations are needed. Build the emulator from the
+vendored source to avoid accidentally profiling with an older external binary.
+
+The native profile clock now explicitly flushes the pending instruction at each
+video-frame timestamp reset and retains the physical PC when a block transfer
+runs across multiple frames. Starting a fresh RPC segment discards the prior
+clock anchor. The frontend rejects failed `prof_dump` writes, reports the
+number of exported addresses and total master ticks, and rejects dumps without
+an active capture. The Python reporting tool checks these native totals against
+the saved histogram before attributing cycles. These are committed changes under `third_party/`, not just
+Python-side report logic. `make cycles-check` also compiles and executes a
+small C++ regression test of this real native helper.
 
 ## Commands
 
 ```sh
+make headless-build  # builds vendored source; requires Mednafen build deps
+make cycles-check    # offline tests, including native profiler clock
+make headless-profiler-smoke  # needs the built emulator + LLVM-MOS SDK
 PCE_HEADLESS=/path/to/pce-headless make cycles-ray
 PCE_HEADLESS=/path/to/pce-headless make cycles-all
 python3 pce-development/workflows/cycle_profile.py gate \

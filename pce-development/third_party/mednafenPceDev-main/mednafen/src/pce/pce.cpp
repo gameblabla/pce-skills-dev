@@ -1019,6 +1019,9 @@ static void Emulate(EmulateSpecStruct *espec)
   vce->ResetTS(end_timestamp_mod12);
 
   HuCPU.SyncAndResetTimestamp(end_timestamp_mod12);
+  // Flush the pending opcode before the HuC6280 clock wraps at VBlank.
+  // Keep the PC across frames for an in-progress block transfer.
+  PCE_CycleProfFrameEnd(end_timestamp, end_timestamp_mod12);
 
   //
   //

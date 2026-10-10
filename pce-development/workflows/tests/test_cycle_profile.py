@@ -52,6 +52,15 @@ class ProfileTests(unittest.TestCase):
             for raw in ('0 100\n0 120\n','100 BAD\n','ffffff 2\n','20 0\n','', '0 2 3\n'):
                 f.write_text(raw)
                 with self.assertRaises(ValueError):c.read_profile(f)
+    def test_native_dump_metadata_matches_serialized_histogram(self):
+        parsed={0x100:100,0x210:200}
+        c.validate_native_dump({'ok':True,'records':2,'master_ticks':300},parsed)
+        c.validate_native_dump({'ok':True},parsed)  # older compatible frontend
+        for bad in ({'records':3},{'master_ticks':301},
+                    {'records':2.0},{'master_ticks':'300'}):
+            with self.subTest(bad=bad),self.assertRaisesRegex(ValueError,'mismatches'):
+                c.validate_native_dump(bad,parsed)
+
     def test_categories_and_frame_sanity(self):
         frames=10
         labels=[(0x80,0xff,'main'),(0x100,0x130,'irq_vdc')]

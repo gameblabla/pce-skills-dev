@@ -29,6 +29,7 @@
 
 #include <mednafen/mednafen.h>
 #include "huc6280.h"
+#include "cycle_profiler.h"
 
 #include <string.h>
 
@@ -38,7 +39,19 @@
 
 namespace MDFN_IEN_PCE
 {
-uint64 *PCE_CycleProf = nullptr;	// physical-address master-clock cycle counts (profiling extension)
+uint64 *PCE_CycleProf = nullptr; // physical-address master-clock cycle counts
+static CycleProfileClock PCE_ProfileClock;
+
+void PCE_CycleProfReset(void)
+{
+ PCE_ProfileClock.Reset();
+}
+
+void PCE_CycleProfFrameEnd(uint32 end_timestamp, uint32 next_timestamp)
+{
+ if(PCE_CycleProf)
+  PCE_ProfileClock.FrameEnd(PCE_CycleProf, end_timestamp, next_timestamp);
+}
 
 INLINE void HuC6280::LastCycle(void)
 {
@@ -596,11 +609,8 @@ NO_INLINE void HuC6280::RunSub(void)
  {
          if(MDFN_UNLIKELY(PCE_CycleProf))
          {
-          static uint32 prof_pc = 0, prof_ts = 0;
-          uint32 d = timestamp - prof_ts;
-          if(d < 2000000) PCE_CycleProf[prof_pc] += d;
-          prof_ts = timestamp;
-          prof_pc = (((uint32)MPR[(PC >> 13) & 7]) << 13) | (PC & 0x1FFF);
+          const uint32 physical_pc = (((uint32)MPR[(PC >> 13) & 7]) << 13) | (PC & 0x1FFF);
+          PCE_ProfileClock.Instruction(PCE_CycleProf, timestamp, physical_pc);
          }
          if(DebugMode)
           old_PC = PC;

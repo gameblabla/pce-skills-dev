@@ -37,6 +37,20 @@ def read_profile(path):
     return totals
 
 
+def validate_native_dump(reply, records):
+    """Cross-check native RPC totals against the serialized histogram.
+
+    Older compatible RPC frontends may only return {"ok":true}; those are
+    handled by the existing record parser and frame-range sanity gate.
+    """
+    if 'records' in reply:
+        if type(reply['records']) is not int or reply['records'] != len(records):
+            raise ValueError('native profiler record count mismatches saved histogram')
+    if 'master_ticks' in reply:
+        if type(reply['master_ticks']) is not int or reply['master_ticks'] != sum(records.values()):
+            raise ValueError('native profiler tick total mismatches saved histogram')
+
+
 def rom_labels(path, linker_map=None):
     """Read exactly the physical *ROM offset* ranges in LLVM-MOS's MLB map."""
     spans=[]
@@ -245,9 +259,11 @@ def profile(exe,rom,mlb,scenario,out):
             rpc.call('run',seg['frames'])
             raw=out/(seg['name']+'.cycles')
             raw.unlink(missing_ok=True)
-            rpc.call('prof_dump',str(raw))
+            dump_reply=rpc.call('prof_dump',str(raw))
+            raw_profile=read_profile(raw)
+            validate_native_dump(dump_reply,raw_profile)
             after=read_progress(rpc,mlb,data.get('progress'))
-            results[seg['name']]=summarize(read_profile(raw),labels,seg['frames'])
+            results[seg['name']]=summarize(raw_profile,labels,seg['frames'])
             results[seg['name']]['buttons']=seg.get('buttons',[])
             if before is not None:
                 mask_counter=0xffffffff if data['progress'].get('kind')=='g2tr' else (1<<(8*data['progress'].get('width',2)))-1

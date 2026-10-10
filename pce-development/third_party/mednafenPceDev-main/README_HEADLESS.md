@@ -46,9 +46,22 @@ cov_clear
 cov_dump<TAB>/tmp/coverage.json
 record_start<TAB>/tmp/capture.y4m
 record_stop
+prof_start
+prof_dump<TAB>/tmp/profile.cycles
 reset
 quit
 ```
+
+`prof_start` clears the native profiler and begins a new measurement window.
+After `run`, `prof_dump` stops profiling and writes one `hex_physical_pc
+master_clock_ticks` record per nonzero address. It reports `records` and
+`master_ticks` in JSON. A missing `prof_start`, a second dump, or an unwritable
+output path is an explicit RPC error (not a false successful empty profile).
+The profiler tracks HuC6280 timestamp rollover at video-frame boundaries,
+including in-progress block-transfer instructions. **It measures emulated
+master-clock ticks, not real-console timing or wall-clock FPS.** Rebuild this
+vendored frontend after source changes; a binary from an earlier snapshot may
+have an older profiler or no `prof_*` operations.
 
 `input` sets a PCE active-high button mask: I, II, Select, Run, Up, Right,
 Down, Left, III, IV, V, and VI occupy bits 0-11. `trace_frames` accepts the

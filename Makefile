@@ -172,6 +172,19 @@ CYCLE_TOOL := $(ROOT)/workflows/cycle_profile.py
 CYCLE_SPECS := $(ROOT)/workflows/specs/cycles
 cycles-check:
 	$(PYTHON) -m unittest discover -s $(ROOT)/workflows/tests -p 'test_cycle_profile.py' -v
+	$(PYTHON) -m unittest discover -s $(ROOT)/workflows/tests -p 'test_native_cycle_profiler.py' -v
+
+# Compile the vendored native profiler too; don't assume an old external
+# pce-headless executable has the RPC profiler from this source checkout.
+.PHONY: headless-build
+headless-build:
+	$(ROOT)/third_party/mednafenPceDev-main/build_headless.sh
+
+.PHONY: headless-profiler-smoke
+HEADLESS_SMOKE_EXE := $(if $(PCE_HEADLESS),$(PCE_HEADLESS),$(ROOT)/third_party/mednafenPceDev-main/pce-headless)
+headless-profiler-smoke:
+	$(MAKE) -C $(EX)/00-project-template all
+	$(PYTHON) $(ROOT)/workflows/headless_profiler_smoke.py --emulator "$(HEADLESS_SMOKE_EXE)" --rom $(EX)/00-project-template/build/00-project-template.pce
 cycles-ray:
 	@test -n "$(PCE_HEADLESS)" && test -x "$(PCE_HEADLESS)" || { echo 'Set PCE_HEADLESS=/absolute/path/to/RPC-capable/pce-headless' >&2; exit 2; }
 	$(MAKE) -C $(EX)/34-rendered-raycaster all
