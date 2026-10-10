@@ -104,6 +104,18 @@ volatile uint16_t ray_bat_words;
 #ifndef RAY_COLUMN_TIA
 #define RAY_COLUMN_TIA 1
 #endif
+/* PCEdev-style generated eight-word vertical writer. Keep a C/TIA
+ * reference build (-DRAY_WALL_CODEGEN=0) for exact visual comparisons. */
+#ifndef RAY_WALL_CODEGEN
+#define RAY_WALL_CODEGEN 1
+#endif
+#if RAY_WALL_CODEGEN
+extern const uint16_t ray_codegen_handlers[33][16];
+extern void ray_codegen_emit(void);
+volatile uint16_t ray_codegen_target;
+volatile uint8_t ray_codegen_variant;
+volatile uint16_t ray_codegen_words;
+#endif
 static uint16_t column_words[RAY_COLUMN_CHUNK_WORDS];
 #endif
 static uint16_t scan_words[RAY_SLICE_ROWS][64];
@@ -353,6 +365,35 @@ static void column_upload(uint8_t pair,uint8_t first,uint8_t last,
         texphase=off&1u;
     }
     for(uint8_t y=first;y<last;) {
+#if RAY_WALL_CODEGEN
+        /* A complete 8-pixel wall block needs no staging, loop, or V
+         * index computations on the target. The generated instruction
+         * sequence reads fixed ROM texture offsets and writes the VDC.
+         * Only short IRQ-masked bursts are permitted; never cross either
+         * 64-row BAT half or the old/new dirty-span boundary. */
+        if(y>=t && (uint8_t)(y-t)%8u==0u &&
+           (uint16_t)y+8u<=last && (uint16_t)y+8u<=end &&
+           (y&63u)<=56u) {
+            uint16_t entry=ray_codegen_handlers[depth[c]][(uint8_t)(y-t)>>3];
+            if(entry) {
+                ray_codegen_target=entry;
+                ray_codegen_variant=(uint8_t)((wall_style[c]<<3)|u);
+                uint16_t address=(uint16_t)((((uint16_t)(y&63u))<<7)+
+                                    ((y&64u)?64u:0u)+pair);
+                pce_cpu_irq_disable();
+                pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,address);
+                *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
+                ray_codegen_emit();
+                pce_cpu_irq_enable();
+                ray_codegen_words=(uint16_t)(ray_codegen_words+8u);
+                ray_bat_words=(uint16_t)(ray_bat_words+8u);
+                background+=512u;
+                tex+=4u;
+                y=(uint8_t)(y+8u);
+                continue;
+            }
+        }
+#endif
         uint8_t n=0;
         uint8_t stop=(uint8_t)((y&64u)?128u:64u);
         uint16_t *out=column_words;
@@ -366,6 +407,12 @@ static void column_upload(uint8_t pair,uint8_t first,uint8_t last,
             background+=64u;
             ++n;
             ++yy;
+#if RAY_WALL_CODEGEN
+            /* Stop the scalar prefix exactly at the next generated
+             * eight-row span. Otherwise a displaced old wall top makes
+             * every later batch misaligned and bypasses all microcode. */
+            if(yy>=t && yy<end && ((uint8_t)(yy-t)&7u)==0u)break;
+#endif
         }
         uint16_t addr=(uint16_t)((((uint16_t)(y&63u))<<7)+((y&64u)?64u:0u)+pair);
         pce_cpu_irq_disable();
@@ -442,6 +489,9 @@ int main(void) {
                  VDC_CONTROL_VRAM_ADD_128);
     pce_cpu_irq_enable();
     next_column=0;cast_valid=0;ray_bat_words=0;
+#if RAY_WALL_CODEGEN
+    ray_codegen_words=0;
+#endif
     for(uint8_t c=0;c<32;++c)old_height[c]=0;
 #endif
     draw_row=0;ray_redraws=0;

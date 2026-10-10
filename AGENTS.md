@@ -294,3 +294,14 @@ half-page renderer, and must never silently replace the full-detail build.
 PCEdev's 15-30fps discussion is a design estimate, not performance evidence
 for this example. The fast background stays screen-anchored while walls move;
 implementing perspective floor motion is future work, not an achieved feature.
+
+## Generated wall-code raycaster (example 34)
+
+Do not claim fast Wolfenstein frame rates from screenshot appearance. The
+full-detail 128x128 raycaster now uses `tools/gen_wall_codegen.py` to generate
+fixed-offset HuC6280 wall writers, with 8-word IRQ-bounded vertical VRAM
+bursts. Use `make tables-check`, `make codegen-benchmark`, and
+`make column-regression`; the benchmark requires both real emulator image
+agreement and ROM-owned codegen word counters. Keep `make atomic-test`
+separate: it builds the independent 128x64 page-flipped mode, which has
+lower vertical detail. The C reference ROM remains `make codegen-reference`.

@@ -11,9 +11,9 @@ OUT := build/34-rendered-raycaster.pce
 FAST_ROM_LINK := -Wl,--defsym=__rom_bank0=0x8000,--defsym=__rom_bank0_size=0x8000
 .PHONY: interaction-test interaction-replay all run trace visual-test bitmap-test clean
 all: tables-check $(OUT)
-$(OUT): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/backdrop_words.h tools/genre_trace.h | toolchain
+$(OUT): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/backdrop_words.h src/wall_codegen.S tools/genre_trace.h | toolchain
 	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) -Itools src/main.c src/bat_sparse_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -Itools src/main.c src/bat_sparse_irq.S src/wall_codegen.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
 PCE_RUN_FRAMES ?= 180
 run: $(OUT)
 	@PCE_RUN_FRAMES="$(PCE_RUN_FRAMES)" PCE_HEADLESS="$(PCE_HEADLESS)" tools/run-pce-headless.sh run "$(OUT)"
@@ -38,6 +38,7 @@ tables-check:
 	python3 tools/gen_wall_pairs.py --check
 	python3 tools/gen_backdrop.py --check
 	python3 tools/gen_sparse_irq.py --check
+	python3 tools/gen_wall_codegen.py --check
 
 # Same-source 4-row and 8-row HuC6280 TIA upload benchmarks. Both runs
 # verify six actual emulator screenshots and count completed VRAM passes.
@@ -102,3 +103,14 @@ column-benchmark: $(OUT)
 column-regression: $(OUT) tables-check
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(OUT) --elf $(OUT).elf --mode column --output build/column-stress.json
 	$(MAKE) column-benchmark
+
+# Two same-resolution dirty-column versions: generated HuC6280 unrolled wall
+# writes vs the existing C/TIA loop. Atomic remains a separate build.
+.PHONY: codegen-reference codegen-benchmark
+CODEGEN_REFERENCE := build/34-rendered-raycaster-column-reference.pce
+$(CODEGEN_REFERENCE): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/backdrop_words.h tools/genre_trace.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_WALL_CODEGEN=0 -Itools src/main.c src/bat_sparse_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+codegen-reference: $(CODEGEN_REFERENCE)
+codegen-benchmark: $(OUT) $(CODEGEN_REFERENCE)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/compare_codegen.py --reference $(CODEGEN_REFERENCE) --optimized $(OUT) --output build/codegen-comparison.json

@@ -40,6 +40,53 @@ geometry is fully ray-cast from the current camera. A dynamically scrolling
 floor remains a separate rendering-quality task. The ROM is 32 KiB, larger
 than the old 8 KiB binary, but work-RAM BSS fell from 1,331 to 487 bytes.
 
+## Generated HuC6280 vertical wall code (PCEdev-inspired, implemented)
+
+The full-detail default now **executes generated wall microcode**, rather
+than only linking a precomputed texture table. Run
+`python3 tools/gen_wall_codegen.py` to regenerate `src/wall_codegen.S`;
+`make tables-check` fails if the file is stale. The generator converts each
+wall height (23 distinct values for 33 distances) into unrolled eight-row
+instruction sequences. Each embeds scaled texture V addresses in `LDA
+ray_codegen_pixels+constant,X`, then writes two duplicate-height pixels
+using direct `STA $0002`/`ST2 #$f2`. `X` selects one of 40 shaded
+material/horizontal texture phases. There is no pixel loop, C array
+indexing, software multiplication, or division in the generated path.
+
+The **eight-word / 16-byte interrupt limit still applies**. C positions the
+VDC's +128-word vertical address pointer, disables IRQs for exactly one
+specialized 8-pixel block, then restores IRQs. Any clipped span before/after
+the unrolled section uses the original scalar/TIA path. The scalar prefix
+*must stop at the next texture-aligned eight-row boundary*; otherwise the
+C batches stay permanently misaligned and the generated writer rarely runs.
+
+The generated source includes full ELF function size metadata for each
+specialized code path; the emulator cycle profiler can attribute these
+instructions rather than treating them as unmapped time. Duplicate wall
+heights share the same ROM routines, so the complete 128×128 variant still
+fits a **32 KiB HuCard**. This is one concrete implementation of the
+[PCEdev code-generation concept](https://pcedev.wordpress.com/2015/11/25/wolfenstein-3d-on-the-pc-engine/),
+not the blog's entire proposed engine or its anticipated FPS.
+
+The same-source `-DRAY_WALL_CODEGEN=0` reference retains the previous
+C/TIA wall writer, while `make atomic-rom` is still separately selectable
+at 128×64, unaffected by this optimization. To reproduce the benchmark:
+
+```sh
+make codegen-reference tables-check
+PCE_HEADLESS=/path/to/rpc-capable/pce-headless make codegen-benchmark
+```
+
+The 540-video-frame comparison observed **17 vs 19 changed-view commits
+while turning** (5.667 vs 6.333 changed views per emulated second).
+The generated routines uploaded **75,408 BAT words** out of **104,698**
+across the measured segments (~72%). The independent stationary screenshot
+matched **135,520 RGB pixels exactly**. Other segments may progress to
+different map positions because faster builds advance more game ticks;
+this is *not* an identical-work CPU cycle comparison, nor a measured
+physical-console FPS. The original blog's 12–30 FPS projections have not
+been reached; scene complexity and progressive presentation still matter.
+
 ## Reproducible measurements (emulated hardware, not real-console timing)
 
 The previous renderer completed 19 *full background-and-wall BAT passes* in
@@ -73,9 +120,11 @@ benchmark of this ROM. The CPU cycle-profile and frame-upload tests remain neces
 claiming any further performance result. Measured under 60-frame turning
 input: ~148,843 master-clock ticks per emulated video frame in
 `column_upload`, ~41,942 in `cast_scene`, and ~52,175 in `irq_vdc`.
-The priority for a genuine 15 FPS engine is generated bank-aligned vertical
-wall-texture write code as described in PCEdev, not larger uninterruptible
-TIA transfers. Neither VRAM-VRAM DMA clearance timing nor physical console
+The generated eight-word vertical instruction paths now exist and are
+measurably useful, but the surrounding C clipping, dispatch and VRAM setup
+still dominate. A more complete 15 FPS engine would require moving more of
+those operations into generated native code; increasing interrupt-masked
+transfer size risks raster starvation. Neither VRAM-VRAM DMA clearance timing nor physical console
 frame rate has been measured.
 
 A stationary picture rendered by this engine matches the original shader's

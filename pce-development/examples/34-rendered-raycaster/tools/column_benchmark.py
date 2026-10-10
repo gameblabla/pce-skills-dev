@@ -35,9 +35,12 @@ def validate(data):
             raise ValueError('unrendered/blank screen')
     if data[0]['dirty_views'] or data[0]['vram_words']:
         raise ValueError('settled idle spurs background redraws')
-    # Immediately after button release, one in-flight four-tick column
-    # pass may legitimately finish before the new idle view is settled.
-    if data[-2]['dirty_views']>2 or data[-2]['vram_words']>4096:
+    # A completed in-flight 32-column pass may contain up to 2*128*32=8192
+    # BAT words (two pairs per ray). The old 4096 threshold incorrectly
+    # rejected valid close-wall frames after a faster renderer advanced
+    # farther during the held-UP segment. The next 90-frame quiet window
+    # MUST still show zero writes and zero new changed views.
+    if data[-2]['dirty_views']>2 or data[-2]['vram_words']>8192:
         raise ValueError('settling period keeps redrawing excessively')
     if data[-1]['dirty_views'] or data[-1]['vram_words']:
         raise ValueError('fully settled idle still performs VRAM writes')
@@ -58,13 +61,18 @@ def run(rom,elf,output):
     bin=platformer_trace._find_binary(str(rom))
     addr={n:platformer_trace.resolve_trace_address(elf,n) for n in
           ('ray_redraws','ray_bat_words','pce_genre_trace')}
+    try:
+        addr['ray_codegen_words']=platformer_trace.resolve_trace_address(elf,'ray_codegen_words')
+    except RuntimeError:
+        pass # Reference ROM deliberately has no generated-code counter.
     client=platformer_trace.NativeControl(str(bin),str(rom),output.parent/(output.stem+'-rpc'),initial_frames=2)
     rows=[]
     try:
         client.call('run',300)
         def sample():
             result={}
-            for key in ('ray_redraws','ray_bat_words'):
+            for key in ('ray_redraws','ray_bat_words','ray_codegen_words'):
+                if key not in addr:continue
                 raw=bytes.fromhex(client.call('memread',hex(addr[key]),2,1)['hex'])
                 result[key]=int.from_bytes(raw,'little')
             raw=bytes.fromhex(client.call('memread',hex(addr['pce_genre_trace']),128,1)['hex'])
@@ -84,6 +92,7 @@ def run(rom,elf,output):
                          'dirty_views':(now['ray_redraws']-before['ray_redraws'])&65535,
                          'vram_words':(now['ray_bat_words']-before['ray_bat_words'])&65535,
                          'game_updates':(now['frame']-before['frame'])&0xffffffff,
+                         'generated_words':(now['ray_codegen_words']-before['ray_codegen_words'])&65535 if 'ray_codegen_words' in addr else None,
                          'screenshot_colors':colors,'screenshot':str(image)})
             before=now
     finally:client.close()

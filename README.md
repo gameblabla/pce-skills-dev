@@ -229,3 +229,12 @@ one settled screenshot still matches the old shader pixel for pixel.
 The 128x64 atomic BAT-half-page mode remains optional, separately compiled
 and tested (`make raycaster-atomic`). Mirrored scenes may be a useful future
 application; they are not part of the current example.
+
+### Pre-generated HuC6280 raycaster vertical wall writers
+
+`PCE_HEADLESS=/path/to/RPC-emulator make raycaster-codegen` builds the
+same-resolution C/TIA and generated-assembly 128×128 raycaster variants,
+compares rendered pixels exactly, and measures actual ROM-authored dirty
+views and generated-code BAT words. The eight-row unrolled paths are
+interrupt-bounded and keep the separate 128×64 atomic renderer unchanged.
+See `pce-development/examples/34-rendered-raycaster/README.md` for tradeoffs.
