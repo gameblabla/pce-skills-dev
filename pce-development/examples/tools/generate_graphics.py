@@ -26,8 +26,8 @@ TITLES = ['PROJECT TEMPLATE','HELLO CD-ROM2','STATIC BACKGROUND','CD TO ARCADE R
           'BANK RELOCATION','HEADLESS DEBUGGING','PYTHON MATH','VIDEO MODES',
           'PICTURE CONVERSION','BACKGROUND STREAMING','PLAYER COLLISION',
           'ENEMIES AND SHOTS','PALETTE FADES','BITMAP FONT','RASTER PARALLAX',
-          'MEMORY MANAGEMENT','ADPCM AND PSG DDA']
-WIDTHS = {0:256,8:256,9:512,10:256,17:256,18:256,19:256,22:512}
+          'MEMORY MANAGEMENT','ADPCM AND PSG DDA','PLATFORM INTEGRATION','PLATFORMER STARTER','PLATFORM + RACE']
+WIDTHS = {0:256,8:256,26:256,27:256,9:512,10:256,17:256,18:256,19:256,22:512}
 PLATFORM_LAYOUT = [(0,176,512,80,80), (104,144,48,8,16),
                    (208,120,48,8,16), (352,144,48,8,16)]
 
@@ -81,7 +81,7 @@ def scene(n):
     w = WIDTHS.get(n,320)
     im = image((512,256))
     d = ImageDraw.Draw(im)
-    if n in (2,4,8,11,16,17,18,20):
+    if n in (2,4,8,11,16,17,18,20,26,27):
         landscape(im, n == 18)
         if n == 11:
             text(d,(32,40),'LIVES 03   HEALTH',4)
@@ -162,7 +162,7 @@ def scene(n):
     d.rectangle((0,0,511,31), fill=8)
     d.line((0,31,511,31),fill=3)
     text(d,(8,8),f'{n:02d}  {TITLES[n]}',1)
-    if n not in (8,9,22):
+    if n not in (8,9,22,26,27):
         text(d,(8,208), {8:'LEFT / RIGHT TO WALK',10:'I: FIRE',11:'I: MOVE HUD UP',
                         17:'STREAMING THE ENTERING EDGE',18:'D-PAD: MOVE / WALL AT X=192',
                         19:'I: FIRE AT ENEMY',20:'VCE PALETTE ANIMATION',
@@ -236,7 +236,7 @@ def bake(folder,n):
     header += array('pce_demo_bat',bat,'uint16_t')
     header += array('pce_demo_sprite_pattern',sprite_bytes)
     (folder/'assets/demo_assets.h').write_text(header)
-    if n == 8:
+    if n in (8,26,27):
         layout = ('#pragma once\n#include <stdint.h>\n'
                   'typedef struct { int16_t x, top, width, collision_height, art_height; } DemoPlatform;\n'
                   f'#define PCE_DEMO_SURFACE_COUNT {len(PLATFORM_LAYOUT)}\n'

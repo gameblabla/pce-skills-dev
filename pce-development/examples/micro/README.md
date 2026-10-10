@@ -1,6 +1,6 @@
 # Small, single-purpose PC Engine examples
 
-87 separate LLVM-MOS HuCard C projects. Each contains **one `main.c` and one one-line Makefile**; the build rules and optional tiny helpers are shared at this level. Audio examples never touch the VDC, VCE, screen, graphics, fonts or sprites. New sprite examples use a graphics-only helper, independent of the PSG. No commercial ROM or BIOS is needed to build these.
+95 separate LLVM-MOS HuCard C projects. Each contains **one `main.c` and one one-line Makefile**; the build rules and optional tiny helpers are shared at this level. Audio examples never touch the VDC, VCE, screen, graphics, fonts or sprites. New sprite examples use a graphics-only helper, independent of the PSG. No commercial ROM or BIOS is needed to build these.
 
 Build one: `cd 03-psg-tone && make`. Run through the configured headless frontend via
 `make run` or `make debug`; both forward to the standard project wrapper.
@@ -111,3 +111,14 @@ Hardware API/register names are from the pinned LLVM-MOS SDK; the project layout
 Sprite patterns use a 16x16 four-bitplane format; the SAT pattern field is in 32-word VRAM units (0x6000 words becomes 0x0300), and SATB DMA is enabled for publication on VBlank. The sprite example is deliberately asymmetric so flipping is visually detectable. The screenshot smoke check does not verify audio output.
 
 Do not combine these snippets verbatim without sharing PSG channel ownership, IRQ vectors, VDC-index state, and memory maps. Busy-wait loops are instructional only. SuperGrafx VDC2 selection does not activate automatic dual-plane compositing. Arcade Card examples require its optional hardware.
+
+## Gameplay building blocks (added)
+
+- [87-cpu-q8-motion](87-cpu-q8-motion/README.md) — CPU: Track fractional Q8 horizontal movement without camera or graphics.
+- [88-cpu-rect-overlap](88-cpu-rect-overlap/README.md) — CPU: Test axis-aligned hitboxes without any sprite or text code.
+- [89-cpu-landing-crossing](89-cpu-landing-crossing/README.md) — CPU: Detect downward platform-top crossings using previous/current feet.
+- [90-cpu-camera-follow](90-cpu-camera-follow/README.md) — CPU: Compute clamped world-to-screen camera offset; never move world positions.
+- [91-cpu-lane-clamp](91-cpu-lane-clamp/README.md) — CPU: Clamp racing lane X independently of forward Y progress.
+- [92-cpu-segment-state](92-cpu-segment-state/README.md) — CPU: Switch between platformer and racing rules with an explicit state machine.
+- [93-joypad-jump-edge](93-joypad-jump-edge/README.md) — Input: Treat jump as a new press, not a repeated held-key action.
+- [94-joypad-lane-steer](94-joypad-lane-steer/README.md) — Input: Use held LEFT/RIGHT to steer an independent lane X value without a display.

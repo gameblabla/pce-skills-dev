@@ -46,3 +46,9 @@ CD target. The shared PCE image/font/sprite converters, audio encoders, BIOS
 ADPCM player, and SoftADPCM/DDA decoder library are documented in
 `pce-development/tools/pce/README.md`. These tools contain no game-specific
 art, ROM, BIOS, or archive data.
+
+## Offline game-request router (for Luna / Leading Edge / smaller local models)
+
+Before inventing a new game/physics scaffold, run `python3 pce-development/workflows/offline.py route "USER REQUEST"` and follow its concrete recipe. For a simple playable platformer choose example 26; for explicit platformer + racing segments choose example 27 with its generated `hybrid_rules.h`. Read `pce-development/workflows/README.md` and the generated project's README. Do not mix their stage-specific X/Y coordinates, and do not treat host-side simulation as game execution. Enforce one scene owner at a time, and test entry and return transitions. `make test` runs offline unit/static checks; `make hybrid-test` needs a newer RPC-capable emulator. **Never claim a failing P2TR scenario succeeded on a prebuilt emulator without `trace_frames`.**
+
+The user-provided transcripts are private inputs for deriving incident patterns only; they are not part of the redistributable toolkit. A separate `transcript_lessons.py` reports aggregate categories without copying their text. Keep them outside commits and published archives.

@@ -53,7 +53,7 @@ the current code before repeating their numbers or assumptions.
   through its source layout, camera/scroll, renderer, and display publication.
 - For lessons from recurring regressions and measured fixes, read
   [incident patterns](references/incident-patterns.md).
-- For first-time, single-function learning, use the [85 micro examples](examples/micro/README.md)
+- For first-time, single-function learning, use the [95 micro examples](examples/micro/README.md)
   (audio without graphics, input, VDC/VCE, SuperGrafx, Arcade Card, timer).
 - For scratch projects and worked starter patterns, use the self-contained
   [examples folder](examples/README.md). Code there is marked as pseudocode
@@ -63,6 +63,10 @@ the current code before repeating their numbers or assumptions.
 - For a new project's Makefile, automatic LLVM-MOS SDK setup, or missing BIOS
   path guidance, use the [toolchain setup reference](references/toolchain-setup.md)
   and copy the shared files under [examples/starter](examples/starter/).
+
+## Offline request-to-project bring-up
+
+**Always route game creation requests before generating source:** `python3 workflows/offline.py route "REQUEST"` from this skill folder. It outputs an existing compiled example, a safe starter-copy command and focused verification expectations. A simple platformer uses `examples/26-platformer-starter` (P2TR collision and camera). A request mixing platformer and racer/Contra-like segments uses `examples/27-platformer-racer` (explicit separate Q8 X/Y rules, transitions, road art) and the validator/spec generator in `workflows/offline.py`. Read [`workflows/README.md`](workflows/README.md) for this workflow, standalone `make` rules, host oracles, offline tests and caveats about RPC emulator versions. The small AI should call these utilities, not improvise hardware register names, untraceable physics, an unbootable CD project, or status claims from an untested ROM.
 
 ## Working method
 

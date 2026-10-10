@@ -102,7 +102,7 @@
   },
   {
     "id": "llvm-mos-cd-hello-bringup",
-    "question": "Outline the smallest cold-boot CD-ROM² project that reaches a Hello World screen. Name the toolchain boundary and the evidence a headless test should capture.",
+    "question": "Outline the smallest cold-boot CD-ROM\u00b2 project that reaches a Hello World screen. Name the toolchain boundary and the evidence a headless test should capture.",
     "context": "The project is new. It has an LLVM-MOS installation with the PCE CD target driver, linker, integrated assembler, SDK headers, libraries, and disc image builder. It has no game source tree, no bundled BIOS, and no build script yet. A user can provide a compatible extracted System Card image and can configure a headless emulator.",
     "references": [
       "references/toolchain-setup.md",
@@ -377,7 +377,7 @@
         "any_groups": [
           [
             "71",
-            "70–72",
+            "70\u201372",
             "70-72",
             "70 to 72",
             "frames 70"
@@ -675,7 +675,7 @@
   {
     "id": "platformer-generated-cd-game-failure-trace",
     "question": "Answer in four short parts: (1) which movement/gravity facts are supported and which collision path fails; (2) explain the frame-125 LANDED+DIED record from the pixel-to-tile call and the uint8_t cast; (3) explain repeated death/fade behavior and whether the jump was tested; (4) give correction order and repeatable Make-based trace steps. Close by stating that game-authored trace data cannot prove rendered pixels. Ground conclusions in frame data and distinguish evidence from inference. Do not request an image or tell the coding agent to launch a frontend directly.",
-    "context": "Generated project trace: 141 samples, game frames 2–142. II is observed one sample after its requested segment. During the right hold, world x changes 32→186 and vx 0→2 px/frame, so horizontal movement works. The player falls to y=304.75, vy=6.25 at frame 49 and DIED first appears. `surface_count=0` on active gameplay frames 19–48. DIED remains set through frame 142; the report flags repeated events over 50–142. At frame 125, LANDED and DIED are both set, y=779, feet=795, vy=0, grounded=true, with no support surface; the report flags `landing_support_unverified`. There is no JUMPED event. The one-frame I press is observed after the player is already dead and airborne.\n\nSource facts: the level uses 8-pixel tiles, is 500 tiles wide and 28 rows high, with ground on rows 24–27. `get_tile(uint16_t tx, uint8_t ty)` expects tile indices and returns empty outside those bounds. The physics code converts Q8 feet/player positions to integer pixels, then calls `get_tile((uint16_t)feet_x, (uint8_t)feet_y)` without dividing by 8. Therefore the frame-125 `feet_y=795` is narrowed to uint8 value 27, an in-range ground row.\n\n`update_fade()` runs before the gameplay branch and increments an outgoing fade toward 15; it switches scenes only at 15. Every dead gameplay frame then sets `fade_in_progress=1`, `fade_direction=1`, `fade_level_current=0`, and target DEATH again. A one-minute interval is the goal. Use a fresh Make `trace` scenario after fixes; start II, allow spawn to settle, tap I for one frame, release, and separately test side-contact death. The relevant guides specify event flags as one-frame pulses and require a support surface for verified landings.",
+    "context": "Generated project trace: 141 samples, game frames 2\u2013142. II is observed one sample after its requested segment. During the right hold, world x changes 32\u2192186 and vx 0\u21922 px/frame, so horizontal movement works. The player falls to y=304.75, vy=6.25 at frame 49 and DIED first appears. `surface_count=0` on active gameplay frames 19\u201348. DIED remains set through frame 142; the report flags repeated events over 50\u2013142. At frame 125, LANDED and DIED are both set, y=779, feet=795, vy=0, grounded=true, with no support surface; the report flags `landing_support_unverified`. There is no JUMPED event. The one-frame I press is observed after the player is already dead and airborne.\n\nSource facts: the level uses 8-pixel tiles, is 500 tiles wide and 28 rows high, with ground on rows 24\u201327. `get_tile(uint16_t tx, uint8_t ty)` expects tile indices and returns empty outside those bounds. The physics code converts Q8 feet/player positions to integer pixels, then calls `get_tile((uint16_t)feet_x, (uint8_t)feet_y)` without dividing by 8. Therefore the frame-125 `feet_y=795` is narrowed to uint8 value 27, an in-range ground row.\n\n`update_fade()` runs before the gameplay branch and increments an outgoing fade toward 15; it switches scenes only at 15. Every dead gameplay frame then sets `fade_in_progress=1`, `fade_direction=1`, `fade_level_current=0`, and target DEATH again. A one-minute interval is the goal. Use a fresh Make `trace` scenario after fixes; start II, allow spawn to settle, tap I for one frame, release, and separately test side-contact death. The relevant guides specify event flags as one-frame pulses and require a support surface for verified landings.",
     "calculation": "((490*8)-32)/(2*60)",
     "references": [
       "references/platformer-rules.md",
@@ -812,7 +812,7 @@
   },
   {
     "id": "platformer-generated-game-deliverable-audit",
-    "question": "Audit this output against the original one-minute Super CD-ROM² platformer request. State the exact built `.pce` and `.bin` artifact types, whether a one-minute full-route duration is demonstrated, whether a bootable CD was delivered, what the title capture visibly contains, and which requested features remain unproven. Quote only the attached Python pure-run time; do not recalculate it or add another route distance/count. Say whether a full-route time is demonstrated, and do not treat the baseline as a measured playthrough. Keep image findings separate from game-authored trace claims, and recommend the next project Make-based evidence. Do not request an image or tell the coding agent to launch a frontend directly. For CD boot, give the Make target with both `PCE_RUN_IMAGE` set to the packaged image and `PCE_SYSTEM_CARD_BIOS` set to the user's BIOS.",
+    "question": "Audit this output against the original one-minute Super CD-ROM\u00b2 platformer request. State the exact built `.pce` and `.bin` artifact types, whether a one-minute full-route duration is demonstrated, whether a bootable CD was delivered, what the title capture visibly contains, and which requested features remain unproven. Quote only the attached Python pure-run time; do not recalculate it or add another route distance/count. Say whether a full-route time is demonstrated, and do not treat the baseline as a measured playthrough. Keep image findings separate from game-authored trace claims, and recommend the next project Make-based evidence. Do not request an image or tell the coding agent to launch a frontend directly. For CD boot, give the Make target with both `PCE_RUN_IMAGE` set to the packaged image and `PCE_SYSTEM_CARD_BIOS` set to the user's BIOS.",
     "context": "The generated project builds an 8 KiB `.pce` preview with `make PCE_CDROM2=0` and a 7,901-byte application `.bin` with `make PCE_CDROM2=1`. The CD Makefile has no disc-image packaging rule; no packaged disc image or System Card boot test exists. The `.bin` is a CD application binary, not a bootable disc.\n\nThe player starts at x=32 px; the flag is at tile column 490. Tiles are 8 pixels wide, walking speed is 2 px/frame, and the intended frame rate is 60 fps. The pure rightward run from spawn to flag is not a full playthrough and does not measure jumps or enemy delays. No full-route completion time was measured. Python calculator output is attached; its unit is seconds.\n\nA 120-frame project `make run` title capture was inspected: it is black except for a few sparse pixels, with no readable title or visible background, floor, HUD, or flag. The P2TR trace shows x movement and downward motion but has no collidable surfaces; it records death and an unsupported landing after the fall. No successful jump, enemy stomp/side-contact, goal, flag animation, end transition, or one-minute route was demonstrated. Trace data is authored by the game and cannot prove visible pixels or physical CD boot behavior.",
     "calculation": "((490*8)-32)/(2*60)",
     "references": [
@@ -922,6 +922,74 @@
             "run"
           ]
         ]
+      }
+    ]
+  },
+  {
+    "id": "local-model-offline-platformer-starter",
+    "question": "I want a working new PCE platformer starter. Which exact offline tool should I invoke before inventing a Makefile or collision engine, which example should I scaffold, and how do I verify input, gravity and landing? No network or direct emulator binary calls. Distinguish build from P2TR evidence.",
+    "context": "This skill bundle has workflows/offline.py, examples/26-platformer-starter, a headless wrapper, and P2TR v1 diagnostics. The local AI cannot access screenshots unless explicitly supplied.",
+    "references": [
+      "workflows/README.md",
+      "references/platformer-rules.md",
+      "examples/26-platformer-starter/README.md"
+    ],
+    "checks": [
+      {
+        "id": "routes via tool",
+        "regex": "(?is)(offline\\.py).{0,80}(route|brief)"
+      },
+      {
+        "id": "copies starter",
+        "regex": "(?is)(26-platformer-starter).{0,160}(new|copy|scaffold)|(?:new|copy|scaffold).{0,160}(26-platformer-starter)"
+      },
+      {
+        "id": "world versus camera",
+        "regex": "(?is)(world).{0,160}(camera)"
+      },
+      {
+        "id": "P2TR scenario",
+        "regex": "(?is)(P2TR|make trace).{0,180}(scenario|frame|input)"
+      },
+      {
+        "id": "separates evidence",
+        "regex": "(?is)(build).{0,160}(not|does not|cannot).{0,100}(prove|verify|confirm)"
+      }
+    ]
+  },
+  {
+    "id": "local-model-contra-hybrid-handoff",
+    "question": "Build a Contra-like PC Engine game alternating a platformer and racing scene with different X/Y rules. What offline tools and starter would you use? Explain how x/y, camera, collision and stage transitions stay separate and how to demonstrate both phases with actual input rather than a neutral screenshot.",
+    "context": "Offline workflows exist under workflows/, a runnable two-scene HuCard project under examples/27-platformer-racer, and a separate accurate micro/86-mode7-bitmap-floor renderer. Assume the prebuilt emulator may not support scripted RPC commands.",
+    "references": [
+      "workflows/README.md",
+      "examples/27-platformer-racer/README.md",
+      "examples/micro/BITMAP_MODE7_HISTORY.md"
+    ],
+    "checks": [
+      {
+        "id": "selects hybrid recipe",
+        "regex": "(?i)(27-platformer-racer)"
+      },
+      {
+        "id": "uses offline routing",
+        "regex": "(?i)offline\\.py\\s+(route|brief)"
+      },
+      {
+        "id": "x/y rules by phase",
+        "regex": "(?is)(lane|race).{0,180}(forward|progress|Y)"
+      },
+      {
+        "id": "does not mix modes",
+        "regex": "(?is)(gravity|jump|platform).{0,220}(disable|separat|mode|scene|phase)"
+      },
+      {
+        "id": "real scenario evidence",
+        "regex": "(?is)(hybrid-test|RPC|scripted input|held RIGHT).{0,240}(scene|transition|emulator|trace)"
+      },
+      {
+        "id": "distinguishes mode7",
+        "regex": "(?is)(mode.?7|paired.BAT|bitmap).{0,160}(separate|not|distinct)"
       }
     ]
   }

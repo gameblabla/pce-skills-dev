@@ -1,0 +1,13 @@
+{
+ "description":"authoring contract example; placeholders are not actual installed sprite frames",
+ "require_existing_files":false,
+ "states":{
+    "idle":{"frames":["hero/idle_0.png"],"ticks_per_frame":8},
+    "run":{"frames":["hero/run_0.png","hero/run_1.png"],"ticks_per_frame":5},
+    "jump":{"frames":["hero/jump_up.png","hero/jump_down.png"],"ticks_per_frame":6},
+    "shoot_idle":{"frames":["hero/shoot_stand.png"],"ticks_per_frame":6},
+    "shoot_run":{"frames":["hero/shoot_run.png"],"ticks_per_frame":6},
+    "hurt":{"frames":["hero/hurt.png"],"ticks_per_frame":8},
+    "death":{"frames":["hero/death_0.png","hero/death_1.png"],"ticks_per_frame":10}
+ }
+}

@@ -1,0 +1,8 @@
+{
+  "version":1, "world":{"width":512,"height":224},
+  "controls":{"walk_speed_q8":256,"gravity_q8":64,"jump_velocity_q8":-1280,"race_speed_q8":768,"race_lane_left":48,"race_lane_right":208},
+  "scenes":[
+    {"id":"fortress","type":"platformer","length":440,"next":"highway","platforms":[{"x":0,"y":176,"w":512,"h":48},{"x":104,"y":144,"w":48,"h":8},{"x":208,"y":120,"w":48,"h":8}]},
+    {"id":"highway","type":"racing","length":480,"next":"fortress"}
+  ]
+}

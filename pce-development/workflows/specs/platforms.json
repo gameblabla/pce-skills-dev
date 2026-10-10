@@ -1,0 +1,9 @@
+{
+ "world":{"width":512,"height":256,"tile_width":8},
+ "surfaces":[
+   {"id":"ground","collision":[0,176,512,80],"art":[0,176,512,80]},
+   {"id":"ledge_a","collision":[104,144,48,8],"art":[104,144,48,16]},
+   {"id":"ledge_b","collision":[208,120,48,8],"art":[208,120,48,16]},
+   {"id":"ledge_c","collision":[352,144,48,8],"art":[352,144,48,16]}
+ ]
+}
