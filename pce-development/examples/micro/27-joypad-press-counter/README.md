@@ -1,5 +1,7 @@
 # 27-joypad-press-counter
 
+**Category:** Input
+
 **Input:** Count new presses of button I; inspect the value in a debugger.
 
 Inspect the `volatile` variable(s) with an emulator debugger; the ROM intentionally draws no status UI.

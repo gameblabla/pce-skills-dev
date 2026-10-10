@@ -1,5 +1,7 @@
 # 48-arcade-card-boundary
 
+**Category:** Arcade Card
+
 **Arcade Card:** Test Arcade Card automatic address carry across the 64 KiB boundary.
 
 Inspect the `volatile` variable(s) with an emulator debugger; the ROM intentionally draws no status UI.

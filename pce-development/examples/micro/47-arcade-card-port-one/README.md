@@ -1,5 +1,7 @@
 # 47-arcade-card-port-one
 
+**Category:** Arcade Card
+
 **Arcade Card:** Exercise data port 1 (0x1a10) with its own 16-bit address register.
 
 Inspect the `volatile` variable(s) with an emulator debugger; the ROM intentionally draws no status UI.

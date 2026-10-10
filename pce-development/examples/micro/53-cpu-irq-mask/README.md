@@ -1,5 +1,7 @@
 # 53-cpu-irq-mask
 
+**Category:** CPU/IRQ
+
 **CPU/IRQ:** Show explicit CPU IRQ masking around one byte update.
 
 Inspect the `volatile` variable(s) with an emulator debugger; the ROM intentionally draws no status UI.

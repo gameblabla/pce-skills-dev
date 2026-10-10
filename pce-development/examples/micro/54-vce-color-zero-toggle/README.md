@@ -1,5 +1,7 @@
 # 54-vce-color-zero-toggle
 
+**Category:** Graphics
+
 **Graphics:** Switch only VCE backdrop color; no fonts, BAT or sprites.
 
 **Graphics-only:** no PSG or audio setup. A debugger-only VRAM or palette test may intentionally show no picture.

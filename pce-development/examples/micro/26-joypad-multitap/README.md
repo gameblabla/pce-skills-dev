@@ -1,5 +1,7 @@
 # 26-joypad-multitap
 
+**Category:** Input
+
 **Input:** Read a second controller when a multitap is connected. No display.
 
 Inspect the `volatile` variable(s) with an emulator debugger; the ROM intentionally draws no status UI.

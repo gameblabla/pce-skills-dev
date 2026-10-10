@@ -1,5 +1,7 @@
 # 51-cpu-block-pattern
 
+**Category:** CPU
+
 **CPU:** Use the alternating-source HuC6280 transfer mode to repeat two RAM bytes.
 
 Inspect the `volatile` variable(s) with an emulator debugger; the ROM intentionally draws no status UI.

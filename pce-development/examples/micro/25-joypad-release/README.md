@@ -1,5 +1,7 @@
 # 25-joypad-release
 
+**Category:** Input
+
 **Input:** Detect buttons released since the previous poll.
 
 Inspect the `volatile` variable(s) with an emulator debugger; the ROM intentionally draws no status UI.

@@ -1,5 +1,7 @@
 # 35-psg-noise-burst
 
+**Category:** Audio
+
 **Audio:** Play a short noise burst on PSG channel 4, then stop it.
 
 **Audio-only:** no VDC, VCE, tile, text, font, sprite, or screenshot code. CPU delay loops do not give exact audio timing.

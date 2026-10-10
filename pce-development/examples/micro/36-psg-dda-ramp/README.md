@@ -1,5 +1,7 @@
 # 36-psg-dda-ramp
 
+**Category:** Audio
+
 **Audio:** Write a repeating 5-bit ramp in PSG DDA mode; rate is CPU-dependent.
 
 **Audio-only:** no VDC, VCE, tile, text, font, sprite, or screenshot code. CPU delay loops do not give exact audio timing.

@@ -1,5 +1,7 @@
 # 29-psg-saw-wave
 
+**Category:** Audio
+
 **Audio:** Load a rising 32-sample sawtooth; no screen output.
 
 **Audio-only:** no VDC, VCE, tile, text, font, sprite, or screenshot code. CPU delay loops do not give exact audio timing.

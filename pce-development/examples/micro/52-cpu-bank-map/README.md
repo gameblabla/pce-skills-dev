@@ -1,5 +1,7 @@
 # 52-cpu-bank-map
 
+**Category:** CPU
+
 **CPU:** Read the currently mapped MPR3 bank without remapping executable code.
 
 Inspect the `volatile` variable(s) with an emulator debugger; the ROM intentionally draws no status UI.

@@ -1,5 +1,7 @@
 # 37-vce-color-readback
 
+**Category:** Graphics
+
 **Graphics:** Write one VCE palette entry and read it back without text.
 
 **Graphics-only:** no PSG or audio setup. A debugger-only VRAM or palette test may intentionally show no picture.

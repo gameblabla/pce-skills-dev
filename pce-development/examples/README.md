@@ -13,7 +13,7 @@ packaged disc image and System Card to be configured first.
 
 Graphics-focused projects use the PCE screen fixture in `src/demo_video.c` and `assets/demo_assets.h`. Boot, CPU, I/O, CD, bank, diagnostic, and audio examples intentionally do not initialize or render graphics. Their results are observable through the debugger, hardware state, or sound. Every topic-specific entry point is in `src/main.c`.
 
-**Small examples:** The [`micro/`](micro/README.md) collection adds 25 much smaller, single-topic HuCard projects. Each has one C file, a two-line Makefile, and minimal shared build helpers. The audio projects never use a graphics fixture. Run `cd micro && python3 check.py` to build all.
+**Small examples:** The [`micro/`](micro/README.md) collection adds 85 much smaller, single-topic HuCard projects. Each has one C file, a one-line Makefile, and minimal shared build helpers. The audio projects never use a graphics fixture. Run `cd micro && python3 check.py` to build all.
 
 ## Projects
 

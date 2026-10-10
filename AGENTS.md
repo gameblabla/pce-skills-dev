@@ -34,7 +34,10 @@ python3 pce-development/scripts/eval_local_ai.py
 
 Read `pce-development/scripts/README.md` for evaluation options and limits.
 Run `python3 pce-development/examples/micro/check.py --lint-only` to guard
-sound-only versus graphics-only examples when changing them.
+sound-only versus graphics-only examples when changing them. The category
+is explicit in each README; use `--self-test` to verify mixing is detected.
+Run `--smoke` with Pillow and the configured headless frontend to assert
+audio renders a blank display and a sprite graphics sample is visible.
 
 Use `pce-development/examples/` for project recipes; each recipe identifies
 where SDK-specific adaptation is required. Scratch projects copy the starter

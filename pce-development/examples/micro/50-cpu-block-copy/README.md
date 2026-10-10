@@ -1,5 +1,7 @@
 # 50-cpu-block-copy
 
+**Category:** CPU
+
 **CPU:** Use the HuC6280 block transfer helper to copy RAM; inspect success in debugger.
 
 Inspect the `volatile` variable(s) with an emulator debugger; the ROM intentionally draws no status UI.

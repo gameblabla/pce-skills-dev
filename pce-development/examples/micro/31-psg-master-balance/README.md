@@ -1,5 +1,7 @@
 # 31-psg-master-balance
 
+**Category:** Audio
+
 **Audio:** Alternate left/right master PSG balance without touching video.
 
 **Audio-only:** no VDC, VCE, tile, text, font, sprite, or screenshot code. CPU delay loops do not give exact audio timing.

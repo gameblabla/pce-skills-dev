@@ -1,5 +1,7 @@
 # 44-vdc-bg-toggle
 
+**Category:** Graphics
+
 **Graphics:** Toggle the VDC background layer without touching audio hardware.
 
 **Graphics-only:** no PSG or audio setup. A debugger-only VRAM or palette test may intentionally show no picture.

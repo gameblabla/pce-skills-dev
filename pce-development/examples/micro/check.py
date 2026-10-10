@@ -5,6 +5,7 @@ python3 check.py             # lint and build every micro ROM
 python3 check.py --lint-only # static checks; does not require LLVM-MOS
 """
 import argparse
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -16,6 +17,8 @@ AUDIO_FORBIDDEN = (
     'IO_PCD_ADPCM', 'printf(', 'puts(',
 )
 VIDEO_FORBIDDEN = ('pce_psg', 'IO_PSG', 'PSG_CH_', 'tone_init(', 'psg.h')
+KNOWN_CATEGORIES = {'Audio', 'Graphics', 'CPU', 'CPU/IRQ', 'Input', 'SuperGrafx', 'Arcade Card'}
+NONVISUAL = {'Audio', 'CPU', 'CPU/IRQ', 'Input', 'Arcade Card'}
 
 
 def lint(project):
@@ -33,28 +36,56 @@ def lint(project):
     doc = readme.read_text()
     if makefile.read_text().strip() != 'include ../common.mk':
         problems.append('Makefile must use the shared one-line build rule')
+    if any(project.glob('*.h')) or len(list(project.glob('*.c'))) != 1:
+        problems.append('project must have just main.c; place reusable helpers beside common.mk')
     if len(source.splitlines()) > 45:
         problems.append('main.c is longer than 45 lines; split the lesson')
 
-    if '**Audio:**' in doc:
-        # Audio is deliberately allowed to be silent *visually*. No borrowed
-        # graphics helpers, fonts, VDC IRQs, palette indicators or HUDs.
+    # Never infer the project type from optional prose. Every README has an
+    # explicit category, otherwise the previous audio/video guard was skipped.
+    category_match = re.search(r'^\*\*Category:\*\*\s*(.+?)\s*$', doc, re.MULTILINE)
+    category = category_match.group(1) if category_match else None
+    if category not in KNOWN_CATEGORIES:
+        problems.append(f'unknown or missing Category: {category!r}')
+    if category in NONVISUAL:
         used = [term for term in AUDIO_FORBIDDEN if term in source]
         if used:
-            problems.append(f'audio and graphics mixed: {used}')
+            problems.append(f'nonvisual project contains display code: {used}')
         if any(child.name.startswith('demo_video') for child in project.iterdir()):
-            problems.append('audio project contains a video fixture')
-    if '**Graphics:**' in doc:
+            problems.append('nonvisual project contains a video fixture')
+    if category in ('Graphics', 'SuperGrafx'):
         used = [term for term in VIDEO_FORBIDDEN if term in source]
         if used:
             problems.append(f'graphics project contains audio code: {used}')
+    if category == 'Audio' and 'sprite.h' in source:
+        problems.append('audio project must not import the sprite helper')
     return problems
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--lint-only', action='store_true')
+    parser.add_argument('--smoke', action='store_true',
+                        help='run and inspect a silent audio ROM and a visible sprite ROM')
+    parser.add_argument('--self-test', action='store_true',
+                        help='prove that deliberate audio/video mixing is rejected')
     args = parser.parse_args()
+    if args.self_test:
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as tmp:
+            for category, injected in [('Audio', 'pce_vdc_bg_enable();'),
+                                       ('Graphics', '*IO_PSG_VOLUME = 0xff;'),
+                                       ('Input', 'graphics_init();')]:
+                sample = Path(tmp) / category
+                sample.mkdir()
+                (sample / 'main.c').write_text('#include <pce.h>\nint main(void){'+injected+'}')
+                (sample / 'Makefile').write_text('include ../common.mk\n')
+                (sample / 'README.md').write_text('**Category:** '+category+'\n')
+                if not lint(sample):
+                    print(f'FAIL: invalid {category} example passed lint', file=sys.stderr)
+                    return 1
+            print('PASS: deliberate audio/video mixing rejected for three project types')
+        return 0
     projects = sorted(p for p in ROOT.iterdir() if p.is_dir() and (p / 'Makefile').exists())
     failures = []
     for project in projects:
@@ -91,6 +122,35 @@ def main():
         print('\n'.join(failed_builds), file=sys.stderr)
         return 1
     print(f'PASS: {len(projects)}/{len(projects)} micro ROMs built', flush=True)
+    if args.smoke:
+        try:
+            from PIL import Image
+        except ImportError:
+            print('Pillow required for screenshot smoke checks (pip install Pillow)', file=sys.stderr)
+            return 1
+        for name, should_be_visible in [('63-psg-quarter-pulse', False),
+                                        ('78-vdc-one-sprite', True)]:
+            project = ROOT / name
+            run = subprocess.run(['make', '-s', 'run'], cwd=project,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            image_path = project / 'build' / 'headless.png'
+            if run.returncode or not image_path.is_file():
+                print(f'FAIL: emulator smoke test {name}: {run.stdout[-1200:]}', file=sys.stderr)
+                return 1
+            with Image.open(image_path) as screen:
+                rgb = screen.convert('RGB')
+                colors = rgb.getcolors(maxcolors=512)
+                unique = len(colors) if colors is not None else 513
+                center = rgb.crop((rgb.width // 2 - 24, rgb.height // 2 - 24,
+                                   rgb.width // 2 + 24, rgb.height // 2 + 24))
+                center_colors = center.getcolors(maxcolors=512)
+                if should_be_visible and (unique < 3 or center_colors is not None and len(center_colors) < 2):
+                    print(f'FAIL: sprite example drew no visible sprite: {image_path}', file=sys.stderr)
+                    return 1
+                if not should_be_visible and unique != 1:
+                    print(f'FAIL: audio example drew graphics: {image_path}', file=sys.stderr)
+                    return 1
+            print(f'PASS: emulator screenshot {name} ({unique} colors)', flush=True)
     return 0
 
 

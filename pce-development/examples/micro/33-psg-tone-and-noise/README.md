@@ -1,5 +1,7 @@
 # 33-psg-tone-and-noise
 
+**Category:** Audio
+
 **Audio:** Use channel 0 for tone and channel 5 for noise simultaneously.
 
 **Audio-only:** no VDC, VCE, tile, text, font, sprite, or screenshot code. CPU delay loops do not give exact audio timing.

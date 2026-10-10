@@ -1,5 +1,7 @@
 # 42-vdc-bat-write
 
+**Category:** Graphics
+
 **Graphics:** Write one BAT entry that points to character pattern at VRAM word 0x0800.
 
 **Graphics-only:** no PSG or audio setup. A debugger-only VRAM or palette test may intentionally show no picture.

@@ -1,5 +1,7 @@
 # 30-psg-channel-selection
 
+**Category:** Audio
+
 **Audio:** Demonstrate that channel selection affects subsequent PSG register writes.
 
 **Audio-only:** no VDC, VCE, tile, text, font, sprite, or screenshot code. CPU delay loops do not give exact audio timing.

@@ -1,5 +1,7 @@
 # 34-psg-channel-mute
 
+**Category:** Audio
+
 **Audio:** Silence only the chosen PSG channel after a brief busy wait.
 
 **Audio-only:** no VDC, VCE, tile, text, font, sprite, or screenshot code. CPU delay loops do not give exact audio timing.

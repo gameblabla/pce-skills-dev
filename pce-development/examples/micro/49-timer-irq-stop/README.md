@@ -1,5 +1,7 @@
 # 49-timer-irq-stop
 
+**Category:** CPU/IRQ
+
 **CPU/IRQ:** Stop the timer after 100 IRQ callbacks; no VBlank or video dependency.
 
 Inspect the `volatile` variable(s) with an emulator debugger; the ROM intentionally draws no status UI.

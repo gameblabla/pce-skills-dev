@@ -1,5 +1,7 @@
 # 46-supergrafx-vdc2-vram
 
+**Category:** SuperGrafx
+
 **SuperGrafx:** Access VDC2 VRAM independently, only after detecting SuperGrafx hardware.
 
 Inspect the `volatile` variable(s) with an emulator debugger; the ROM intentionally draws no status UI.

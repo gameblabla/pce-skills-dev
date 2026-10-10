@@ -1,5 +1,7 @@
 # 39-vdc-vram-copy
 
+**Category:** Graphics
+
 **Graphics:** Upload exactly one 8x8, 4bpp tile (32 bytes) to VDC VRAM.
 
 **Graphics-only:** no PSG or audio setup. A debugger-only VRAM or palette test may intentionally show no picture.

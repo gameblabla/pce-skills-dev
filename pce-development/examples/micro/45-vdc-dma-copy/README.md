@@ -1,5 +1,7 @@
 # 45-vdc-dma-copy
 
+**Category:** Graphics
+
 **Graphics:** Copy a tile between two VDC VRAM addresses using VRAM-to-VRAM DMA.
 
 **Graphics-only:** no PSG or audio setup. A debugger-only VRAM or palette test may intentionally show no picture.

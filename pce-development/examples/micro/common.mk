@@ -6,7 +6,7 @@ PCE_FLAGS ?= -std=gnu11 -Os -Wall -Wextra -Werror -mlto-zp=0
 OUT := build/$(notdir $(CURDIR)).pce
 .PHONY: all clean
 all: $(OUT)
-$(OUT): main.c | toolchain
+$(OUT): main.c $(wildcard ../*.h) | toolchain
 	@mkdir -p build
 	$(LLVM_MOS_CC) $(PCE_FLAGS) $< -o $@ -Wl,-Map,$@.map
 clean:

@@ -1,5 +1,7 @@
 # 41-vdc-register-readback
 
+**Category:** Graphics
+
 **Graphics:** Read the VDC background scroll register into a debugger-visible variable.
 
 **Graphics-only:** no PSG or audio setup. A debugger-only VRAM or palette test may intentionally show no picture.

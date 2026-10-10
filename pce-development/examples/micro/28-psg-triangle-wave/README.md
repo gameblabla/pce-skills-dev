@@ -1,5 +1,7 @@
 # 28-psg-triangle-wave
 
+**Category:** Audio
+
 **Audio:** Write a rising/falling 32-sample PSG waveform, then play it.
 
 **Audio-only:** no VDC, VCE, tile, text, font, sprite, or screenshot code. CPU delay loops do not give exact audio timing.

@@ -1,10 +1,10 @@
 # Small, single-purpose PC Engine examples
 
-55 separate LLVM-MOS HuCard C projects. Each contains **one `main.c` and one one-line Makefile**; the build rules and optional tiny helpers are shared at this level. Audio examples never touch the VDC, VCE, screen, graphics, fonts or sprites. No commercial ROM or BIOS is needed to build these.
+85 separate LLVM-MOS HuCard C projects. Each contains **one `main.c` and one one-line Makefile**; the build rules and optional tiny helpers are shared at this level. Audio examples never touch the VDC, VCE, screen, graphics, fonts or sprites. New sprite examples use a graphics-only helper, independent of the PSG. No commercial ROM or BIOS is needed to build these.
 
 Build one: `cd 03-psg-tone && make`. Run through the configured headless frontend via
 `make run` or `make debug`; both forward to the standard project wrapper.
-Or build/test all: `python3 check.py`. Use `python3 check.py --lint-only` for static separation checks without the toolchain.
+Or build/test all: `python3 check.py`. Use `python3 check.py --lint-only` for static separation checks without the toolchain. Run `python3 check.py --self-test` to confirm the separation rules reject intentionally mixed examples. With Pillow and the configured headless frontend, `python3 check.py --smoke` also checks the audio ROM draws nothing and the sprite ROM draws a visible sprite.
 
 **Scope:** HuCard by default; these are not bootable CD image files. Memory outputs are observable via emulator debugger rather than by rendering status text. Sound output needs audio capture/listening for runtime verification; compilation alone cannot prove audible playback.
 
@@ -67,8 +67,42 @@ Or build/test all: `python3 check.py`. Use `python3 check.py --lint-only` for st
 - [53-cpu-irq-mask](53-cpu-irq-mask/README.md) — CPU/IRQ: Show explicit CPU IRQ masking around one byte update.
 - [54-vce-color-zero-toggle](54-vce-color-zero-toggle/README.md) — Graphics: Switch only VCE backdrop color; no fonts, BAT or sprites.
 
+
+- [55-joypad-run-edge](55-joypad-run-edge/README.md) — Input: Detect a new RUN press without drawing button state.
+- [56-joypad-two-button-chord](56-joypad-two-button-chord/README.md) — Input: Detect buttons I and II held at the same time.
+- [57-joypad-held-frames](57-joypad-held-frames/README.md) — Input: Count consecutive controller polls while LEFT is held (not real frames).
+- [58-joypad-direction-mask](58-joypad-direction-mask/README.md) — Input: Keep only the four D-pad direction bits in a debugger-visible byte.
+- [59-cpu-block-reverse](59-cpu-block-reverse/README.md) — CPU: Copy bytes backward with the HuC6280 TDD block-transfer mode.
+- [60-cpu-block-fixed-dest](60-cpu-block-fixed-dest/README.md) — CPU: Use TIN to repeatedly overwrite one RAM byte; its final value is the last source byte.
+- [61-cpu-block-alternate-dest](61-cpu-block-alternate-dest/README.md) — CPU: Use TIA to alternate writes to a pair of RAM bytes.
+- [62-cpu-mpr-snapshot](62-cpu-mpr-snapshot/README.md) — CPU: Read MPR2, MPR3 and MPR4 mappings without altering bank registers.
+- [63-psg-quarter-pulse](63-psg-quarter-pulse/README.md) — Audio: Load an eight-sample-high pulse wave into one 32-sample PSG channel.
+- [64-psg-three-quarter-pulse](64-psg-three-quarter-pulse/README.md) — Audio: Load a 75% duty-cycle PSG pulse wave to contrast with the quarter pulse.
+- [65-psg-volume-staircase](65-psg-volume-staircase/README.md) — Audio: Step one PSG channel through eight amplitude levels, no screen or VBlank.
+- [66-psg-pitch-bend](66-psg-pitch-bend/README.md) — Audio: Bend one pitch gradually by changing only the PSG period.
+- [67-psg-two-channel-interval](67-psg-two-channel-interval/README.md) — Audio: Start a second PSG channel at a different period using the same square waveform.
+- [68-psg-three-channel-chord](68-psg-three-channel-chord/README.md) — Audio: Play a three-note PSG chord on channels 0, 1 and 2 without any graphics.
+- [69-psg-melody-loop](69-psg-melody-loop/README.md) — Audio: Loop a four-period melody on PSG channel 0 with approximate CPU delays.
+- [70-psg-noise-gate](70-psg-noise-gate/README.md) — Audio: Gate noise on and off using channel 5 noise enable, leaving display untouched.
+- [71-psg-reload-wave](71-psg-reload-wave/README.md) — Audio: Turn off PSG channel 0, reload 32 waveform samples, then restart playback.
+- [72-psg-master-mute](72-psg-master-mute/README.md) — Audio: Silence all PSG channels by setting global left/right volume to zero.
+- [73-psg-dual-channel-pan](73-psg-dual-channel-pan/README.md) — Audio: Pan two PSG channels to opposite speakers using per-channel balance.
+- [74-vdc-bat-row](74-vdc-bat-row/README.md) — Graphics: Alternate empty and patterned BAT entries in the first background row.
+- [75-vdc-bat-column](75-vdc-bat-column/README.md) — Graphics: Blank one BAT column using 32-word VRAM increment mode.
+- [76-vdc-bat-blank-stripe](76-vdc-bat-blank-stripe/README.md) — Graphics: Overwrite one visible BAT row with zero pattern entries to create a stripe.
+- [77-vdc-scroll-diagonal](77-vdc-scroll-diagonal/README.md) — Graphics: Change horizontal and vertical background scroll together.
+- [78-vdc-one-sprite](78-vdc-one-sprite/README.md) — Graphics: Show one hardware sprite with a solid generated pattern; no text or audio.
+- [79-vdc-move-sprite](79-vdc-move-sprite/README.md) — Graphics: Move one sprite horizontally by rewriting a single SAT entry.
+- [80-vdc-flip-sprite](80-vdc-flip-sprite/README.md) — Graphics: Toggle the sprite horizontal flip attribute in its SAT entry.
+- [81-vdc-hide-sprite](81-vdc-hide-sprite/README.md) — Graphics: Hide and show a hardware sprite by changing just its Y coordinate.
+- [82-vdc-sprite-palette](82-vdc-sprite-palette/README.md) — Graphics: Change a single sprite palette color, without changing the background palette.
+- [83-arcade-card-port-two](83-arcade-card-port-two/README.md) — Arcade Card: Access Arcade Card RAM through data port 2 at 0x1a20.
+- [84-arcade-card-independent-ports](84-arcade-card-independent-ports/README.md) — Arcade Card: Verify port 0 and port 1 have independent address counters.
+
 ## Code origin and constraints
 
 Hardware API/register names are from the pinned LLVM-MOS SDK; the project layout was inspired by the existing recipes. The PSG channel ownership and DDA separation follow the `sv24_2` branch of gameblabla/SaberRiderStarSheriffUnOfficial (`src/platform/pce/psg_pce.c`, `audio_pcm.c`, `video_pce.c`). There is no Saber Rider game code or asset copied into these small projects.
+
+Sprite patterns use a 16x16 four-bitplane format; the SAT pattern field is in 32-word VRAM units (0x6000 words becomes 0x0300), and SATB DMA is enabled for publication on VBlank. The sprite example is deliberately asymmetric so flipping is visually detectable. The screenshot smoke check does not verify audio output.
 
 Do not combine these snippets verbatim without sharing PSG channel ownership, IRQ vectors, VDC-index state, and memory maps. Busy-wait loops are instructional only. SuperGrafx VDC2 selection does not activate automatic dual-plane compositing. Arcade Card examples require its optional hardware.
