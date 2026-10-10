@@ -324,6 +324,23 @@ def check_budget(report,limits):
                 continue
             actual=values[0]
             if actual>cap:issues.append(f'{name}: {sym} {actual:.1f} > {cap:.1f} ticks/frame')
+        # LTO may inline a wall writer into main, eliminating its independent
+        # ELF symbol. A bounded SUM of function-attributed ticks is stable
+        # across that transformation; absence of all grouped symbols is not.
+        for group in b.get('max_ticks_per_frame_by_symbol_groups',[]):
+            if (not isinstance(group,dict) or not isinstance(group.get('symbols'),list) or
+                not group['symbols'] or not all(isinstance(x,str) and x for x in group['symbols']) or
+                len(set(group['symbols']))!=len(group['symbols']) or
+                not isinstance(group.get('max'),(int,float)) or group['max']<=0):
+                raise ValueError('invalid grouped ticks/frame budget')
+            symbols=set(group['symbols'])
+            values=[f['ticks_per_frame'] for f in s['functions'] if f['symbol'] in symbols]
+            if not values:
+                issues.append(f'{name}: missing all symbols in budget group {group["symbols"]}')
+                continue
+            actual=sum(values)
+            if actual>group['max']:
+                issues.append(f'{name}: group {group["symbols"]} {actual:.1f} > {group["max"]:.1f} ticks/frame')
         for category,cap in b.get('max_pct_by_category',{}).items():
             if category not in ('interrupt','application','runtime','local','unmapped') or not isinstance(cap,(int,float)) or cap<0 or cap>100:
                 raise ValueError('invalid category or maximum percent')

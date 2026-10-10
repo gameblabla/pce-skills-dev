@@ -119,6 +119,18 @@ class ProfileTests(unittest.TestCase):
             c.check_budget(r,{'segments':{'turn':{'min_attributed_pct':120}}})
         missing=c.check_budget(r,{'segments':{'turn':{'max_ticks_per_frame_by_symbol':{'nonexistent_render':100}}}})
         self.assertEqual(missing['result'],'failed')
+        # A compiler may inline column_upload into main: both symbol layouts
+        # must account for the same total time without silently losing a cap.
+        inline={'symbols':['render_slice','other_helper'],'max':120000}
+        self.assertEqual(c.check_budget(r,{'segments':{'turn':{'max_ticks_per_frame_by_symbol_groups':[inline]}}})['result'],'passed')
+        separated={'symbols':['render_slice','irq_vdc'],'max':120000}
+        self.assertEqual(c.check_budget(r,{'segments':{'turn':{'max_ticks_per_frame_by_symbol_groups':[separated]}}})['result'],'failed')
+        absent={'symbols':['never_a','never_b'],'max':200000}
+        self.assertIn('missing all symbols',c.check_budget(r,{'segments':{'turn':{'max_ticks_per_frame_by_symbol_groups':[absent]}}})['issues'][0])
+        for invalid in ({'symbols':[],'max':100}, {'symbols':['main','main'],'max':100},
+                        {'symbols':['main'],'max':0}, {'symbols':'main','max':100}):
+            with self.assertRaisesRegex(ValueError,'grouped ticks'):
+                c.check_budget(r,{'segments':{'turn':{'max_ticks_per_frame_by_symbol_groups':[invalid]}}})
     def test_compare_does_not_claim_speedup_when_game_updates_differ(self):
         a=c.summarize({0x100:3500000},[(0x100,0x100,'main')],10)
         b=c.summarize({0x100:3500000},[(0x100,0x100,'main')],10)

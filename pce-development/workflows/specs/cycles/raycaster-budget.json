@@ -13,23 +13,39 @@
       "min_game_updates": 24,
       "max_ticks_per_frame_by_symbol": {
         "irq_vdc": 65000,
-        "column_upload": 185000,
         "cast_scene": 62000,
-        "main": 210000
+        "cast_ray": 56000
       },
       "min_attributed_pct": 96.0,
-      "max_unmapped_ticks_per_frame": 13500
+      "max_unmapped_ticks_per_frame": 13500,
+      "max_ticks_per_frame_by_symbol_groups": [
+        {
+          "symbols": [
+            "main",
+            "column_upload"
+          ],
+          "max": 290000
+        }
+      ]
     },
     "walk": {
       "min_game_updates": 24,
       "max_ticks_per_frame_by_symbol": {
         "irq_vdc": 65000,
-        "column_upload": 185000,
         "cast_scene": 62000,
-        "main": 210000
+        "cast_ray": 56000
       },
       "min_attributed_pct": 96.0,
-      "max_unmapped_ticks_per_frame": 13500
+      "max_unmapped_ticks_per_frame": 13500,
+      "max_ticks_per_frame_by_symbol_groups": [
+        {
+          "symbols": [
+            "main",
+            "column_upload"
+          ],
+          "max": 290000
+        }
+      ]
     }
   }
 }

@@ -27,8 +27,13 @@ class ScalarFPSChecks(unittest.TestCase):
         budget=json.loads((ROOT.parents[1]/'workflows/specs/cycles/raycaster-budget.json').read_text())
         for key in ('turn','walk'):
             limits=budget['segments'][key]['max_ticks_per_frame_by_symbol']
-            self.assertIn('column_upload',limits)
+            # LTO can inline column_upload into main. Verify their COMBINED
+            # cost is bounded, not just whichever ELF symbol survives.
+            groups=budget['segments'][key]['max_ticks_per_frame_by_symbol_groups']
+            self.assertTrue(any(set(group['symbols'])=={'main','column_upload'} and
+                                group['max']<=290000 for group in groups))
             self.assertIn('cast_scene',limits)
+            self.assertIn('cast_ray',limits)
             self.assertIn('irq_vdc',limits)
             self.assertNotIn('pce_memop',limits)
             self.assertGreaterEqual(budget['segments'][key]['min_attributed_pct'],96)
