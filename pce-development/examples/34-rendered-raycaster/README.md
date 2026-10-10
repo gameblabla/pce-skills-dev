@@ -78,6 +78,44 @@ Results and emulator PNGs are under `build/bitmap-{baseline,optimized}*`.
 `tools/bitmap_compare.py` refuses different controller scripts and incomplete
 visual evidence. Neither a passing compile nor G2TR-only state is accepted.
 
+## Faster full-detail texture sampling (no resolution loss)
+
+**This change optimizes only the shader, not the BAT layout or image geometry.**
+`tools/gen_wall_pairs.py` produces the checked 640-byte `src/wall_pairs.h`
+lookup: five pre-shaded stone/brick/metal material classes, 8 horizontal
+texture phases and 16 vertical texture phases. One table fetch returns **two
+independent 4-bit pixels packed into a BAT byte**. Material and distance fade
+classes are selected once per 32-ray cast (`wall_style[]`), rather than taking
+branches and evaluating the wall shader twice for each BAT pair.
+All runtime table strides are powers of two; no target-side multiply/divide.
+The colour palette, 128x128 bitmap and 8-row VBlank TIA uploads are unchanged.
+
+`make wall-lookup-check` compares **24,576** material/depth/face/texture-phase
+cases against the original shader; `make wall-lookup-visual` compares every RGB
+pixel from two independently emulated 600-frame idle screenshots. Both must
+pass, not merely look similar. `make wall-lookup-throughput` compares two
+**same-resolution, same-upload** ROMs using six input-driven captures and
+real completed-BAT-pass counters. The reference build uses
+`-DRAY_WALL_LOOKUP=0` (old conditional shader); the optimized full-detail ROM
+uses the generated lookup by default.
+
+In the recorded 1,080-emulator-frame run, the original conditional shader
+completed 16 full 128x128 redraws (263 game updates); the generated-pair shader
+completed **19** (304 game updates), **18.75% more completed image passes**.
+The stationary full-detail emulator screenshots were pixel-for-pixel identical
+across 135,520 RGB screenshot pixels. LLVM-MOS C function boundaries/inlining
+change between versions, so do not claim a comparable per-function cycle
+saving. The profiler reports are emulator master ticks, **not console timing**.
+
+The optional atomic version is still a **separate** 128x64 double-BAT-page
+binary (`make atomic-rom`), with its own `atomic-test` and `atomic-stress`.
+It shares the cheap shader but **does not become the default**, and its
+completed page flips must never be compared to full-detail redraw counts as
+if they were equally detailed images. A future *symmetric* top/bottom
+raycaster might deliberately mirror 64 unique rows to make this compromise
+more attractive; this project does **not** claim to implement that mirrored
+raster mapping, nor that its current ceiling and floor are symmetric.
+
 ## Alternate atomic presentation: trade vertical detail for two VRAM BAT pages
 
 **Default (`make`)** remains the original **128x128 logical pixels**, which

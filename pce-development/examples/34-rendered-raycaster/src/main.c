@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include "genre_trace.h"
 #include "ray_tables.h"
+#include "wall_pairs.h"
 #include "bat_bitmap.h"
 #ifndef RAY_DOUBLE_BUFFER
 #define RAY_DOUBLE_BUFFER 0
@@ -47,6 +48,11 @@ static uint8_t angle,wall_blocked;
 static uint16_t near_depth,far_depth,hit_count;
 /* 32 real rays, four logical pixels wide. No per-pixel ray traversal. */
 static uint8_t depth[32],top[32],tex_u[32],wall_kind[32];
+/* Five pre-shaded material classes computed once per scene, not per pixel. */
+static uint8_t wall_style[32];
+#ifndef RAY_WALL_LOOKUP
+#define RAY_WALL_LOOKUP 1
+#endif
 /* Explicit renderer variants for reproducible SAME-SOURCE benchmarks.
  * Default: eight logical rows via TIA during VBlank (1024 bytes).
  * Benchmark variant: four rows (512 bytes) with the same TIA transfer path.
@@ -107,11 +113,16 @@ __attribute__((noinline)) static void cast_scene(void) {
         if(d<near_depth)near_depth=d;
         if(d>far_depth)far_depth=d;
         if(d<32)++hit_count;
+        uint8_t material=(uint8_t)(wall_kind[c]&0x7fu);
+        wall_style[c]=(material==3u)?4u:(material==2u)?
+            ((d>13u)?3u:2u):
+            ((d>16u || (wall_kind[c]&0x80u))?1u:0u);
     }
 }
 /* Bitmap texel shader: colour indices, not planar tile indices.
  * Wall_v is an offline-generated lookup, so this draws without target
  * multiply/divide and without compiler software math helpers. */
+#if !RAY_WALL_LOOKUP
 static uint8_t wall_pixel(uint8_t c,uint8_t u,uint8_t y) {
     uint8_t d=depth[c],v=wall_tex_v[d][(uint8_t)(y-top[c])>>1];
     uint8_t m=wall_kind[c]&0x7fu;
@@ -128,6 +139,7 @@ static uint8_t wall_pixel(uint8_t c,uint8_t u,uint8_t y) {
     if(d>16 || (wall_kind[c]&0x80u))return 12;
     return ((u^v)&3u)==0?15:13;
 }
+#endif
 static uint8_t floor_color(uint8_t u,uint8_t v) {
     if((u&31u)==0u || (v&31u)==0u)return 7u;
     return (((u>>4)^(v>>4))&1u)?5u:6u;
@@ -143,7 +155,15 @@ static uint8_t bitmap_pair(uint8_t pair,uint8_t y) {
     }
     if((uint8_t)(y-t)<wall_height[d]) {
         uint8_t u=(uint8_t)(tex_u[c]+((pair&1u)<<1))&7u;
+#if RAY_WALL_LOOKUP
+        /* One ROM lookup yields both 4-bit texels. All table strides are
+         * powers of two: no runtime multiply/divide, texture branching or
+         * duplicate wall shader evaluations in the inner BAT row loop. */
+        uint8_t v=wall_tex_v[d][(uint8_t)(y-t)>>1];
+        return ray_wall_pairs[wall_style[c]][u][v];
+#else
         return (uint8_t)((wall_pixel(c,u,y)<<4)|wall_pixel(c,(u+1u)&7u,y));
+#endif
     }
     /* A perspective floor: two nearby horizontal samples, independent
      * palette nibbles, and no runtime multiply/divide. */

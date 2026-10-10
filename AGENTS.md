@@ -253,3 +253,23 @@ speedup; verify with `make atomic-test`, and state the loss of vertical detail.
 Use `pce-development/workflows/paired_bat_plan.py` for layout verification.
 PCEdev's speculative palette/dither expansions are NOT working implemented
 32- or 256-colour bitmap modes in this toolkit.
+
+## Raycaster full-detail shader performance gate
+
+For `34-rendered-raycaster`, keep the default 128x128 full-detail BAT mapping.
+The old double `wall_pixel()` call per BAT entry has been replaced with a
+**generated, exact, two-texel table** (`tools/gen_wall_pairs.py`). Select
+`wall_style` only when casting the 32 rays, then look up `ray_wall_pairs` per
+visible wall pair. Never hand-edit the generated header or add target-side
+multiplication/index strides; run `make tables-check` and
+`make wall-lookup-check` first. A compiler/link success alone is insufficient:
+run `make wall-lookup-visual` for exact 600-frame emulator pixel agreement,
+`make wall-lookup-throughput` for equal-resolution completed-BAT counters,
+`make interaction-test` for collision, and `make cycles-ray` for mapped ROM
+master-clock regression limits. Do not claim function-local cycle changes
+when inlining moved the shader into `main`.
+
+Keep the 128x64 atomic BXR-flip renderer as a **different binary** with
+`make atomic-test`. Its half-height frame swaps are not directly comparable
+to 128x128 complete passes. Mirroring top/bottom would require an intentional
+symmetric scene and different raster mapping; do not claim it happens here.
