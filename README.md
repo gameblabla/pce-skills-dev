@@ -13,3 +13,5 @@ sound without video initialization, and debugger examples expose volatile
 state instead of displaying unrelated text or graphics. The full historical
 recipes remain in `pce-development/examples/`, with nine non-visual lessons
 now isolated from video helpers.
+
+Bitmap/old Mode 7 floor lessons: [`85-bitmap-128-circle`](pce-development/examples/micro/85-bitmap-128-circle/) and [`86-mode7-bitmap-floor`](pce-development/examples/micro/86-mode7-bitmap-floor/). The [historical implementation notes](pce-development/examples/micro/BITMAP_MODE7_HISTORY.md) link to the pre-replacement Saber Rider sources.

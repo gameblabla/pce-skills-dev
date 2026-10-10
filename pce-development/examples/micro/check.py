@@ -66,7 +66,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--lint-only', action='store_true')
     parser.add_argument('--smoke', action='store_true',
-                        help='run and inspect a silent audio ROM and a visible sprite ROM')
+                        help='run and inspect silent audio, visible sprite, and filled bitmap ROMs')
     parser.add_argument('--self-test', action='store_true',
                         help='prove that deliberate audio/video mixing is rejected')
     args = parser.parse_args()
@@ -129,7 +129,9 @@ def main():
             print('Pillow required for screenshot smoke checks (pip install Pillow)', file=sys.stderr)
             return 1
         for name, should_be_visible in [('63-psg-quarter-pulse', False),
-                                        ('78-vdc-one-sprite', True)]:
+                                        ('78-vdc-one-sprite', True),
+                                        ('85-bitmap-128-circle', True),
+                                        ('86-mode7-bitmap-floor', True)]:
             project = ROOT / name
             run = subprocess.run(['make', '-s', 'run'], cwd=project,
                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -144,12 +146,26 @@ def main():
                 center = rgb.crop((rgb.width // 2 - 24, rgb.height // 2 - 24,
                                    rgb.width // 2 + 24, rgb.height // 2 + 24))
                 center_colors = center.getcolors(maxcolors=512)
-                if should_be_visible and (unique < 3 or center_colors is not None and len(center_colors) < 2):
+                if name == '78-vdc-one-sprite' and (unique < 3 or (center_colors is not None and len(center_colors) < 2)):
                     print(f'FAIL: sprite example drew no visible sprite: {image_path}', file=sys.stderr)
                     return 1
                 if not should_be_visible and unique != 1:
                     print(f'FAIL: audio example drew graphics: {image_path}', file=sys.stderr)
                     return 1
+                if name in ('85-bitmap-128-circle', '86-mode7-bitmap-floor'):
+                    # Prevent regression to partially transferred tiles: a red
+                    # crescent can compile and run while most pixels are black.
+                    red = [(x, y) for y in range(rgb.height) for x in range(rgb.width)
+                           if (lambda p: p[0] > 128 and p[0] > 2*p[1] and
+                               p[0] > 2*p[2])(rgb.getpixel((x, y)))]
+                    if len(red) < 2000 or not red:
+                        print(f'FAIL: bitmap output missing filled red shape: {image_path}', file=sys.stderr)
+                        return 1
+                    left, right = min(x for x, _ in red), max(x for x, _ in red)
+                    top, bottom = min(y for _, y in red), max(y for _, y in red)
+                    if right - left < 50 or bottom - top < 50:
+                        print(f'FAIL: bitmap shape is unexpectedly small: {image_path}', file=sys.stderr)
+                        return 1
             print(f'PASS: emulator screenshot {name} ({unique} colors)', flush=True)
     return 0
 
