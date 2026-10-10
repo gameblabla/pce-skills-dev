@@ -39,27 +39,15 @@ run debug: $(PCE_RUN_IMAGE)
 	 PCE_DEBUG_DISASM="$(PCE_DEBUG_DISASM)" \
 	 tools/run-pce-headless.sh "$@" "$(PCE_RUN_IMAGE)"
 
-# P2TR scenarios apply deterministic input and produce a text physics report.
-PCE_PLATFORM_TRACE_ADDRESS ?=
-PCE_PLATFORM_TRACE_ELF ?= $(OUT).elf
-PCE_PLATFORM_TRACE_SYMBOL ?= pce_platformer_trace
-PCE_PLATFORM_TRACE_SCENARIO ?= tools/platformer-scenario.example.json
-PCE_PLATFORM_TRACE_OUTPUT ?= build/platformer-trace.json
-PCE_PLATFORM_TRACE_BASE_DIR ?= build/platformer-trace-base
-PCE_PLATFORM_TRACE_INITIAL_FRAMES ?= 2
-
-.PHONY: trace
-trace: $(PCE_RUN_IMAGE)
-	@if [ -z "$(PCE_RUN_IMAGE)" ]; then \
-	  echo 'For CD, set PCE_RUN_IMAGE to the packaged disc image.' >&2; exit 2; \
-	fi
-	PCE_HEADLESS="$(PCE_HEADLESS)" PCE_SYSTEM_CARD_BIOS="$(PCE_SYSTEM_CARD_BIOS)" \
-	 python3 tools/platformer-trace.py --rom "$(PCE_RUN_IMAGE)" \
-	 $(if $(PCE_PLATFORM_TRACE_ADDRESS),--address "$(PCE_PLATFORM_TRACE_ADDRESS)",--elf "$(PCE_PLATFORM_TRACE_ELF)" --symbol "$(PCE_PLATFORM_TRACE_SYMBOL)") \
-	 --scenario "$(PCE_PLATFORM_TRACE_SCENARIO)" \
-	 --base-dir "$(PCE_PLATFORM_TRACE_BASE_DIR)" \
- --initial-frames "$(PCE_PLATFORM_TRACE_INITIAL_FRAMES)" \
-	 --output "$(PCE_PLATFORM_TRACE_OUTPUT)"
+# Compact 16-bit Q4 P4TR. The trace is two 32-byte records, with no P2TR ABI.
+.PHONY: trace trace-replay
+trace: $(OUT)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/p4_trace.py --rom $(OUT) \
+	 --elf $(OUT).elf --scenario tools/platformer-scenario.example.json \
+	 --samples-out build/p4-trace-samples.json --output build/p4-trace-report.json
+trace-replay:
+	python3 tools/p4_trace.py --samples build/p4-trace-samples.json \
+	 --output build/p4-trace-replay.json
 
 # Transcript-derived local-model guardrails. Build the game only after checking
 # API spellings and target scope; generated C is still compiled with -Werror.

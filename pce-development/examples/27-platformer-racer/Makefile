@@ -39,45 +39,15 @@ run debug: $(PCE_RUN_IMAGE)
 	 PCE_DEBUG_DISASM="$(PCE_DEBUG_DISASM)" \
 	 tools/run-pce-headless.sh "$@" "$(PCE_RUN_IMAGE)"
 
-# P2TR scenarios apply deterministic input and produce a text physics report.
-PCE_PLATFORM_TRACE_ADDRESS ?=
-PCE_PLATFORM_TRACE_ELF ?= $(OUT).elf
-PCE_PLATFORM_TRACE_SYMBOL ?= pce_platformer_trace
-PCE_PLATFORM_TRACE_SCENARIO ?= tools/platformer-scenario.example.json
-PCE_PLATFORM_TRACE_OUTPUT ?= build/platformer-trace.json
-PCE_PLATFORM_TRACE_BASE_DIR ?= build/platformer-trace-base
-PCE_PLATFORM_TRACE_INITIAL_FRAMES ?= 2
-
-.PHONY: trace
-trace: $(PCE_RUN_IMAGE)
-	@if [ -z "$(PCE_RUN_IMAGE)" ]; then \
-	  echo 'For CD, set PCE_RUN_IMAGE to the packaged disc image.' >&2; exit 2; \
-	fi
-	PCE_HEADLESS="$(PCE_HEADLESS)" PCE_SYSTEM_CARD_BIOS="$(PCE_SYSTEM_CARD_BIOS)" \
-	 python3 tools/platformer-trace.py --rom "$(PCE_RUN_IMAGE)" \
-	 $(if $(PCE_PLATFORM_TRACE_ADDRESS),--address "$(PCE_PLATFORM_TRACE_ADDRESS)",--elf "$(PCE_PLATFORM_TRACE_ELF)" --symbol "$(PCE_PLATFORM_TRACE_SYMBOL)") \
-	 --scenario "$(PCE_PLATFORM_TRACE_SCENARIO)" \
-	 --base-dir "$(PCE_PLATFORM_TRACE_BASE_DIR)" \
- --initial-frames "$(PCE_PLATFORM_TRACE_INITIAL_FRAMES)" \
-	 --output "$(PCE_PLATFORM_TRACE_OUTPUT)"
-
-# Offline rule generation: this copy remains standalone after scaffolding.
-.PHONY: rules-check simulate offline-doctor romcheck
-rules-check:
-	python3 tools/offline.py validate tools/hybrid.json
-src/hybrid_rules.h: tools/hybrid.json tools/offline.py
-	python3 tools/offline.py generate tools/hybrid.json --out $@
-simulate: rules-check
-	python3 tools/offline.py simulate tools/hybrid.json tools/hybrid-scenario.json --out build/oracle-physics.json
-romcheck: $(OUT)
-	python3 tools/offline.py romcheck $(OUT)
-offline-doctor:
-	python3 tools/offline.py doctor
-.PHONY: assets hybrid-test
-assets:
-	python3 tools/build_race_art.py
-hybrid-test: $(OUT)
-	python3 tools/hybrid_runtime.py --rom $(OUT) --elf $(OUT).elf --out build/hybrid-scenario
+# Compact 16-bit Q4 P4TR. The trace is two 32-byte records, with no P2TR ABI.
+.PHONY: trace trace-replay
+trace: $(OUT)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/p4_trace.py --rom $(OUT) \
+	 --elf $(OUT).elf --scenario tools/platformer-scenario.example.json \
+	 --samples-out build/p4-trace-samples.json --output build/p4-trace-report.json
+trace-replay:
+	python3 tools/p4_trace.py --samples build/p4-trace-samples.json \
+	 --output build/p4-trace-replay.json
 
 # Transcript-derived local-model guardrails. Build the game only after checking
 # API spellings and target scope; generated C is still compiled with -Werror.
@@ -89,3 +59,18 @@ diagnose:
 	python3 tools/model_guard.py diagnose "$(LOG)"
 acceptance-check:
 	python3 tools/model_guard.py evidence tools/evidence.json
+
+.PHONY: assets hybrid-test
+assets:
+	python3 tools/build_race_art.py
+hybrid-test: $(OUT)
+	python3 tools/hybrid_runtime.py --rom $(OUT) --elf $(OUT).elf --out build/hybrid-scenario
+
+.PHONY: trace-hybrid trace-hybrid-replay
+trace-hybrid: $(OUT)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/p4_trace.py --rom $(OUT) \
+	 --elf $(OUT).elf --scenario tools/hybrid-trace-scenario.json --hybrid \
+	 --samples-out build/p4-hybrid-samples.json --output build/p4-hybrid-report.json
+trace-hybrid-replay:
+	python3 tools/p4_trace.py --samples build/p4-hybrid-samples.json --hybrid \
+	 --output build/p4-hybrid-replay.json

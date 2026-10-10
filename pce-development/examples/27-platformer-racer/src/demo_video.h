@@ -7,6 +7,7 @@ void demo_wait_frame(void);
 void demo_set_scroll(uint16_t x, uint16_t y);
 void demo_set_color(uint8_t palette, uint8_t color, uint16_t value);
 void demo_upload_sprite_patterns(void);
+void demo_restore_platform_background(void);
 void demo_load_race_background(void);
 void demo_draw_sprite(int16_t x, int16_t y, uint16_t pattern_word, uint16_t attr);
 void demo_draw_sprite_slot(uint8_t slot, int16_t x, int16_t y,

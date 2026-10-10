@@ -148,3 +148,17 @@ pce-development/workflows/scene_vram.py pce-development/examples/33-rendered-shm
 (or the relevant project). It validates generated tile/sprite array sizes
 against the scene manifest and boot transfer budget, rather than trusting a
 hand-written VRAM JSON plan.
+
+## Current platformer mandate (supersedes old P2TR and Q8 instructions)
+
+Use example 26 or 27 with `platformer_q4.h` and `P4TR v4` for NEW platformer
+projects. The two portable projects have no wide runtime integer variables, no
+software mul/div helpers, and only 64 trace bytes. Do not copy obsolete P2TR
+v1 / 32-bit Q8 examples unless examining history. `make platformer-check` is
+host-only and must pass before building; `PCE_HEADLESS=... make platformer-test`
+proves actual movement/landing and continued gameplay following a racing scene
+handoff. A screenshot of the return scene is not a valid proof of continuation.
+Do not re-run `demo_video_init()` on every scene handoff. Prefer a background
+restore and bounded per-frame VDC word writes for SAT entries. Validate the
+screen separately from RAM telemetry. `make arith-games` audits the linked
+platformer ELFs in addition to the shmup, racer and raycaster.

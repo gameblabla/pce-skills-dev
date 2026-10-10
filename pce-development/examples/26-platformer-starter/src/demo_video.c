@@ -83,15 +83,20 @@ void demo_draw_sprite_slot(uint8_t slot, int16_t x, int16_t y,
     sprite.x = (uint16_t)(x + 32);
     sprite.pattern = pattern_word;
     sprite.attr = attr | VDC_SPRITE_FG;
-    pce_vdc_copy_to_vram((uint16_t)(0x7f00u + (uint16_t)slot * 4u),
-                         &sprite, sizeof(sprite));
+    /* SAT has four words. Avoid the SDK block-transfer path during
+     * per-frame writes; it can stall after a background scene handoff. */
+    pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,(uint16_t)(0x7f00u + (uint16_t)slot * 4u));
+    pce_vdc_poke(VDC_REG_VRAM_DATA,sprite.y);
+    pce_vdc_poke(VDC_REG_VRAM_DATA,sprite.x);
+    pce_vdc_poke(VDC_REG_VRAM_DATA,sprite.pattern);
+    pce_vdc_poke(VDC_REG_VRAM_DATA,sprite.attr);
 }
 
 void demo_hide_sprite_slot(uint8_t slot) {
-    const vdc_sprite_t hidden = {0, 0, 0, 0};
-    if (slot < 64)
-        pce_vdc_copy_to_vram((uint16_t)(0x7f00u + (uint16_t)slot * 4u),
-                             &hidden, sizeof(hidden));
+    if (slot < 64) {
+        pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,(uint16_t)(0x7f00u + (uint16_t)slot * 4u));
+        for(uint8_t n=0;n<4;++n)pce_vdc_poke(VDC_REG_VRAM_DATA,0);
+    }
 }
 
 void demo_draw_bitmap_text_pce(void) {

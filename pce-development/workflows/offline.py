@@ -86,9 +86,9 @@ def guidance(kind, request=""):
     if kind=='hybrid':
         lines+=['Run make rules-check and make simulate for the hybrid JSON spec.',
                 'Keep collision/world coordinates independent of camera and art.',
-                'Trace jump/landing/input edges via P2TR; audit transitions separately.']
+                'Trace jump/landing/input edges via compact P4TR v4; audit transitions and post-return movement.']
     if kind=='platformer':
-        lines+=['Use make trace for P2TR walk/jump/landing; do not run hybrid-only simulate/validate here.',
+        lines+=['Use make trace for 16-bit P4TR walk/jump/landing; no 32-bit ABI or specialized trace_frames RPC.',
                 'Keep collision/world coordinates independent of camera and art.']
     if kind=='math': lines+=['Use libcommon/include/pce_fastmath.h and link libpcecommon.a rather than compiler software multiply/divide.',
                                 'For Mode7, use generated projection lookups; do NOT calculate reciprocal or 16-bit division each line.',
@@ -97,7 +97,7 @@ def guidance(kind, request=""):
     if kind in ('raycaster_trace','racing_trace','shmup_trace'):
         lines+=['This is an instrumentation-only G2TR probe; it does NOT draw a playable game.',
                 'Run make trace with a headless emulator supporting run/input/memread; check source and graphics separately.',
-                'G2TR state[0..3] must be real game values; preserve the older P2TR v1 for platformer collision geometry.']
+                'G2TR state[0..3] must be real game values; for modern platformer projects use compact P4TR with independent geometry.']
     if kind=='visual_novel':
         lines+=['Edit assets/background.png and transparent 16x16 mouth overlays; make assets regenerates C and memory report.',
                 'Use make assets-multi for high-colour 16-background-palette mode (Pillow+numpy required).',

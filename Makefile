@@ -5,7 +5,7 @@ TOOL := $(ROOT)/workflows/offline.py
 EX := $(ROOT)/examples
 .PHONY: help doctor route project-check micro-lint micro-build games-build game-run hybrid-test trace-test test
 help:
-	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile standalone game and rendered genre projects' '  make agent-check  - reject hallucinated SDK symbols and large inline assets' '  make agent-assets - validate tilemap generator + level JSON' '  make agent-build  - compile generated-map example' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make genre-check  - offline G2TR schemas + visual-novel asset audits' '  make genre-build  - build G2TR probes + visual-novel example' '  make genre-test   - trace genres, rendered scenes and VN mouth in emulator' '  make visual-games-build - build actual shmup/raycaster/racing scenes' '  make visual-games-test - scripted input + screenshot evidence for 3 scenes' '  make interaction-test - exercise projectile hits, wall blocking and racing laps' '  make interaction-replay - offline recheck of captured per-tick G2TR evidence' '  make sat-check - offline VDC sprite admission limits / priority'  '  make arith-check - reject new 32/64-bit math and libm/libgcc linking' '  make arith-build - link-audit Mode7, circle, and 4 arithmetic ROMs' '  make arith-audit-all - build and link-audit all 99 micro ROMs' '  make arith-games - audit rendered shmup/raycaster/racer ELFs' '  make vram-check - validate generic and generated scene VRAM upload plans' '  make performance-check - run VRAM and 8/16-bit arithmetic source gates' '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
+	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile standalone game and rendered genre projects' '  make agent-check  - reject hallucinated SDK symbols and large inline assets' '  make agent-assets - validate tilemap generator + level JSON' '  make agent-build  - compile generated-map example' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make genre-check  - offline G2TR schemas + visual-novel asset audits' '  make genre-build  - build G2TR probes + visual-novel example' '  make genre-test   - trace genres, rendered scenes and VN mouth in emulator' '  make visual-games-build - build actual shmup/raycaster/racing scenes' '  make visual-games-test - scripted input + screenshot evidence for 3 scenes' '  make interaction-test - exercise projectile hits, wall blocking and racing laps' '  make interaction-replay - offline recheck of captured per-tick G2TR evidence' '  make sat-check - offline VDC sprite admission limits / priority'  '  make arith-check - reject new 32/64-bit math and libm/libgcc linking' '  make arith-build - link-audit Mode7, circle, and 4 arithmetic ROMs' '  make arith-audit-all - build and link-audit all 99 micro ROMs' '  make arith-games - audit rendered shmup/raycaster/racer + two platformer ELFs' '  make vram-check - validate generic and generated scene VRAM upload plans' '  make performance-check - run VRAM and 8/16-bit arithmetic source gates' '  make platformer-test - 16-bit P4TR walk/jump + hybrid return-gameplay checks' '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
 doctor:
 	$(PYTHON) $(TOOL) doctor
 project-check:
@@ -104,12 +104,15 @@ arith-build: arith-check
 arith-audit-all: micro-build arith-check
 	$(PYTHON) $(ROOT)/workflows/arith_guard.py audit $(EX)/micro --min-roms 99
 
-# The three input-driven *rendered* genre ROMs are now soft-math-free too.
-# The P2TR physics starters still have legacy helpers and are not on this
-# strict list; use the frozen arith-legacy.json source gate for those.
+# Five rendered game starters are now helper-free, including both Q4 platformers.
+# P4TR v4 replaces the previous wide P2TR state ABI in examples 26 and 27.
 .PHONY: arith-games vram-check performance-check
 arith-games: visual-games-build
 	@for project in $(VISUAL_GAMES); do \
+	  $(PYTHON) $(ROOT)/workflows/arith_guard.py elf $(EX)/$$project/build/$$project.pce.elf || exit 1; \
+	done
+	@for project in 26-platformer-starter 27-platformer-racer; do \
+	  $(MAKE) -C $(EX)/$$project --no-print-directory || exit 1; \
 	  $(PYTHON) $(ROOT)/workflows/arith_guard.py elf $(EX)/$$project/build/$$project.pce.elf || exit 1; \
 	done
 vram-check:
@@ -117,3 +120,24 @@ vram-check:
 	$(PYTHON) $(ROOT)/workflows/scene_vram.py $(EX)/33-rendered-shmup
 	$(PYTHON) $(ROOT)/workflows/scene_vram.py $(EX)/35-rendered-racer
 performance-check: arith-check vram-check
+
+# 16-bit movement + independent external collision geometry. This catches
+# regressions beyond a simple display/scene switch screenshot.
+.PHONY: platformer-check platformer-test platformer-replay
+platformer-check:
+	$(PYTHON) -m unittest discover -s $(ROOT)/workflows/tests -p 'test_p4*.py' -v
+platformer-test: platformer-check
+	$(MAKE) -C $(EX)/26-platformer-starter trace
+	$(MAKE) -C $(EX)/27-platformer-racer trace
+	$(MAKE) -C $(EX)/27-platformer-racer trace-hybrid
+	$(MAKE) -C $(EX)/27-platformer-racer hybrid-test
+platformer-replay:
+	$(MAKE) -C $(EX)/26-platformer-starter trace-replay
+	$(MAKE) -C $(EX)/27-platformer-racer trace-hybrid-replay
+
+# Optional measured instruction comparison against an existing LOCAL checkout.
+# Do not interpret the total-instruction delta as FPS/cycles: idle wait is included.
+.PHONY: platformer-perf
+platformer-perf:
+	@test -n "$(PCE_BASELINE_ROOT)" && test -n "$(PCE_HEADLESS)" || { echo 'Usage: PCE_BASELINE_ROOT=/path/to/old-checkout PCE_HEADLESS=/path/to/pce-headless make platformer-perf' >&2; exit 2; }
+	$(PYTHON) $(ROOT)/workflows/perf_pair.py --baseline "$(PCE_BASELINE_ROOT)" --emulator "$(PCE_HEADLESS)" --out build/platformer-perf

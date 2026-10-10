@@ -13,9 +13,20 @@ make assets             # regenerate the race background (requires Pillow)
 make simulate           # host-only Q8 oracle from tools/hybrid-scenario.json
 make run                # neutral pad emulator screenshot
 make hybrid-test        # scripted emulator scene transitions if RPC input is available
-make trace              # P2TR platformer scenario if RPC trace_frames is available
+make trace              # P4TR walk/jump scenario (generic run + memread)
+make trace-hybrid       # 598-frame platformer -> racer -> platformer + movement acceptance
 ```
 
 The JSON file `tools/hybrid.json` is the source for movement rates, trigger distances, and lane limits. `tools/offline.py generate` deterministically builds `src/hybrid_rules.h`; every compile depends on it. That generator validates bounds and deliberately rejects 3+ stages: to add more stages, extend the code and tests together.
 
-Debug using `hybrid_scene` (0 platform, 1 race), `hybrid_race_lane_q8`, `hybrid_race_progress_q8`, and the platformer `pce_platformer_trace`. P2TR scene 4 is used for the racing phase, excluded from platformer-only collision checks. Never infer collision behavior from the static scene screenshot or host-only oracle. No title state, enemy AI, shooting, fade transitions, save/load, SuperGrafx or disc packaging is implemented; these are explicit extension tasks, not hidden features.
+Debug using `hybrid_scene` (0 platformer, 1 racer), `hybrid_race_lane_px`, `hybrid_race_progress_px` and the compact `p4_trace` record. The standalone P4TR runner validates both scene transitions AND continued movement after the return. Never infer collision behavior from the static scene screenshot or host-only oracle. No title state, enemy AI, shooting, fade transitions, save/load, SuperGrafx or disc packaging is implemented; these are explicit extension tasks, not hidden features.
+
+### Compact 16-bit P4TR tracing
+
+- `src/platformer_q4.h`: strictly 16-bit Q4 physics and camera in a 512×224 world. Signed velocities never require wide arithmetic.
+- `tools/p4tr.h`: two 32-byte records published with an odd/even sequence guard.
+- `tools/p4_trace.py`: generic RPC `run` + `memread`, with external platform geometry. The old P2TR 432-byte window and special `trace_frames` command are **not used**.
+- `make trace-replay` rechecks saved captured samples offline, with no emulator.
+- `make arith-games` at the repository root audits linked ROMs for multiplication/division helpers.
+
+A successful state trace does not establish that graphics are correct; use `make run` and check emulator screenshots separately.

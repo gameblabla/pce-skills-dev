@@ -121,3 +121,31 @@ frozen, reviewed 32-bit compatibility exceptions. Do not copy those wide
 integer types into new gameplay. This toolkit's strict ELF math gate now
 covers the three rendered genre starters; the two legacy platformer demos
 still need an isolated narrow-physics migration.
+
+## Platformer performance rewrite: 16-bit Q4 and compact P4TR v4
+
+Examples 26 and 27 now use **signed 16-bit Q4** movement and camera values
+instead of 32-bit Q8 physics. Both use two 32-byte P4TR records (64 bytes
+combined), with platform geometry audited independently from
+`assets/platform_layout.h`. There is no dependency on P2TR's special
+`trace_frames` emulator command. `make arith-games` checks the linked binaries
+for software multiplications and divisions.
+
+`make platformer-check` runs host-only differential and malicious-trace tests;
+`PCE_HEADLESS=... make platformer-test` runs scripted ROM movement and a
+598-frame hybrid platformer/racer/platformer round trip, **followed by another
+20 frames of movement** to prove the game does not freeze after returning. The
+SAT update in example 27 is four VDC word writes, not a blocking SDK SAT copy.
+The older P2TR examples are historical references, not the default for new AI
+projects. See `pce-development/references/q4-platformer-and-p4tr.md`.
+
+For a reproducible instruction-count comparison against a local older checkout:
+
+```sh
+PCE_BASELINE_ROOT=/path/to/ca35950-checkout PCE_HEADLESS=/path/to/pce-headless make platformer-perf
+```
+
+The report is `build/platformer-perf/comparison.json`. It compares compiled
+BSS, linked compiler helper symbols, unique executed PC addresses and emulator
+instruction counts across 240 equal-length idle-input frames. These are **not
+CPU-cycle measurements**, and the busy-wait work limits speed conclusions.
