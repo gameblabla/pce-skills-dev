@@ -9,6 +9,9 @@ OUT := build/34-rendered-raycaster.pce
 # BAT backdrop lives in ROM, never in scarce HuC6280 working RAM. Atomic
 # and reference renderers deliberately keep their original 8 KiB layout.
 FAST_ROM_LINK := -Wl,--defsym=__rom_bank0=0x8000,--defsym=__rom_bank0_size=0x8000
+# The 64-ray tables no longer fit the old 8KiB row/atomic prototypes.
+# Keep reference and atomic variants in a contiguous 16KiB HuCard bank.
+ROW_ROM_LINK := -Wl,--defsym=__rom_bank0=0xc000,--defsym=__rom_bank0_size=0x4000
 .PHONY: interaction-test interaction-replay all run trace visual-test bitmap-test clean
 all: tables-check $(OUT)
 $(OUT): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/backdrop_words.h src/wall_codegen.S src/sheet_pairs.h src/sheet_palette.h assets/wolftextures16.png tools/genre_trace.h | toolchain
@@ -47,7 +50,7 @@ tables-check:
 BASELINE_ROM := build/34-rendered-raycaster-four-row.pce
 $(BASELINE_ROM): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h src/wall_pairs.h tools/genre_trace.h | toolchain
 	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_COLUMN_STREAM=0 -DRAY_FAST_SPANS=0 -DRAY_SLICE_ROWS=4 -DRAY_UPLOAD_TIA=1 -Itools src/main.c src/bat_bitmap_irq.S -o $@
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_COLUMN_STREAM=0 -DRAY_FAST_SPANS=0 -DRAY_SLICE_ROWS=4 -DRAY_UPLOAD_TIA=1 -Itools src/main.c src/bat_bitmap_irq.S -o $@ $(ROW_ROM_LINK)
 bitmap-stress: $(OUT)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(OUT) --elf $(OUT).elf --mode column --output build/bitmap-stress.json
 bitmap-throughput: column-benchmark
@@ -60,7 +63,7 @@ bitmap-throughput: column-benchmark
 ATOMIC_ROM := build/34-rendered-raycaster-atomic-64.pce
 $(ATOMIC_ROM): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h src/wall_pairs.h tools/genre_trace.h | toolchain
 	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) $(ATOMIC_FLAGS) -DRAY_FAST_SPANS=0 -Itools src/main.c src/bat_bitmap_irq.S -o $@ -Wl,-Map,$@.map
+	$(LLVM_MOS_CC) $(PCE_FLAGS) $(ATOMIC_FLAGS) -DRAY_FAST_SPANS=0 -Itools src/main.c src/bat_bitmap_irq.S -o $@ $(ROW_ROM_LINK) -Wl,-Map,$@.map
 atomic-rom: $(ATOMIC_ROM)
 atomic-bitmap-test: $(ATOMIC_ROM)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/atomic_present.py --rom $(ATOMIC_ROM) --elf $(ATOMIC_ROM).elf --output build/atomic-evidence.json --frames 160
@@ -78,7 +81,7 @@ presentation-compare: bitmap-stress atomic-stress
 WALL_REFERENCE_ROM := build/34-rendered-raycaster-wall-reference.pce
 $(WALL_REFERENCE_ROM): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h src/wall_pairs.h tools/genre_trace.h | toolchain
 	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_COLUMN_STREAM=0 -DRAY_FAST_SPANS=0 -DRAY_WALL_LOOKUP=0 -Itools src/main.c src/bat_bitmap_irq.S -o $@ -Wl,-Map,$@.map
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_COLUMN_STREAM=0 -DRAY_FAST_SPANS=0 -DRAY_WALL_LOOKUP=0 -Itools src/main.c src/bat_bitmap_irq.S -o $@ $(ROW_ROM_LINK) -Wl,-Map,$@.map
 wall-reference-rom: $(WALL_REFERENCE_ROM)
 wall-lookup-check: tables-check
 	python3 tools/verify_wall_pairs.py

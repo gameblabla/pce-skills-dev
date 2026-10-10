@@ -1,11 +1,40 @@
 # 34 — fast 128×128 VRAM-resident raycaster (HuC6280)
 
-This is a **real 32-ray textured raycaster** using the paired-BAT technique in
+This is a **real 64-sample textured raycaster** using the paired-BAT technique in
 [PCEdev's Wolfenstein article](https://pcedev.wordpress.com/2015/11/25/wolfenstein-3d-on-the-pc-engine/)
 and [bitmap-mode article](https://pcedev.wordpress.com/2015/12/10/pce-bitmap-mode/).
 It sets physical **512×224** and keeps **128×128 logical 4-bit pixels** in the
 VDC's 128×64 BAT, with two pixels per word and 256 fixed glyphs. It is **not**
 128×64 atomic mode and does not create 8×8 planar tiles every frame.
+
+## 64-column wall quality pass (2026-10)
+
+The original build used 32 rays: each cast result occupied **two** BAT words
+(four logical pixels/16 physical horizontal pixels), producing pronounced
+vertical wall steps and oversized texture strips. The default now renders
+**64 wall samples, one BAT word (two logical pixels) per sample**. It remains
+PCEdev's VRAM-resident paired-BAT bitmap mode: 256 fixed glyphs; each BAT
+entry encodes two 4-bit pixel colours. **No software framebuffer or per-frame
+planar tile uploads were introduced.**
+
+To avoid doubling all map traversal, odd columns are interpolated from their
+adjacent exact casts only on a continuous face of the *same wall cell*.
+Texture-wrap seams, material changes, face changes, and sharp depth changes
+trigger a real cast. Empty-cell marching skips unnecessary map probes, and
+one binary midpoint improves hit texture coordinates over sampling the
+overshot endpoint. The renderer now streams 16 instead of eight BAT columns
+per game-loop update; one full 64-column dirty pass takes four calls, as
+before, and generated eight-word vertical wall writes remain intact.
+
+The same 540-video-frame emulator input benchmark (90 idle, 90 turn right,
+90 walk, 90 turn left, 90 settle, 90 quiet) measured **6.33 changed views/s
+on turns in the previous 32-ray build** and **6.33 changed views/s in this
+higher-detail 64-column build**. The latter is *not a wall-clock FPS or a
+performance speedup claim*: it is a 2x horizontal sampling quality improvement
+at roughly the same emulated progressive changed-view rate. Rendering is
+still not atomic, the floor still uses a screen-anchored VRAM backdrop, and
+physical-hardware timing is untested. To reproduce, run `make column-regression`
+and `make bitmap-test` with a compatible `PCE_HEADLESS` binary.
 
 ## What changed: stop rendering the entire picture every update
 
@@ -18,7 +47,10 @@ The fast **full-detail** default now:
 
 1. Generates an exact **16 KiB screen-anchored sky/earth BAT backdrop offline**
    (`tools/gen_backdrop.py`) and installs it in VRAM once at startup.
-2. Casts 32 actual map rays only when the camera position or angle changes.
+2. Resolves 64 wall columns only when the camera moves or turns, casting
+   the even rays exactly and safely interpolating between rays only when the
+   two neighbors hit the same map cell, face and texture span. Edge cases
+   (texture wrapping, wall corners or depth discontinuities) are ray-cast.
 3. Compares wall depth, texture phase, height and shading against the last
    drawn view. Unchanged columns incur **zero VRAM writes**.
 4. Writes only the union of old/new wall spans, using the VDC's
@@ -38,7 +70,7 @@ BAT, with tearing possible. The background is **screen-anchored** to avoid
 expensive perspective-floor reconstruction on camera translation; wall
 geometry is fully ray-cast from the current camera. A dynamically scrolling
 floor remains a separate rendering-quality task. The ROM is 32 KiB, larger
-than the old 8 KiB binary, but work-RAM BSS fell from 1,331 to 487 bytes.
+than the old 8 KiB binary, and work-RAM requirements are significantly lower than the old full-frame staging renderer.
 
 ## Generated HuC6280 vertical wall code (PCEdev-inspired, implemented)
 
@@ -109,10 +141,12 @@ PCE_HEADLESS=/path/to/pce-headless make bitmap-test visual-test interaction-test
 `column-benchmark` includes warm-up, idle, rotation, movement, settling and
 quiet periods, plus five/six independently captured screenshots. It rejects
 fabricated dirty-view counts without actual BAT writes and idle-rendering
-loops that would falsely inflate FPS. The final benchmark measured **23 changed-view commits in 540 video frames**,
-including **17 in 180 turning frames**, or **5.667 changed-view commits per
-emulated second while turning**. A separate 1,080-frame stress test recorded
-64 dirty-view commits. These are not atomic images or guaranteed continuous
+loops that would falsely inflate FPS. The earlier *32-ray* benchmark measured **23 changed-view commits in 540
+video frames**, including **17 in 180 turning frames**, or **5.667 changed
+views per emulated second while turning**. This is archival context rather
+than a measurement for the current 64-column build. The current emulator run
+records **27 commits in 540 frames** (19 during 180 turning frames) and **65
+commits in the 1,080-frame stress test**. These are not atomic images or guaranteed continuous
 motion, and this turning rate remains below PCEdev's projected **12–15 FPS
 for typical action / up to 30 FPS in open areas**; the original blog figure was an *estimate
 for a more specialized precomputed vertical texture-code engine*, not a
@@ -142,7 +176,7 @@ are **not** compared with the new dirty-column counter as though equal work.
   `src/bat_sparse_irq.S` and 32 KiB HuCard. Has full detail, but not atomic
   presentation.
 - **`make atomic-rom`:** original independently compiled 128×64 VBlank-page
-  swap using `src/bat_bitmap_irq.S`, 8 KiB HuCard, lower vertical detail.
+  swap using `src/bat_bitmap_irq.S`, 16 KiB HuCard, lower vertical detail.
   Mirrored/symmetric top/bottom scenes could suit it, but are not implemented
   or silently enabled here.
 
