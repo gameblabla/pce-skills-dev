@@ -1,9 +1,9 @@
 # PC Engine / CD-ROM² example projects
 
 Runnable examples 00–24 are standalone project folders containing a Makefile,
-README, C source under `src/`, assets under `assets/`, and a local copy of the
-LLVM-MOS bootstrap tools. Run `make` to build a HuCard `.pce` ROM; each README
-embeds a headless-emulator screenshot captured after 120 frames. Example 25 is
+README, and C source under `src/`, with graphics assets only where needed. Run
+`make` to build a HuCard `.pce` ROM; graphics examples have headless screenshot
+captures, while non-visual examples do not. Example 25 is
 a cross-feature integration case study, not a standalone project. A bootable
 CD-ROM² release still needs project-specific IPL/disc packaging and a
 user-supplied System Card BIOS; `make bios-check` reports the local BIOS setup
@@ -11,7 +11,9 @@ path. The examples include `make run` for a bounded headless capture and
 `make debug` for a capture plus execution coverage; CD examples require their
 packaged disc image and System Card to be configured first.
 
-Every project includes a compact PCE screen fixture in `src/demo_video.c` and `assets/demo_assets.h`. The feature-specific entry point is `src/main.c`; use the folder README to follow the target design, constraints, and next adaptation steps.
+Graphics-focused projects use the PCE screen fixture in `src/demo_video.c` and `assets/demo_assets.h`. Boot, CPU, I/O, CD, bank, diagnostic, and audio examples intentionally do not initialize or render graphics. Their results are observable through the debugger, hardware state, or sound. Every topic-specific entry point is in `src/main.c`.
+
+**Small examples:** The [`micro/`](micro/README.md) collection adds 25 much smaller, single-topic HuCard projects. Each has one C file, a two-line Makefile, and minimal shared build helpers. The audio projects never use a graphics fixture. Run `cd micro && python3 check.py` to build all.
 
 ## Projects
 
@@ -52,7 +54,7 @@ The `00-project-template/` folder demonstrates the layout. The shared bootstrap 
 
 ## Rebuilding the graphics and screenshots
 
-The examples use original indexed artwork with a shared 16-color VCE palette.
+The graphics examples use original indexed artwork with a shared 16-color VCE palette.
 Each ROM loads its generated background patterns and full BAT from
 `assets/demo_assets.h`; `assets/source.png` shows the initial viewport before
 runtime sprites, scroll, and palette changes. `assets/sprite-sheet.png` holds
@@ -66,7 +68,7 @@ python3 pce-development/examples/tools/generate_graphics.py
 python3 pce-development/examples/tools/capture_screenshots.py
 ```
 
-Both commands accept `--example NUMBER` to update one project. The capture
+Both commands accept `--example NUMBER` to update one graphics project. Non-visual examples are skipped intentionally. The capture
 command builds the ROM and runs 120 frames with all controller buttons
 released, using the bundled headless emulator; build that emulator first or
 pass `--emulator PATH`. Its captures are actual emulator output. The source art

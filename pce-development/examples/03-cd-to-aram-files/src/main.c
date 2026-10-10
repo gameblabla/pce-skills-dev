@@ -2,36 +2,27 @@
 #ifdef PCE_CDROM2
 #include <pce/cd/bios.h>
 #endif
-#include <stdint.h>
-#include "demo_video.h"
 
-/* Set this sector from the disc manifest before using the read path. */
+/* Debugger-visible status; no palette/screenshot is needed for a CD read. */
+volatile uint8_t last_cd_result = 0xff;
 #ifdef PCE_CDROM2
-static const pce_sector_t demo_file_start = {.lo = 0, .md = 0, .hi = 0};
-static uint8_t cpu_stage[2048];
-
-static uint8_t read_one_sector_to_cpu(void) {
-    return pce_cdb_cd_read(demo_file_start, PCE_CDB_ADDRESS_BYTES,
-                           (uint16_t)(uintptr_t)cpu_stage, sizeof(cpu_stage));
+/* Replace sector zero with the file's sector from your packed-disc manifest. */
+static const pce_sector_t first_sector = {.lo=0,.md=0,.hi=0};
+static uint8_t sector_buffer[2048];
+static uint8_t read_sector(void) {
+    return pce_cdb_cd_read(first_sector,PCE_CDB_ADDRESS_BYTES,
+                           (uint16_t)(uintptr_t)sector_buffer,sizeof(sector_buffer));
 }
 #else
-/* The default HuCard build has no drive. It displays the no-disc result. */
-static uint8_t read_one_sector_to_cpu(void) {
-    return 0x0b; /* PCE_CDB_NO_DISC */
-}
-#define PCE_CDB_SUCCESS 0x00
+static uint8_t read_sector(void) { return 0x0b; } /* no drive on HuCard */
 #endif
 
 int main(void) {
-    demo_video_init(320, VCE_PIXEL_CLOCK_7MHZ);
+    uint8_t last = 0;
     for (;;) {
-        demo_wait_frame();
-        if (demo_read_pad() & KEY_1) {
-            uint8_t result = read_one_sector_to_cpu();
-            /* A project loader checks this result before consuming cpu_stage. */
-            demo_set_color(0, 3, result == PCE_CDB_SUCCESS
-                                     ? VCE_COLOR(1, 7, 2)
-                                     : VCE_COLOR(7, 1, 1));
-        }
+        uint8_t held = (uint8_t)~pce_joypad_read();
+        if ((held & KEY_1) && !(last & KEY_1))
+            last_cd_result = read_sector();
+        last = held;
     }
 }

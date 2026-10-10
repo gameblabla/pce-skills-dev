@@ -257,4 +257,5 @@ if __name__=='__main__':
     args = parser.parse_args()
     for folder in sorted(ROOT.glob('[0-9][0-9]-*')):
         n = int(folder.name[:2])
+        if n in {0,1,3,5,12,13,14,23,24}: continue  # Non-visual recipes
         if args.example is None or args.example == n: bake(folder,n)

@@ -1,18 +1,16 @@
 #include <pce.h>
-#include "demo_video.h"
 
+/* Small PSG tone example: audio only. No VDC/VCE/fonts/graphics. */
 int main(void) {
-    static const uint8_t dda_wave[] = {0, 8, 16, 24, 31, 24, 16, 8};
-    uint8_t index = 0;
-    demo_video_init(320, VCE_PIXEL_CLOCK_7MHZ);
     pce_psg_reset();
-    *IO_PSG_CH_SELECT = 4;
-    *IO_PSG_CH_CONTROL = 0;
+    *IO_PSG_VOLUME = 0xff;
+    *IO_PSG_CH_SELECT = 0;
+    *IO_PSG_CH_CONTROL = PSG_CH_DDA; /* reset waveform write index */
+    *IO_PSG_CH_CONTROL = PSG_CH_OFF;
+    for (uint8_t i = 0; i < 32; ++i)
+        *IO_PSG_CH_SAMPLE = (i < 16) ? 31 : 0;
     *IO_PSG_CH_VOLUME = 0xff;
-    *IO_PSG_CH_CONTROL = 0xdf;
-    for (;;) {
-        demo_wait_frame();
-        *IO_PSG_CH_SELECT = 4;
-        *IO_PSG_CH_SAMPLE = dda_wave[index++ & 7];
-    }
+    *IO_PSG_CH_FREQ = 0x0180;
+    *IO_PSG_CH_CONTROL = PSG_CH_ON | 31;
+    for (;;) {}
 }

@@ -46,6 +46,8 @@ def main():
     if args.frames <= 0:
         parser.error('--frames must be positive')
     for folder in sorted(ROOT.glob('[0-9][0-9]-*')):
+        if int(folder.name[:2]) in {0,1,3,5,12,13,14,23,24}:
+            continue  # These examples have no framebuffer output.
         if args.example is not None and int(folder.name[:2]) != args.example:
             continue
         build = subprocess.run(['make'], cwd=folder, capture_output=True, text=True)

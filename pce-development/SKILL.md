@@ -31,6 +31,8 @@ the current code before repeating their numbers or assumptions.
 
 ## Route to the relevant guide
 
+- For the motivation and style rules behind tiny one-subsystem examples, read
+  [single-purpose examples](references/single-purpose-examples.md).
 - For CPU banking, overlays, memory budgets, display limits, or raster timing,
   read [hardware and architecture](references/hardware-and-architecture.md) and
   [bank placement and safe relocation](references/banks-and-overlays.md).
@@ -51,6 +53,8 @@ the current code before repeating their numbers or assumptions.
   through its source layout, camera/scroll, renderer, and display publication.
 - For lessons from recurring regressions and measured fixes, read
   [incident patterns](references/incident-patterns.md).
+- For first-time, single-function learning, use the [25 micro examples](examples/micro/README.md)
+  (audio without graphics, input, VDC/VCE, SuperGrafx, Arcade Card, timer).
 - For scratch projects and worked starter patterns, use the self-contained
   [examples folder](examples/README.md). Code there is marked as pseudocode
   whenever it needs adaptation to a project's SDK.

@@ -1,10 +1,7 @@
-#include <pce.h>
-#include "demo_video.h"
-
+#include <stdint.h>
+/* Minimal boot template: no graphics, input, sound, or CD initialization. */
+volatile uint8_t booted;
 int main(void) {
-    demo_video_init(256, VCE_PIXEL_CLOCK_5MHZ);
-    for (;;) {
-        demo_wait_frame();
-        demo_set_color(0, 3, VCE_COLOR((demo_vblank_count >> 3) & 7, 3, 7));
-    }
+    booted = 1;
+    for (;;) {}
 }

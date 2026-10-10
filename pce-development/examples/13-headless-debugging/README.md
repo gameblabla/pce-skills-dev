@@ -1,6 +1,6 @@
 # Example 13: headless emulator and MCP debugging
 
-![Example 13: headless emulator and MCP debugging emulator screenshot](assets/screenshot.png)
+**No screen output:** Monitor the volatile status/counter in the emulator debugger or a memory watch. The absence of a screenshot is intentional.
 
 **Project:** Run `make` in this folder to build `build/13-headless-debugging.pce`
 with the bundled LLVM-MOS setup. The result is a HuCard preview. CD-ROM²

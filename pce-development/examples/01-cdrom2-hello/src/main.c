@@ -1,8 +1,7 @@
-#include <pce.h>
-#include "demo_video.h"
-
+#include <stdint.h>
+/* No graphics are required merely to reach C main. */
+volatile uint8_t booted;
 int main(void) {
-    demo_video_init(320, VCE_PIXEL_CLOCK_7MHZ);
-    demo_draw_bitmap_text_pce();
-    for (;;) demo_wait_frame();
+    booted = 1;
+    for (;;) {}
 }
