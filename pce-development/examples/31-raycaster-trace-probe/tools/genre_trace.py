@@ -156,7 +156,7 @@ def run_emulator(rom,address,scenario,bios=None,base_dir=None,initial_frames=2):
             # Generic RPC: existing trace_frames is intentionally hard-coded to
             # two 216-byte platformer records. G2TR uses run + memread instead.
             for _ in range(step['frames']):
-                for attempt in range(4):
+                for attempt in range(16):
                     client.call('run',1)
                     pair=bytes.fromhex(client.call('memread',hex(address),128,1)['hex'])
                     try:
@@ -167,7 +167,7 @@ def run_emulator(rom,address,scenario,bios=None,base_dir=None,initial_frames=2):
                         samples.append(state)
                         break
                 else:
-                    raise RuntimeError('G2TR frame did not advance within four emulator frames; inspect publication and IRQ')
+                    raise RuntimeError('G2TR frame did not advance within sixteen emulator frames; inspect publication, IRQ and heavy rendering')
     finally:
         client.close()
     return validate(samples,scenario)

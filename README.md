@@ -31,3 +31,28 @@ See [local-model failure fixes](pce-development/references/local-ai-transcript-f
 Legacy platformer **P2TR v1 stays supported**. New **G2TR v2** instruments shmup, raycaster, racing, platformer (coarse) and visual-novel game state without inventing platform-collision semantics for other genres. From the repo root: `make genre-check` (offline), `make genre-build` (LLVM-MOS) or `PCE_HEADLESS=... make genre-test` (actual emulator). See `pce-development/tools/pce/GENRE_TRACE.md`.
 
 Example 29 is a real static-scene visual-novel ROM with a separate 16×16 animated mouth sprite, preview and VRAM/palette audits; `make assets` converts original PNGs while `make visual-test` compares two actual emulator captures. Example probes 30–32 exercise nonvisual genre-specific trace publication. See `pce-development/examples/29-visual-novel/README.md` and the offline routing tool's `visual_novel`, `shmup_trace`, `raycaster` and `racing_trace` recipes.
+
+### Rendered cross-genre acceptance examples (new)
+
+Examples [33-rendered-shmup](pce-development/examples/33-rendered-shmup/),
+[34-rendered-raycaster](pce-development/examples/34-rendered-raycaster/) and
+[35-rendered-racer](pce-development/examples/35-rendered-racer/) add actual
+BG/SAT or raycast-BAT graphics and controller response **without replacing**
+nonvisual G2TR probes 30–32. `make visual-games-build` builds all three and
+`PCE_HEADLESS=... make visual-games-test` runs independent input-driven G2TR
+and PNG-difference checks. Screenshots are compared *inside gameplay regions*,
+not just checked for existence.
+
+`pce-development/tools/pce/scene_pack.py` converts tightly specified 256×224
+RGB scenes and four 16×16 transparent sprite frames (64×16 atlas) into
+palette-safe, deduplicated PCE tiles, BAT, and sprite data, with manifest and
+VRAM overlap checks. `visual_scenario.py` couples scripted input, framebuffer
+captures, trace input latching, and movement/diff thresholds. These tools and
+assets are bundled inside the standalone example projects. The raycaster is
+an actual coarse 32-column ray stepper, *not* a static image labelled raycast.
+
+These teaching ROMs are not fully featured commercial games; the raycaster has
+solid-colour distance-shaded walls rather than textured walls, and the racer
+uses a fixed perspective background rather than the separate paired-BAT Mode 7
+engine. The screenshot checks prove rendered changes in an emulator, not sound,
+collision completeness, performance guarantees, or physical hardware timing.

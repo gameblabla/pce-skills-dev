@@ -1,0 +1,1 @@
+{"steps":[{"frames":12,"buttons":[]},{"frames":30,"buttons":["right"]},{"frames":26,"buttons":["up"]},{"frames":12,"buttons":["left"]}],"require_genres":["raycaster"],"require_state_variation":{"raycaster":[2,3]}}

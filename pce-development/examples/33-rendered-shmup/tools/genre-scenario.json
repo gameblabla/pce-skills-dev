@@ -1,0 +1,1 @@
+{"steps":[{"frames":10,"buttons":[]},{"frames":15,"buttons":["right","i"]},{"frames":4,"buttons":[]},{"frames":15,"buttons":["left","i"]},{"frames":8,"buttons":[]}],"require_genres":["shmup"],"require_state_variation":{"shmup":[0,2]}}

@@ -5,7 +5,7 @@ TOOL := $(ROOT)/workflows/offline.py
 EX := $(ROOT)/examples
 .PHONY: help doctor route project-check micro-lint micro-build games-build game-run hybrid-test trace-test test
 help:
-	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile two standalone game projects' '  make agent-check  - reject hallucinated SDK symbols and large inline assets' '  make agent-assets - validate tilemap generator + level JSON' '  make agent-build  - compile generated-map example' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make genre-check  - offline G2TR schemas + visual-novel asset audits' '  make genre-build  - build G2TR probes + visual-novel example' '  make genre-test   - trace genres and verify visual novel mouth in emulator' '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
+	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile standalone game and rendered genre projects' '  make agent-check  - reject hallucinated SDK symbols and large inline assets' '  make agent-assets - validate tilemap generator + level JSON' '  make agent-build  - compile generated-map example' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make genre-check  - offline G2TR schemas + visual-novel asset audits' '  make genre-build  - build G2TR probes + visual-novel example' '  make genre-test   - trace genres, rendered scenes and VN mouth in emulator' '  make visual-games-build - build actual shmup/raycaster/racing scenes' '  make visual-games-test - scripted input + screenshot evidence for 3 scenes' '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
 doctor:
 	$(PYTHON) $(TOOL) doctor
 project-check:
@@ -18,7 +18,7 @@ micro-lint:
 	$(PYTHON) $(EX)/micro/check.py --lint-only
 micro-build:
 	$(PYTHON) $(EX)/micro/check.py
-games-build:
+games-build: visual-games-build
 	$(MAKE) -C $(EX)/28-generated-level
 	$(MAKE) -C $(EX)/29-visual-novel
 	$(MAKE) -C $(EX)/26-platformer-starter
@@ -60,7 +60,15 @@ genre-check:
 genre-build:
 	$(MAKE) -C $(EX)/29-visual-novel
 	@for project in $(GENRE_PROBES); do $(MAKE) -C $(EX)/$$project || exit 1; done
-genre-test: genre-build
+genre-test: genre-build visual-games-test
 	@for project in $(GENRE_PROBES); do $(MAKE) -C $(EX)/$$project trace || exit 1; done
 	$(MAKE) -C $(EX)/29-visual-novel trace
 	$(MAKE) -C $(EX)/29-visual-novel visual-test
+
+# Rendered, input-driven genre games supplement instrumentation-only probes.
+.PHONY: visual-games-build visual-games-test
+VISUAL_GAMES := 33-rendered-shmup 34-rendered-raycaster 35-rendered-racer
+visual-games-build:
+	@for project in $(VISUAL_GAMES); do $(MAKE) -C $(EX)/$$project || exit 1; done
+visual-games-test: visual-games-build
+	@for project in $(VISUAL_GAMES); do 	  $(MAKE) -C $(EX)/$$project trace || exit 1; 	  $(MAKE) -C $(EX)/$$project visual-test || exit 1; 	done

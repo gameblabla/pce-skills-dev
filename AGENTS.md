@@ -62,3 +62,27 @@ Four later sessions exposed hallucinated joypad/sprite API names, hand-counted a
 Never reuse `P2TR v1` collision-surface fields for unrelated genres. Keep platformer P2TR v1 (216 bytes ×2); use the new `G2TR v2` (64 bytes ×2) and genre-specific validators for shmup, racing, raycaster or visual novel. Run `make genre-check` first (no SDK), then `make genre-build`, `PCE_HEADLESS=... make genre-test` when RPC and compiler exist. `trace_frames` in the bundled emulator only accepts P2TR v1; the generic runner uses `run`+`memread` instead. A RAM trace is game-authored data, not evidence of pixel output.
 
 For visual novels, do not hand-code huge picture arrays: use `examples/29-visual-novel/tools/vn_pack.py` and versioned PNGs. Single-palette generator only requires Pillow; multi-palette fitter requires NumPy too. Use generated BAT/4bpp patterns for background and SAT 16x16 pattern indices for mouth overlays. Check the manifest for ROM/VRAM/palette constraints and `make visual-test` for actual mouth-only screenshot differences. Avoid making a visual-novel sprite depend on sound/text raster init unless requested.
+
+## Rendered genre examples and screenshot acceptance (33–35)
+
+After choosing a genre with `offline.py route`, prefer rendered example 33
+(shmup), 34 (raycaster), or 35 (conventional racer) when visual output is part
+of the request. Preserve examples 30–32 as intentionally **nonvisual** G2TR
+instrumentation probes. For true 512×224 pseudo-bitmap road rendering, use
+micro example 86 rather than calling the fixed perspective racer Mode 7.
+
+For 33 and 35, change PNGs and run `make assets` instead of hand-writing huge
+C graphics arrays. `tools/scene_pack.py` validates indexed colours, a 64×16
+sprite strip, tile counts and VRAM allocation. For 34, raycast actual map cells
+and submit the height columns to the VDC BAT; do not substitute a static image
+and claim that it is a raycaster.
+
+Run `make trace` **and** `make visual-test` for each rendered project. The first
+checks game-authored G2TR telemetry under scripted input; the second captures
+and compares actual emulator pixels, input latching and screen-space motion.
+Neither proves physical hardware performance, audio or complete game mechanics.
+The basic `pce_joypad_read()` returns **eight bits** (two-button controls); do
+not invert it into `uint16_t` and interpret the high nibble as extra buttons.
+Initialize mutable gameplay globals explicitly in `main()` for minimal HuCard
+startup environments; do not assume initialized `.data` was copied as on a PC.
+See `pce-development/tools/pce/GENRE_TRACE.md` for the trace contract.

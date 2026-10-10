@@ -1,0 +1,28 @@
+{
+  "genre": "shmup",
+  "steps": [
+    {
+      "frames": 12,
+      "buttons": []
+    },
+    {
+      "frames": 22,
+      "buttons": [
+        "right",
+        "i"
+      ]
+    }
+  ],
+  "expect": {
+    "min_colors": 6,
+    "min_changed_pixels": 50,
+    "changed_region": [
+      105,
+      145,
+      211,
+      214
+    ],
+    "min_region_changed_pixels": 30,
+    "player_dx": "positive"
+  }
+}

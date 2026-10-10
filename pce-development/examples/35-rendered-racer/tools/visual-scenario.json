@@ -1,0 +1,28 @@
+{
+  "genre": "racing",
+  "steps": [
+    {
+      "frames": 12,
+      "buttons": []
+    },
+    {
+      "frames": 28,
+      "buttons": [
+        "right",
+        "up"
+      ]
+    }
+  ],
+  "expect": {
+    "min_colors": 7,
+    "min_changed_pixels": 50,
+    "changed_region": [
+      75,
+      159,
+      202,
+      219
+    ],
+    "min_region_changed_pixels": 30,
+    "player_dx": "positive"
+  }
+}

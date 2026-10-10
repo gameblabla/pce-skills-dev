@@ -82,3 +82,45 @@ cd standalone-map && make assets-check && make && make run
 Example 29 uses a static 256×224 background plus a separate 16×16 animated mouth sprite. `vn_pack.py` creates reproducible source PNGs, validates sizes and sprite palettes, deduplicates background tiles, generates 4bpp characters/BAT/SAT-ready sprite patterns, previews, and a SHA/VRAM allocation manifest. Use `make assets` for a compact single background palette, or `make assets-multi` for advanced 16-palette per-tile static pictures. `make visual-test` compares **actual emulator** captures, requiring changes only in the mouth. This independently catches an AI that changes its trace variables while never drawing the mouth.
 
 Examples 30–32 are intentionally nonvisual telemetry probes, *not* finished shmup/raycaster/racing games. They show exactly how to publish the genre schema and detect counters, depths, camera, and forward-motion errors in the real emulator. Combine with examples 10, 86 and other gameplay recipes, then write genre-specific acceptance scenarios; never infer a rendered shooter or raycaster from a blank trace-probe ROM.
+
+## Rendered G2TR acceptance pipeline — examples 33–35
+
+A no-graphics G2TR probe deliberately cannot prove that any pixel was rendered.
+To bridge that gap, route an ordinary shmup request to example 33, a raycaster
+request to example 34 and a conventional racer request to example 35. Explicit
+*trace/probe* requests still route to examples 30–32. PCE paired-BAT Mode 7
+requests still route to micro example 86.
+
+These three HuCard ROMs use actual input and visible changes:
+
+- **33:** movable ship and on-button-edge bullets, three enemies; telemetry
+  counts bullets actually present in the SAT upload
+- **34:** 32 real quarter-cell stepped map rays, producing distance-shaded
+  BAT wall-height columns (not pre-rendered views); arrow keys move/rotate
+- **35:** lane-controlled vehicle and distance-dependent traffic sprites;
+  this is a racing-controls lesson, not a software Mode 7 emulator
+
+The offline image generator `tools/pce/scene_pack.py` accepts **only** a
+256×224 RGB background and a 64×16 RGBA sprite strip with exact 16-colour
+palette. It enforces the sprite's reserved transparent index, unique-tile
+budget and pattern/BAT/SAT VRAM separation. Generated output is deterministic.
+`make assets` regenerates each visual demo's graphics and its byte-allocation
+manifest; `make assets-check` works without any SDK or network.
+
+`tools/pce/visual_scenario.py` captures independent emulator PNGs after
+scripted button holds, verifies trace input latching, checks minimum distinct
+colours, checks a minimum number of changed pixels, optionally checks changes
+inside a scene-local rectangle, and verifies screen-X motion sign. A trace
+alone, or a screenshot that never changes, fails the acceptance test.
+
+```sh
+make visual-games-build
+PCE_HEADLESS=/path/to/pce-headless make visual-games-test
+python3 pce-development/workflows/offline.py route 'make a raycaster game'
+python3 pce-development/workflows/offline.py new --recipe raycaster_visual --out /tmp/my-raycaster
+```
+
+The tool permits a bounded sixteen emulator frames to obtain the next G2TR
+game tick, because complex software rendering may take longer than one VBlank.
+This prevents false failures on slower scenes without accepting a permanently
+stalled game. No SDK/BIOS/image downloads are made by these validators.

@@ -25,7 +25,10 @@ RECIPES = {
     'base': '00-project-template',
     'level': '28-generated-level',
     'visual_novel':'29-visual-novel',
-    'shmup':'10-shmup',
+    'shmup':'33-rendered-shmup',
+    'raycaster_visual':'34-rendered-raycaster',
+    'racing_visual':'35-rendered-racer',
+    'raycaster_trace':'31-raycaster-trace-probe',
     'shmup_trace':'30-shmup-trace-probe',
     'raycaster':'31-raycaster-trace-probe',
     'racing_trace':'32-racing-trace-probe',
@@ -43,7 +46,7 @@ def choose(prompt):
     if re.search(r'visual.?novel|dialogue|mouth.?animat|portrait|character.?conversation',q):
         return 'visual_novel'
     if re.search(r'raycast|wolfenstein|pseudo.?3d.*wall',q):
-        return 'raycaster'
+        return 'raycaster_trace' if has_trace else 'raycaster_visual'
     if re.search(r'shmup|shoot.?em.?up|bullet.?hell|scrolling.?shooter',q):
         return 'shmup_trace' if has_trace else 'shmup'
     if has_trace and re.search(r'rac(e|ing|er)|driv|road|lane',q) and not has_platform:
@@ -54,7 +57,7 @@ def choose(prompt):
     if has_platform:
         return 'platformer'
     if has_race:
-        return 'racer'
+        return 'racer' if re.search(r'mode.?7|bitmap|paired.?bat|512.?x.?224',q) else 'racing_visual'
     for key, pat in [('level', r'asset.?pack|tile.?map|tile.?set|level.?generator|level.?editor|generated map'),
                      ('audio', r'psg|sound|music|tone|audio'),
                      ('cd', r'cd.?rom|system card|disc|ipl'),
@@ -85,7 +88,7 @@ def guidance(kind, request=""):
         lines+=['Use make trace for P2TR walk/jump/landing; do not run hybrid-only simulate/validate here.',
                 'Keep collision/world coordinates independent of camera and art.']
     if kind=='audio': lines+=['Never add VDC/VCE/font/sprite drawing to an audio recipe.']
-    if kind in ('raycaster','racing_trace','shmup_trace'):
+    if kind in ('raycaster_trace','racing_trace','shmup_trace'):
         lines+=['This is an instrumentation-only G2TR probe; it does NOT draw a playable game.',
                 'Run make trace with a headless emulator supporting run/input/memread; check source and graphics separately.',
                 'G2TR state[0..3] must be real game values; preserve the older P2TR v1 for platformer collision geometry.']
@@ -94,7 +97,11 @@ def guidance(kind, request=""):
                 'Use make assets-multi for high-colour 16-background-palette mode (Pillow+numpy required).',
                 'Run make trace and make visual-test. One closed/open screenshot pair must differ ONLY in the mouth region.',
                 'Do not call PNG previews emulator screenshots; use original static scene + separate sprite and SAT.']
-    if kind=='shmup':lines+=['For RAM telemetry use the separate shmup_trace scaffold, not platformer-specific P2TR.']
+    if kind in ('shmup','raycaster_visual','racing_visual'):
+        lines+=['This is a minimal *rendered* gameplay lesson, not a complete game or a Super CD image.',
+                'Run make trace AND make visual-test to compare input-driven telemetry with emulator screenshots.',
+                'Edit the validated 256x224 PNG/64x16 atlas and run make assets for shmup/racing; raycaster draws actual BAT walls.',
+                'Keep the nonvisual G2TR probes for hardware-independent state debugging.']
     if kind=='level': lines+=['Edit assets/level.json, run make assets-check then make. Each cell is an 8x8 tile, not a pixel.',
                              'The rendered level has no playable enemies or goal logic: link it to example 26, then test actual events.']
     if is_micro: lines+=['Micro recipe scaffolds the shared micro and starter build helpers.']

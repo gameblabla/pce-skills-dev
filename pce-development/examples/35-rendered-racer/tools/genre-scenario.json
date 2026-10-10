@@ -1,0 +1,1 @@
+{"steps":[{"frames":10,"buttons":[]},{"frames":20,"buttons":["right","up"]},{"frames":16,"buttons":["left","up"]},{"frames":8,"buttons":["down"]}],"require_genres":["racing"],"require_state_variation":{"racing":[0,1,2]}}

@@ -42,3 +42,20 @@ An offline scenario is a JSON object with `steps` (1..32 held-input segments of 
 - Scripted emulator trace: verifies game-authored RAM values changed, NOT whether those pixels were actually drawn.
 - Two emulator screenshots + localized difference: verifies closed/open frames visibly differ in the intended area; it still does NOT prove lipsync, audio, or hardware.
 - Claim a complete visual novel, shooter, racer, or raycaster **only after genre-specific gameplay acceptance tests** (collision/weapon hits, projection, scene transitions, full dialogue scripting, etc.) exist and pass.
+
+## Rendered examples and independent acceptance checks
+
+Examples 33–35 add working rendered companions to the intentionally invisible
+probes 30–32. `make visual-games-build` builds them; `make visual-games-test`
+runs their G2TR scenarios and **independent emulator screenshot differences**.
+The scripts use common `run`, `input`, `memread` and `screenshot` headless RPC,
+not the platformer-only `trace_frames` API.
+
+A given G2TR tick may take more than a single emulator frame (particularly
+when redrawing the raycaster BAT). The reader polls for a *fresh committed*
+record for up to sixteen frames and fails on stalling; it does not assume
+one emulator VBlank equals one gameplay update. The independent visual test
+checks that pixels changed in an expected scene region, that the reported
+controller mask matches what was applied, and that screen-X movement has the
+required sign. A rendered demo still doesn't verify collision completeness,
+physical console timings, or 60 FPS.

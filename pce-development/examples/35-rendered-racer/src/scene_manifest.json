@@ -1,0 +1,36 @@
+{
+  "format": "pce-scene-pack-v1",
+  "canvas": [
+    256,
+    224
+  ],
+  "source_tiles": 896,
+  "unique_tiles": 73,
+  "sprite_frames": 4,
+  "sprite_size": [
+    16,
+    16
+  ],
+  "vram_word_ranges": {
+    "bat": [
+      0,
+      1024
+    ],
+    "bg": [
+      2048,
+      3216
+    ],
+    "sprites": [
+      24576,
+      24832
+    ],
+    "sat": [
+      32512,
+      32768
+    ]
+  },
+  "inputs_sha256": {
+    "background.png": "09d8ad2185e3afe300b79b827519c8c01fa30417be74ee81aee993f76eb78f99",
+    "sprites.png": "16072c5558bd5d47a63cc683b71b1f56184dd13f0dcf1cb3c967e05d4dc4512d"
+  }
+}
