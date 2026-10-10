@@ -46,6 +46,10 @@ Graphics-focused projects use the PCE screen fixture in `src/demo_video.c` and `
 - [Example 26: runnable platformer starter and real P2TR telemetry](26-platformer-starter/README.md)
 - [Example 27: platformer/racing phase transition with explicit X/Y rules](27-platformer-racer/README.md)
 - [Example 28: offline JSON -> validated 4bpp tiles and BAT](28-generated-level/README.md)
+- [Example 29: visual-novel static picture + sprite mouth animation](29-visual-novel/README.md)
+- [Example 30: G2TR shmup instrumentation probe](30-shmup-trace-probe/README.md)
+- [Example 31: G2TR raycaster instrumentation probe](31-raycaster-trace-probe/README.md)
+- [Example 32: G2TR racing instrumentation probe](32-racing-trace-probe/README.md)
 
 ## Shared converters and audio modules
 

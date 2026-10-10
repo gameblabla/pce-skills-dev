@@ -1,0 +1,44 @@
+{
+  "format": "pce-vn-pack-v1",
+  "canvas": [
+    256,
+    224
+  ],
+  "background_unique_tiles": 298,
+  "background_raw_tiles": 896,
+  "background_dedup_ratio": 0.6674,
+  "background_palette_count": 1,
+  "palette_mode": "single",
+  "bg_palette_entries": 16,
+  "sprite_palette_entries": 16,
+  "mouth_changed_pixels": 43,
+  "sprite_frames": 2,
+  "mouth_sprite_size": [
+    16,
+    16
+  ],
+  "vram_words": {
+    "bat": [
+      0,
+      1024
+    ],
+    "background_patterns": [
+      2048,
+      6816
+    ],
+    "sprite_patterns": [
+      24576,
+      24704
+    ],
+    "sat": [
+      32512,
+      32768
+    ]
+  },
+  "source_hashes": {
+    "background.png": "208f07affb722c0ad9a071aea6fa15c31b1683daf69c90d5935128cbd1552ce8",
+    "mouth_closed.png": "be7c59edad9885a49dc88cc1450846df3c37ffbf8d9b14ff966f0ccbd315e403",
+    "mouth_open.png": "6f31e686805cca42ff63f0875018e9e2ed1439f3330283e3b9cafc6cdc0a7c40"
+  },
+  "generated_c_sha256": "0341d90b998522f1e56f19e7d0e1a8aa8223f0876e064a35db30ec7f63363272"
+}

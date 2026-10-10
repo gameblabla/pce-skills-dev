@@ -1,0 +1,5 @@
+{
+  "steps": [{"frames": 36, "buttons": []}, {"frames": 2, "buttons": ["i"]}, {"frames": 36, "buttons": []}],
+  "require_genres": ["visual_novel"],
+  "require_state_variation": {"visual_novel": [2]}
+}

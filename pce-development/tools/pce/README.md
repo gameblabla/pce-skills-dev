@@ -87,3 +87,9 @@ The timer-driven two-channel PSG DDA implementation is documented in
 [`examples/24-hardware-adpcm-and-psg-dda/README.md`](../../examples/24-hardware-adpcm-and-psg-dda/README.md).
 The included decoder adapts Saber Rider's measured runtime path; its state,
 code/table placement, and sample-bank constraints are listed above.
+
+## Genre-neutral traces and visual-novel picture/sprite conversion
+
+`genre_trace.h` and `genre_trace.py` define and validate **G2TR v2** for shmup, raycaster, racing, visual novel and coarse platformer metrics. The old P2TR v1 platformer collision format remains unchanged. Read [`GENRE_TRACE.md`](GENRE_TRACE.md) for binary fields, input scripts, and independent evidence requirements. `make genre-check` runs offline; `make genre-test` builds four HuCards and uses real emulator RPC and mouth-screenshot checks.
+
+`vn_pack.py demo` creates a coherent original static-scene drawing and transparent closed/open mouth PNGs. `vn_pack.py pack` bakes a 256x224 background and 16x16 hardware mouth sprite using deduplicated 4bpp characters, BAT, BG/sprite palettes, and a SHA-checked manifest with VRAM ranges. Single palette needs Pillow only; `--palette-mode multi` uses existing `picture.py`/`palfit.py` (NumPy) for up to 16 BG palettes. A mouth is a **real SAT sprite**: do not bake an animation into the static background. `vn_visual_check.py` validates **real emulator** screenshots and fails if changes leave the mouth region.

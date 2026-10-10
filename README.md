@@ -25,3 +25,9 @@ Use `make help` and `make test` at repository root. Runnable full-project starte
 ### Hardening from further local-AI failure transcripts
 
 See [local-model failure fixes](pce-development/references/local-ai-transcript-fixes.md). The new `model_guard.py` catches hallucinated SDK names, relays actionable compile/ROM overflow and headless RPC diagnostics, and gates unverified gameplay/CD claims. `assetpack.py` generates safe 4bpp planar tiles and BAT maps from JSON, with a new standalone **example 28**. Root `make agent-check agent-assets agent-build` runs the related checks and build. Original private transcripts are not included.
+
+### Genre-neutral trace and visual-novel pipeline
+
+Legacy platformer **P2TR v1 stays supported**. New **G2TR v2** instruments shmup, raycaster, racing, platformer (coarse) and visual-novel game state without inventing platform-collision semantics for other genres. From the repo root: `make genre-check` (offline), `make genre-build` (LLVM-MOS) or `PCE_HEADLESS=... make genre-test` (actual emulator). See `pce-development/tools/pce/GENRE_TRACE.md`.
+
+Example 29 is a real static-scene visual-novel ROM with a separate 16×16 animated mouth sprite, preview and VRAM/palette audits; `make assets` converts original PNGs while `make visual-test` compares two actual emulator captures. Example probes 30–32 exercise nonvisual genre-specific trace publication. See `pce-development/examples/29-visual-novel/README.md` and the offline routing tool's `visual_novel`, `shmup_trace`, `raycaster` and `racing_trace` recipes.

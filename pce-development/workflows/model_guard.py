@@ -12,6 +12,7 @@ import re
 import sys
 import shutil
 import os
+import hashlib
 
 # This small allowlist is intentionally NOT a replacement for the installed SDK.
 # It catches the most common hallucinations even when the SDK is unavailable.
@@ -76,8 +77,23 @@ def scan(project):
             diagnostics.append({'code':'redefined-joypad','file':str(f.relative_to(base)),
                                 'line':clean.count('\n',0,match.start())+1,
                                 'symbol':match.group(1),'fix':'include <pce.h> and use existing joypad.h constants'})
+        # Only exempt the exact byte-for-byte generated VN C asset when its
+        # manifest names real source PNG hashes. Never exempt arbitrary files
+        # merely for containing a GENERATE comment: local AI can invent those.
+        verified_generated=False
+        manifest=base/'src/manifest.json'
+        if f.name=='vn_assets.c' and f.parent==base/'src' and manifest.is_file():
+            try:
+                meta=json.loads(manifest.read_text())
+                sources=meta['source_hashes']
+                verified_generated=(meta.get('format')=='pce-vn-pack-v1' and
+                    meta.get('generated_c_sha256')==hashlib.sha256(f.read_bytes()).hexdigest() and
+                    all(name in ('background.png','mouth_closed.png','mouth_open.png') and
+                        hashlib.sha256((base/'assets'/name).read_bytes()).hexdigest()==digest
+                        for name,digest in sources.items()) and len(sources)==3)
+            except (ValueError,KeyError,OSError,TypeError):pass
         # Generic arrays of per-pixel literal data in C tend to swamp the linker.
-        if f.suffix=='.c' and len(raw)>48000 and len(re.findall(r'0x[\da-fA-F]{2}|\b\d+\s*,',clean))>4000:
+        if not verified_generated and f.suffix=='.c' and len(raw)>48000 and len(re.findall(r'0x[\da-fA-F]{2}|\b\d+\s*,',clean))>4000:
             diagnostics.append({'code':'large-inline-assets','file':str(f.relative_to(base)),
                                 'line':1,'fix':'pack with assetpack.py; inspect ROM bank budget before building'})
     return diagnostics

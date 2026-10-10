@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "frames": 48,
+      "buttons": []
+    }
+  ],
+  "require_genres": [
+    "raycaster"
+  ]
+}

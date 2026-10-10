@@ -24,6 +24,11 @@ RECIPES = {
     'sgx': '18-supergrafx-vdc2',
     'base': '00-project-template',
     'level': '28-generated-level',
+    'visual_novel':'29-visual-novel',
+    'shmup':'10-shmup',
+    'shmup_trace':'30-shmup-trace-probe',
+    'raycaster':'31-raycaster-trace-probe',
+    'racing_trace':'32-racing-trace-probe',
 }
 
 
@@ -34,6 +39,15 @@ def fail(message):
 def choose(prompt):
     q = prompt.lower()
     has_platform = bool(re.search(r'platform|contra|run.?and.?gun|jump', q))
+    has_trace=bool(re.search(r'\b(trace|tracing|telemetry|g2tr|p2tr|debug|debugging)\b', q))
+    if re.search(r'visual.?novel|dialogue|mouth.?animat|portrait|character.?conversation',q):
+        return 'visual_novel'
+    if re.search(r'raycast|wolfenstein|pseudo.?3d.*wall',q):
+        return 'raycaster'
+    if re.search(r'shmup|shoot.?em.?up|bullet.?hell|scrolling.?shooter',q):
+        return 'shmup_trace' if has_trace else 'shmup'
+    if has_trace and re.search(r'rac(e|ing|er)|driv|road|lane',q) and not has_platform:
+        return 'racing_trace'
     has_race = bool(re.search(r'rac(e|ing|er)|driv|car|road', q))
     if has_platform and has_race:
         return 'hybrid'
@@ -58,7 +72,7 @@ def guidance(kind, request=""):
     path=('examples/micro/' if is_micro else 'examples/')+proj
     lines=['Inspect AGENTS.md and SKILL.md before editing.',
            f'Copy {path} through offline.py new; never edit a reference example in place.',
-           'Run make, then make run (or make trace for the P2TR platformer).',
+           'Run make, then make run; for instrumented starters use make trace and genre-specific validators.',
            'Use real game state and fresh emulator captures; compiler success is not gameplay proof.',
            'Check linker map, RAM, IRQ/PSG channel ownership before combining subsystems.',
            'Run model_guard.py scan on src before building; classify compiler errors with model_guard.py diagnose LOG.',
@@ -71,6 +85,16 @@ def guidance(kind, request=""):
         lines+=['Use make trace for P2TR walk/jump/landing; do not run hybrid-only simulate/validate here.',
                 'Keep collision/world coordinates independent of camera and art.']
     if kind=='audio': lines+=['Never add VDC/VCE/font/sprite drawing to an audio recipe.']
+    if kind in ('raycaster','racing_trace','shmup_trace'):
+        lines+=['This is an instrumentation-only G2TR probe; it does NOT draw a playable game.',
+                'Run make trace with a headless emulator supporting run/input/memread; check source and graphics separately.',
+                'G2TR state[0..3] must be real game values; preserve the older P2TR v1 for platformer collision geometry.']
+    if kind=='visual_novel':
+        lines+=['Edit assets/background.png and transparent 16x16 mouth overlays; make assets regenerates C and memory report.',
+                'Use make assets-multi for high-colour 16-background-palette mode (Pillow+numpy required).',
+                'Run make trace and make visual-test. One closed/open screenshot pair must differ ONLY in the mouth region.',
+                'Do not call PNG previews emulator screenshots; use original static scene + separate sprite and SAT.']
+    if kind=='shmup':lines+=['For RAM telemetry use the separate shmup_trace scaffold, not platformer-specific P2TR.']
     if kind=='level': lines+=['Edit assets/level.json, run make assets-check then make. Each cell is an 8x8 tile, not a pixel.',
                              'The rendered level has no playable enemies or goal logic: link it to example 26, then test actual events.']
     if is_micro: lines+=['Micro recipe scaffolds the shared micro and starter build helpers.']

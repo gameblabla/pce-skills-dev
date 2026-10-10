@@ -43,7 +43,7 @@ the current code before repeating their numbers or assumptions.
   read the [platformer integration example](examples/25-platformer-integration/README.md)
   alongside examples 08, 17, 18, and 21. Those smaller samples are not a
   complete game scaffold when combined without their stated limits.
-- For platformer physics invariants, text-only per-frame state traces, and
+- For platformer physics invariants, detailed **P2TR v1** per-frame state traces, and
   repeatable input scenarios, read [platformer rules](references/platformer-rules.md).
 - For symptom tracing, test selection, profiling, and hardware claims, read
   [debugging and verification](references/debugging-and-verification.md) and
@@ -53,6 +53,17 @@ the current code before repeating their numbers or assumptions.
   through its source layout, camera/scroll, renderer, and display publication.
 - For lessons from recurring regressions and measured fixes, read
   [incident patterns](references/incident-patterns.md).
+- For non-platformer genre diagnostics, use [G2TR v2](tools/pce/GENRE_TRACE.md):
+  shmup, raycaster, racing, visual novel, and coarse platformer state. This
+  64-byte record complements rather than replaces 216-byte P2TR platform traces.
+  A generic G2TR tracer uses `run`+`memread` RPC, not the platformer-only
+  `trace_frames` operation.
+- For static artwork and portrait mouth animation, use the standalone
+  [visual-novel example](examples/29-visual-novel/README.md). The offline
+  generator converts 256x224 PNGs into deduplicated 4bpp patterns/BAT,
+  mouth sprites and palettes; multi mode fits up to 16 BG palettes.
+  Require closed/open emulator screenshots showing a change restricted to
+  the mouth sprite. Do not claim actual lip sync from a static screenshot.
 - For first-time, single-function learning, use the [95 micro examples](examples/micro/README.md)
   (audio without graphics, input, VDC/VCE, SuperGrafx, Arcade Card, timer).
 - For scratch projects and worked starter patterns, use the self-contained
@@ -109,6 +120,15 @@ the active project’s full test target when shared behavior is affected. State
 exactly which checks ran. Emulator checks, manually viewed emulator
 captures, a human playthrough, and physical PC Engine tests are different
 evidence; never report one as another.
+
+For a genre-specific instrumentation project, choose `offline.py new --recipe
+shmup_trace|raycaster|racing_trace|visual_novel` and use its `make trace`
+scenario; G2TR RAM telemetry does not prove rendering. Example 29 is a
+real visual scene; examples 30-32 are intentionally nonvisual RAM probes.
+Run `make genre-check` without a compiler, and `PCE_HEADLESS=... make
+genre-test` for compiled/runnable checks. Do not hand-author raw picture
+pixel arrays: use `vn_pack.py` and inspect the manifest VRAM regions, ROM
+bank headroom, and actual screenshot differences.
 
 For a new example or scratch project, copy the starter Makefile and its tools,
 then use `make run` or `make debug` for neutral-input capture and coverage. Use
