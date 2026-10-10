@@ -88,6 +88,17 @@ def main():
                     return 1
             print('PASS: deliberate audio/video mixing rejected for three project types')
         return 0
+    # Guard against silently regressing to per-character planar frame uploads.
+    bat = (ROOT / 'bat_bitmap.h').read_text()
+    required = ('pce_vdc_set_resolution(512,224,VCE_PIXEL_CLOCK_10MHZ)',
+                'VDC_BG_SIZE_128_64', 'pair<256', '0xf200u',
+                'VDC_REG_SCANLINE', 'VDC_REG_BG_SCROLL_X', 'VDC_REG_BG_SCROLL_Y')
+    if any(token not in bat for token in required):
+        print('FAIL: 512x224 paired-BAT pseudo-bitmap hardware setup missing', file=sys.stderr)
+        return 1
+    if 'pce_vdc_copy_to_vram' in bat or 'FLOOR128_PATTERN_WORD' in (ROOT / 'floor128.h').read_text():
+        print('FAIL: pseudo-bitmap reverted to conventional planar frame uploads', file=sys.stderr)
+        return 1
     projects = sorted(p for p in ROOT.iterdir() if p.is_dir() and (p / 'Makefile').exists())
     failures = []
     for project in projects:
@@ -161,7 +172,7 @@ def main():
                     red = [(x, y) for y in range(rgb.height) for x in range(rgb.width)
                            if (lambda p: p[0] > 128 and p[0] > 2*p[1] and
                                p[0] > 2*p[2])(rgb.getpixel((x, y)))]
-                    if len(red) < 2000:
+                    if len(red) < 10000:
                         print(f'FAIL: bitmap circle is too small: {image_path}', file=sys.stderr)
                         return 1
                     if max(x for x, _ in red) - min(x for x, _ in red) < 50 or \
@@ -181,9 +192,9 @@ def main():
                     red = sum(r > 150 and r > g*2 and r > b*2 for r,g,b in terrain)
                     gray = sum(55 < r < 180 and abs(r-g) < 9 and abs(r-b) < 9
                                for r,g,b in terrain)
-                    if len(palette) != 16 or min(green, yellow, red, gray) < 100:
+                    if unique != 16 or min(green, yellow, red, gray) < 100:
                         print(f'FAIL: Mode 7 floor missing 16-colour road/grass/kerbs: '
-                              f'{image_path} ({len(palette)} colours, '
+                              f'{image_path} ({unique} colours, '
                               f'{green}/{yellow}/{red}/{gray} pixels)', file=sys.stderr)
                         return 1
 

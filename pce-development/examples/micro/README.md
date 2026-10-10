@@ -99,10 +99,10 @@ Or build/test all: `python3 check.py`. Use `python3 check.py --lint-only` for st
 - [83-arcade-card-port-two](83-arcade-card-port-two/README.md) — Arcade Card: Access Arcade Card RAM through data port 2 at 0x1a20.
 - [84-arcade-card-independent-ports](84-arcade-card-independent-ports/README.md) — Arcade Card: Verify port 0 and port 1 have independent address counters.
 
-- [85-bitmap-128-circle](85-bitmap-128-circle/README.md) — Graphics: A true 128x128 *logical* 1-bit framebuffer in RAM, rendered as PCE background tiles; filled red circle with no sound, sprites or fonts.
-- [86-mode7-bitmap-floor](86-mode7-bitmap-floor/README.md) — Graphics: A real 128x128 16-colour Mode 7-style textured racing road, including curved asphalt, red/white kerbs, yellow dashes, grass and sky. Turn LEFT/RIGHT, move UP/DOWN; no circle, sound, fonts, CD or Arcade Card.
+- [85-bitmap-128-circle](85-bitmap-128-circle/README.md) — Graphics: Actual 512×224 BAT-backed pseudo-bitmap, 128×128 logical 4-bit pixels in VRAM; red filled circle built from constant pair-character patterns.
+- [86-mode7-bitmap-floor](86-mode7-bitmap-floor/README.md) — Graphics: 512×224 high-resolution paired-BAT pseudo-bitmap with a 128×128 software perspective floor; 256 fixed pair tiles, 16 colours, raster-remapped BAT, not planar frame uploads.
 
-The bitmap lessons have a [separate historical note](BITMAP_MODE7_HISTORY.md) tracing Saber Rider's old 19-strip Arcade Card floor, the replacement commit, and the deliberate teaching simplifications.
+Both bitmap lessons now use the 512×224 PCEdev paired-BAT scheme via [`bat_bitmap.h`](bat_bitmap.h), not ordinary per-frame planar tiles. The bitmap lessons have a [separate historical note](BITMAP_MODE7_HISTORY.md) tracing Saber Rider's old 19-strip Arcade Card floor, the replacement commit, and the deliberate teaching simplifications.
 
 ## Code origin and constraints
 
