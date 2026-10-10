@@ -9,6 +9,10 @@ Use this before writing BAT, sprite patterns or SAT copy code. A successful
 plan only proves allocations and byte budgets, not that an emulator displays
 correct frames or that an IRQ handler will meet deadlines.
 
+Progressive visible BAT edits may be declared with `progressive_visible=true`,
+which explicitly acknowledges tearing; they must use raster IRQs and chunks
+<=16 bytes and cannot also claim VBlank-only publishing. This planner checks
+only *linear allocation spans*, not VDC vertical address-increment semantics.
 Active raster transfers must be <=16 bytes; explicitly VBlank-only uploads
 may use an additional, separately declared bounded TIA chunk size. This does
 NOT assert a given VBlank has enough actual HuC6280 cycles: that requires a
@@ -87,12 +91,19 @@ def parse(spec):
         transfer_ranges.setdefault(region['id'],[]).append((offset,offset+count//2,name))
         early=integer(u.get('earliest_frame',0),f'{name}.earliest_frame',0,frames-1)
         deadline=integer(u.get('deadline_frame',frames-1),f'{name}.deadline_frame',early,frames-1)
-        if region['visibility']=='front' and not u.get('vblank_only',False):
-            raise ValueError(f'{name}: writing visible VRAM requires explicit vblank_only=true')
         if 'vblank_only' in u and type(u['vblank_only'])!=bool:
             raise ValueError(f'{name}: vblank_only must be boolean')
+        if 'progressive_visible' in u and type(u['progressive_visible'])!=bool:
+            raise ValueError(f'{name}: progressive_visible must be boolean')
+        progressive=u.get('progressive_visible',False)
+        if progressive and u.get('vblank_only',False):
+            raise ValueError(f'{name}: progressive_visible contradicts vblank_only')
+        if progressive and (region['visibility']!='front' or not raster):
+            raise ValueError(f'{name}: progressive_visible requires a front BAT region and raster_irqs=true')
+        if region['visibility']=='front' and not u.get('vblank_only',False) and not progressive:
+            raise ValueError(f'{name}: writing visible VRAM requires explicit vblank_only=true or progressive_visible=true')
         requests.append({'id':name,'region':region,'offset':offset,'total_bytes':count,
-                         'vblank_only':u.get('vblank_only',False),
+                         'vblank_only':u.get('vblank_only',False),'progressive_visible':progressive,
                          'remaining_bytes':count,'earliest':early,'deadline':deadline,'order':order})
     if sum(r['total_bytes'] for r in requests)>4*1024*1024:
         raise ValueError('total scheduled uploads exceed 4 MiB offline planning limit')
@@ -116,7 +127,8 @@ def plan(spec):
                 addr=req['region']['start_word']+req['offset']+(req['total_bytes']-req['remaining_bytes'])//2
                 allocations.append({'id':req['id'],'region':req['region']['id'],'vdc':req['region']['vdc'],
                                     'start_word':addr,'bytes':n,'chunk_bytes':n,
-                                    'vblank_only':req['vblank_only']})
+                                    'vblank_only':req['vblank_only'],
+                                    'progressive_visible':req['progressive_visible']})
                 room-=n;req['remaining_bytes']-=n
         if allocations:
             timeline.append({'frame':frame,'bytes':budget-room,'chunks':allocations})
@@ -133,11 +145,12 @@ def plan(spec):
     return {'ok':not incomplete and not late,'regions':sum(len(b) for b in banks),
             'vdc_count':len(banks),'raster_irqs':raster,
             'bytes_per_frame':budget,'max_chunk_bytes':chunk,
+            'contains_progressive_visible_writes':any(r['progressive_visible'] for r in requests),
             'vblank_max_chunk_bytes':vblank_chunk,
             'scheduled_bytes':sum(t['bytes'] for t in timeline),
             'frames_used':len(timeline),'timeline':timeline,
             'incomplete':incomplete,'late_uploads':late,
-            'limits':'Offline byte scheduling only. No measured CPU cycles, VBlank timing or hardware-proof claims.'}
+            'limits':'Offline linear byte scheduling only: no VDC stride validation, measured CPU cycles, VBlank timing or hardware-proof claims. Progressive visible writes can tear.'}
 
 
 def main():

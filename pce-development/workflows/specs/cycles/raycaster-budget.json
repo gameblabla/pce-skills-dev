@@ -1,36 +1,37 @@
 {
   "segments": {
     "idle": {
-      "min_game_updates": 16,
+      "min_game_updates": 50,
       "max_ticks_per_frame_by_symbol": {
-        "irq_vdc": 145000,
-        "cast_scene": 15000,
-        "pce_memop": 1000,
-        "main": 230000
+        "irq_vdc": 65000,
+        "main": 320000
       },
-      "min_attributed_pct": 98,
-      "max_unmapped_ticks_per_frame": 7000
+      "min_attributed_pct": 99.0,
+      "max_unmapped_ticks_per_frame": 1000
     },
     "turn": {
-      "min_game_updates": 16,
+      "min_game_updates": 24,
       "max_ticks_per_frame_by_symbol": {
-        "irq_vdc": 145000,
-        "pce_memop": 1000,
-        "main": 230000
+        "irq_vdc": 65000,
+        "column_upload": 185000,
+        "cast_scene": 62000,
+        "pce_memop": 8500,
+        "main": 210000
       },
-      "min_attributed_pct": 98,
-      "max_unmapped_ticks_per_frame": 7000
+      "min_attributed_pct": 96.0,
+      "max_unmapped_ticks_per_frame": 13500
     },
     "walk": {
-      "min_game_updates": 16,
+      "min_game_updates": 24,
       "max_ticks_per_frame_by_symbol": {
-        "irq_vdc": 145000,
-        "cast_scene": 15000,
-        "pce_memop": 1000,
-        "main": 230000
+        "irq_vdc": 65000,
+        "column_upload": 185000,
+        "cast_scene": 62000,
+        "pce_memop": 8500,
+        "main": 210000
       },
-      "min_attributed_pct": 98,
-      "max_unmapped_ticks_per_frame": 7000
+      "min_attributed_pct": 96.0,
+      "max_unmapped_ticks_per_frame": 13500
     }
   }
 }

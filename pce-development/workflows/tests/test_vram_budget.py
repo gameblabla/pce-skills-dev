@@ -57,6 +57,29 @@ class VramPlannerTests(unittest.TestCase):
         d['uploads'][0]['vblank_only']=True
         self.assertTrue(v.plan(d)['ok'])
 
+    def test_explicit_progressive_visible_bat_upload(self):
+        d=base(regions=[{'id':'bat','start_word':0,'words':8192,'visibility':'front'}])
+        d['uploads'][0]['progressive_visible']=True
+        r=v.plan(d)
+        self.assertTrue(r['ok'])
+        self.assertTrue(r['contains_progressive_visible_writes'])
+        self.assertTrue(all(x['bytes']<=16 and x['progressive_visible'] and not x['vblank_only']
+                            for tick in r['timeline'] for x in tick['chunks']))
+        d['uploads'][0]['vblank_only']=True
+        with self.assertRaisesRegex(ValueError,'contradicts'):v.plan(d)
+        d['uploads'][0].pop('vblank_only')
+        d['raster_irqs']=False
+        with self.assertRaisesRegex(ValueError,'raster_irqs'):v.plan(d)
+        d['raster_irqs']=True
+        d['max_chunk_bytes']=32
+        with self.assertRaisesRegex(ValueError,'16'):v.plan(d)
+        d['max_chunk_bytes']=16
+        d['uploads'][0]['progressive_visible']='true'
+        with self.assertRaisesRegex(ValueError,'boolean'):v.plan(d)
+        d['uploads'][0]['progressive_visible']=True
+        d['regions'][0]['visibility']='back'
+        with self.assertRaisesRegex(ValueError,'front BAT'):v.plan(d)
+
     def test_no_long_block_moves_under_raster(self):
         with self.assertRaisesRegex(ValueError,'16'):v.plan(base(max_chunk_bytes=64))
 

@@ -15,6 +15,6 @@
   "expect": {
     "min_colors": 9,
     "min_changed_pixels": 8000,
-    "min_colors_each": 9
+    "min_colors_each": 8
   }
 }

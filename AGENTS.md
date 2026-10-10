@@ -131,7 +131,12 @@ Layout uses VRAM **words** (0..0x7fff) but upload sizes are **bytes**.
 A budgeted transfer is not evidence that timing succeeds on real hardware.
 If raster interrupts are active, split TIA/TAI into <=16-byte bursts with
 interrupts allowed between them; never claim a long block transfer is safe.
-Do not write visible BAT rows outside a documented VBlank publication step.
+By default, do not write visible BAT rows outside a documented VBlank
+publication step. The fast full-detail raycaster is an explicit exception:
+progressive *visible* BAT edits use the VDC +128-word vertical stride and
+no more than 16 bytes per interrupt-masked burst, restoring interrupts between
+bursts. Such edits may tear. Require a documented `progressive_visible` VRAM
+budget and a long emulator input/screenshot stress test; never call that atomic.
 
 Before submitting rendered racing, shmup or raycaster projects run
 `make arith-games` and `make genre-test` with the input-capable emulator.
@@ -273,3 +278,19 @@ Keep the 128x64 atomic BXR-flip renderer as a **different binary** with
 `make atomic-test`. Its half-height frame swaps are not directly comparable
 to 128x128 complete passes. Mirroring top/bottom would require an intentional
 symmetric scene and different raster mapping; do not claim it happens here.
+
+## Fast raycaster: do not regress to a CPU framebuffer
+
+For `examples/34-rendered-raycaster`, the full-detail default uses a 32 KiB
+HuCard ROM with offline-generated BAT backdrop, VDC +128 vertical address
+increments, short 16-byte IRQ-bounded `TIA` bursts and a 127-event native
+raster IRQ. Do not convert it back to full-sky/floor pixel loops or a RAM
+framebuffer. Always run `make tables-check`, `make column-regression`,
+`make column-benchmark`, `make visual-test`, and `make interaction-test` before
+claiming an FPS improvement. A dirty-column presentation is NOT equal pixel
+work to an old 128x128 complete repaint: report changed views, uploaded BAT
+words and input scenario separately. `atomic-rom` is a different 128x64
+half-page renderer, and must never silently replace the full-detail build.
+PCEdev's 15-30fps discussion is a design estimate, not performance evidence
+for this example. The fast background stays screen-anchored while walls move;
+implementing perspective floor motion is future work, not an achieved feature.

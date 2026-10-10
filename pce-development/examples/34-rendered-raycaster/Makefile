@@ -5,11 +5,15 @@ PCE_FLAGS ?= -std=gnu11 -Os -Wall -Wextra -Werror -mlto-zp=0
 PCE_FLAGS += -DBAT_BITMAP_NATIVE_IRQ
 ATOMIC_FLAGS := -DBAT_BITMAP_DOUBLE_BUFFER=1 -DRAY_DOUBLE_BUFFER=1
 OUT := build/34-rendered-raycaster.pce
+# Full-detail ROM uses 32 KiB of contiguous HuCard ROM: the 16 KiB static
+# BAT backdrop lives in ROM, never in scarce HuC6280 working RAM. Atomic
+# and reference renderers deliberately keep their original 8 KiB layout.
+FAST_ROM_LINK := -Wl,--defsym=__rom_bank0=0x8000,--defsym=__rom_bank0_size=0x8000
 .PHONY: interaction-test interaction-replay all run trace visual-test bitmap-test clean
 all: tables-check $(OUT)
-$(OUT): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h src/wall_pairs.h tools/genre_trace.h | toolchain
+$(OUT): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/backdrop_words.h tools/genre_trace.h | toolchain
 	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) -Itools src/main.c src/bat_bitmap_irq.S -o $@ -Wl,-Map,$@.map
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -Itools src/main.c src/bat_sparse_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
 PCE_RUN_FRAMES ?= 180
 run: $(OUT)
 	@PCE_RUN_FRAMES="$(PCE_RUN_FRAMES)" PCE_HEADLESS="$(PCE_HEADLESS)" tools/run-pce-headless.sh run "$(OUT)"
@@ -32,6 +36,8 @@ interaction-replay:
 tables-check:
 	python3 tools/gen_ray_tables.py --check
 	python3 tools/gen_wall_pairs.py --check
+	python3 tools/gen_backdrop.py --check
+	python3 tools/gen_sparse_irq.py --check
 
 # Same-source 4-row and 8-row HuC6280 TIA upload benchmarks. Both runs
 # verify six actual emulator screenshots and count completed VRAM passes.
@@ -39,13 +45,11 @@ tables-check:
 BASELINE_ROM := build/34-rendered-raycaster-four-row.pce
 $(BASELINE_ROM): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h src/wall_pairs.h tools/genre_trace.h | toolchain
 	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_SLICE_ROWS=4 -DRAY_UPLOAD_TIA=1 -Itools src/main.c src/bat_bitmap_irq.S -o $@
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_COLUMN_STREAM=0 -DRAY_FAST_SPANS=0 -DRAY_SLICE_ROWS=4 -DRAY_UPLOAD_TIA=1 -Itools src/main.c src/bat_bitmap_irq.S -o $@
 bitmap-stress: $(OUT)
-	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(OUT) --elf $(OUT).elf --output build/bitmap-stress.json
-bitmap-throughput: $(OUT) $(BASELINE_ROM)
-	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(BASELINE_ROM) --elf $(BASELINE_ROM).elf --output build/bitmap-baseline.json
-	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(OUT) --elf $(OUT).elf --output build/bitmap-optimized.json
-	python3 tools/bitmap_compare.py --baseline build/bitmap-baseline.json --optimized build/bitmap-optimized.json --output build/bitmap-comparison.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(OUT) --elf $(OUT).elf --mode column --output build/bitmap-stress.json
+bitmap-throughput: column-benchmark
+	@echo "NOTE: Column dirty views and old complete BAT passes are different work; no false full-redraw speedup ratio."
 
 # PCEdev-style two half-pages: atomic VBlank BXR flip at 128x64 logical
 # resolution, preserving 512x224 physical timing. Quality vs presentation
@@ -54,7 +58,7 @@ bitmap-throughput: $(OUT) $(BASELINE_ROM)
 ATOMIC_ROM := build/34-rendered-raycaster-atomic-64.pce
 $(ATOMIC_ROM): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h src/wall_pairs.h tools/genre_trace.h | toolchain
 	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) $(ATOMIC_FLAGS) -Itools src/main.c src/bat_bitmap_irq.S -o $@ -Wl,-Map,$@.map
+	$(LLVM_MOS_CC) $(PCE_FLAGS) $(ATOMIC_FLAGS) -DRAY_FAST_SPANS=0 -Itools src/main.c src/bat_bitmap_irq.S -o $@ -Wl,-Map,$@.map
 atomic-rom: $(ATOMIC_ROM)
 atomic-bitmap-test: $(ATOMIC_ROM)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/atomic_present.py --rom $(ATOMIC_ROM) --elf $(ATOMIC_ROM).elf --output build/atomic-evidence.json --frames 160
@@ -72,7 +76,7 @@ presentation-compare: bitmap-stress atomic-stress
 WALL_REFERENCE_ROM := build/34-rendered-raycaster-wall-reference.pce
 $(WALL_REFERENCE_ROM): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h src/wall_pairs.h tools/genre_trace.h | toolchain
 	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_WALL_LOOKUP=0 -Itools src/main.c src/bat_bitmap_irq.S -o $@ -Wl,-Map,$@.map
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_COLUMN_STREAM=0 -DRAY_FAST_SPANS=0 -DRAY_WALL_LOOKUP=0 -Itools src/main.c src/bat_bitmap_irq.S -o $@ -Wl,-Map,$@.map
 wall-reference-rom: $(WALL_REFERENCE_ROM)
 wall-lookup-check: tables-check
 	python3 tools/verify_wall_pairs.py
@@ -81,13 +85,20 @@ wall-lookup-check: tables-check
 # lookup). The 128x64 atomic variant is deliberately excluded; redraws
 # with half the pixels are not comparable. Both require six checked PNGs.
 .PHONY: wall-lookup-throughput
-wall-lookup-throughput: $(OUT) $(WALL_REFERENCE_ROM)
-	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(WALL_REFERENCE_ROM) --elf $(WALL_REFERENCE_ROM).elf --output build/wall-reference-stress.json
-	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(OUT) --elf $(OUT).elf --output build/wall-lookup-stress.json
-	python3 tools/bitmap_compare.py --baseline build/wall-reference-stress.json --optimized build/wall-lookup-stress.json --output build/wall-lookup-comparison.json
+wall-lookup-throughput: column-benchmark
+	@echo "NOTE: use the ROM's changed-view and VRAM-word counters. The old full-redraw shader is not equivalent work."
 
 # Bit-identical stationary emulator pixels from the two SAME-RESOLUTION builds;
 # a screenshot being "textured" alone is insufficient to prove equivalence.
 .PHONY: wall-lookup-visual
 wall-lookup-visual: $(OUT) $(WALL_REFERENCE_ROM) wall-lookup-check
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(WALL_REFERENCE_ROM) --optimized $(OUT) --output build/wall-lookup-exact.json
+
+# New full-detail VRAM-resident raycaster acceptance: verifies real changed
+# columns, render state, long controller exercise, and bounded raster IRQ.
+.PHONY: column-benchmark column-regression
+column-benchmark: $(OUT)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(OUT) --elf $(OUT).elf --output build/column-benchmark.json
+column-regression: $(OUT) tables-check
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(OUT) --elf $(OUT).elf --mode column --output build/column-stress.json
+	$(MAKE) column-benchmark

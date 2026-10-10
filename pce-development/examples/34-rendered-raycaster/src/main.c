@@ -10,6 +10,12 @@
 #include "genre_trace.h"
 #include "ray_tables.h"
 #include "wall_pairs.h"
+#ifndef RAY_FAST_SPANS
+#define RAY_FAST_SPANS 1
+#endif
+#if RAY_FAST_SPANS && !RAY_DOUBLE_BUFFER
+#include "backdrop_words.h"
+#endif
 #include "bat_bitmap.h"
 #ifndef RAY_DOUBLE_BUFFER
 #define RAY_DOUBLE_BUFFER 0
@@ -64,11 +70,41 @@ static uint8_t wall_style[32];
 #ifndef RAY_UPLOAD_TIA
 #define RAY_UPLOAD_TIA 1
 #endif
+#ifndef RAY_DIRECT_CHUNKS
+#define RAY_DIRECT_CHUNKS 0
+#endif
 #if RAY_SLICE_ROWS != 4 && RAY_SLICE_ROWS != 8
 #error "RAY_SLICE_ROWS must be 4 or 8, dividing 128 exactly"
 #endif
 #if RAY_UPLOAD_TIA != 0 && RAY_UPLOAD_TIA != 1
 #error "RAY_UPLOAD_TIA must be 0 or 1"
+#endif
+#ifndef RAY_COLUMN_STREAM
+#define RAY_COLUMN_STREAM 1
+#endif
+#if RAY_DOUBLE_BUFFER
+#undef RAY_COLUMN_STREAM
+#define RAY_COLUMN_STREAM 0
+#endif
+#if RAY_COLUMN_STREAM && !RAY_FAST_SPANS
+#error "Column streaming requires the generated background"
+#endif
+#if RAY_COLUMN_STREAM
+#ifndef RAY_COLUMNS_PER_UPDATE
+#define RAY_COLUMNS_PER_UPDATE 8u
+#endif
+#ifndef RAY_COLUMN_CHUNK_WORDS
+#define RAY_COLUMN_CHUNK_WORDS 8u
+#endif
+static uint8_t next_column,cast_valid,cast_angle;
+static int16_t cast_x,cast_y;
+static uint8_t old_top[32],old_height[32],old_tex[32],old_style[32],old_depth[32];
+static uint8_t column_pass_dirty;
+volatile uint16_t ray_bat_words;
+#ifndef RAY_COLUMN_TIA
+#define RAY_COLUMN_TIA 1
+#endif
+static uint16_t column_words[RAY_COLUMN_CHUNK_WORDS];
 #endif
 static uint16_t scan_words[RAY_SLICE_ROWS][64];
 /* Independently observable completed BAT passes; increment only AFTER VRAM
@@ -140,13 +176,13 @@ static uint8_t wall_pixel(uint8_t c,uint8_t u,uint8_t y) {
     return ((u^v)&3u)==0?15:13;
 }
 #endif
-static uint8_t floor_color(uint8_t u,uint8_t v) {
+static __attribute__((unused)) uint8_t floor_color(uint8_t u,uint8_t v) {
     if((u&31u)==0u || (v&31u)==0u)return 7u;
     return (((u>>4)^(v>>4))&1u)?5u:6u;
 }
 /* Return two independent 4-bit pixel indices packed into one BAT word.
  * Unlike a flat-column renderer, both halves of the pair are sampled. */
-static uint8_t bitmap_pair(uint8_t pair,uint8_t y) {
+static __attribute__((unused)) uint8_t bitmap_pair(uint8_t pair,uint8_t y) {
     uint8_t c=pair>>1;
     uint8_t d=depth[c],t=top[c];
     if(y<t) {
@@ -189,11 +225,44 @@ static uint8_t bitmap_pair(uint8_t pair,uint8_t y) {
  * Cache camera position once per 128-row redraw so its textured floor never
  * combines pixels from multiple player positions inside the same pass.
  */
-static void render_slice(void) {
+static __attribute__((unused)) void render_slice(void) {
     if(draw_row==0u) {
         render_world_x=world_x;render_world_y=world_y;
         cast_scene();
     }
+#if RAY_FAST_SPANS && !RAY_DOUBLE_BUFFER
+    /* Entire base is ROM-resident paired BAT words. Copying has no
+     * divide/texture branches; CPU work scales with visible wall spans,
+     * not the complete sky/floor raster. The atomic variant remains a
+     * separate rendering mode and uses the original shader. */
+    for(uint8_t i=0;i<RAY_SLICE_ROWS;++i) {
+        uint8_t y=(uint8_t)(draw_row+i);
+        for(uint8_t pair=0;pair<64u;++pair)
+            scan_words[i][pair]=ray_backdrop[y][pair];
+    }
+    for(uint8_t c=0;c<32u;++c) {
+        uint8_t t=top[c],h=wall_height[depth[c]];
+        uint8_t first=(t>draw_row)?t:draw_row;
+        uint8_t limit=(uint8_t)(draw_row+RAY_SLICE_ROWS);
+        uint8_t bottom=(uint8_t)(t+h);
+        if(bottom<limit)limit=bottom;
+        if(first>=limit)continue;
+        uint8_t u=(uint8_t)(tex_u[c]&7u);
+        const uint8_t *a=ray_wall_pairs[wall_style[c]][u];
+        const uint8_t *b=ray_wall_pairs[wall_style[c]][(u+2u)&7u];
+        const uint8_t *v=&wall_tex_v[depth[c]][(uint8_t)(first-t)>>1];
+        uint8_t odd=(uint8_t)(first-t)&1u;
+        uint16_t *dst=&scan_words[first-draw_row][(uint8_t)(c<<1)];
+        for(uint8_t y=first;y<limit;++y) {
+            uint8_t index=*v;
+            dst[0]=(uint16_t)(0xf200u|a[index]);
+            dst[1]=(uint16_t)(0xf200u|b[index]);
+            dst+=64;
+            if(odd)++v;
+            odd^=1u;
+        }
+    }
+#else
     for(uint8_t i=0;i<RAY_SLICE_ROWS;++i) {
         uint8_t y=(uint8_t)(draw_row+i);
 #if RAY_DOUBLE_BUFFER
@@ -203,11 +272,14 @@ static void render_slice(void) {
         for(uint8_t pair=0;pair<64u;++pair)
             scan_words[i][pair]=(uint16_t)(0xf200u|bitmap_pair(pair,y));
     }
+#endif
     /* Wait specifically for the NEXT vertical blank. No RCR writes execute
      * while interrupts are masked; the raster remap is idle in VBlank. */
+#if !RAY_DIRECT_CHUNKS
     uint8_t before=bat_frames;
     while(bat_frames==before){}
     pce_cpu_irq_disable();
+#endif
     for(uint8_t i=0;i<RAY_SLICE_ROWS;++i) {
         uint8_t y=(uint8_t)(draw_row+i);
 #if RAY_DOUBLE_BUFFER
@@ -215,6 +287,17 @@ static void render_slice(void) {
 #else
         uint16_t address=((uint16_t)(y&63u)<<7)+((y&64u)?64u:0u);
 #endif
+#if RAY_DIRECT_CHUNKS
+        /* Interrupts remain enabled while shading. Each VDC write burst
+         * is only eight BAT words (16 bytes), bounded across raster IRQs. */
+        for(uint8_t base=0;base<64;base+=8u) {
+            pce_cpu_irq_disable();
+            pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,(uint16_t)(address+base));
+            *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
+            pce_memop((void *)IO_VDC_DATA,&scan_words[i][base],16u,PCE_MEMOP_INCR_ALT);
+            pce_cpu_irq_enable();
+        }
+#else
         pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,address);
         *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
 
@@ -223,8 +306,11 @@ static void render_slice(void) {
 #else
         for(uint8_t pair=0;pair<64u;++pair)*IO_VDC_DATA=scan_words[i][pair];
 #endif
+#endif /* RAY_DIRECT_CHUNKS */
     }
+#if !RAY_DIRECT_CHUNKS
     pce_cpu_irq_enable();
+#endif
     draw_row=(draw_row+RAY_SLICE_ROWS)&(RAY_LOGICAL_ROWS-1u);
     if(draw_row==0u) {
 #if RAY_DOUBLE_BUFFER
@@ -238,6 +324,92 @@ static void render_slice(void) {
 #endif
     }
 }
+#if RAY_COLUMN_STREAM
+/* This is the crucial difference from a framebuffer + full-frame TIA:
+ * each 8-word VRAM burst writes VERTICALLY, using the VDC's ADD_128 stride.
+ * At an angle/movement change only damaged wall spans need be restored,
+ * not the sky and floor. All raster IRQs remain enabled between bursts.
+ * The background lives in VDC VRAM, not an 8K RAM framebuffer.
+ */
+static void column_background_init(void) {
+    for(uint8_t y=0;y<128u;++y) {
+        uint16_t addr=(uint16_t)((((uint16_t)y&63u)<<7)+((y&64u)?64u:0u));
+        pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,addr);
+        *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
+        /* IRQs disabled by bat_bitmap_setup; initial 128-byte TIA safe. */
+        pce_memop((void*)IO_VDC_DATA,ray_backdrop[y],128u,PCE_MEMOP_INCR_ALT);
+    }
+}
+static void column_upload(uint8_t pair,uint8_t first,uint8_t last,
+                          uint8_t c,uint8_t u) {
+    const uint8_t t=top[c],end=(uint8_t)(t+wall_height[depth[c]]);
+    const uint8_t *wall=ray_wall_pairs[wall_style[c]][u];
+    const uint8_t *tex=wall_tex_v[depth[c]];
+    const uint16_t *background=&ray_backdrop[first][pair];
+    uint8_t texphase=0u;
+    if(first>t) {
+        uint8_t off=(uint8_t)(first-t);
+        tex+=off>>1;
+        texphase=off&1u;
+    }
+    for(uint8_t y=first;y<last;) {
+        uint8_t n=0;
+        uint8_t stop=(uint8_t)((y&64u)?128u:64u);
+        uint16_t *out=column_words;
+        uint8_t yy=y;
+        while(n<RAY_COLUMN_CHUNK_WORDS && yy<last && yy<stop) {
+            if(yy>=t && yy<end) {
+                *out++=(uint16_t)(0xf200u|wall[*tex]);
+                if(texphase)++tex;
+                texphase^=1u;
+            } else *out++=*background;
+            background+=64u;
+            ++n;
+            ++yy;
+        }
+        uint16_t addr=(uint16_t)((((uint16_t)(y&63u))<<7)+((y&64u)?64u:0u)+pair);
+        pce_cpu_irq_disable();
+        pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,addr);
+        *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
+#if RAY_COLUMN_TIA
+        pce_memop((void*)IO_VDC_DATA,column_words,(uint16_t)(n<<1),PCE_MEMOP_INCR_ALT);
+#else
+        for(uint8_t j=0;j<n;++j)*IO_VDC_DATA=column_words[j];
+#endif
+        pce_cpu_irq_enable();
+        ray_bat_words=(uint16_t)(ray_bat_words+n);
+        y=yy;
+    }
+}
+static void render_columns(void) {
+    if(next_column==0u) {
+        if(cast_valid && cast_angle==angle &&
+           cast_x==world_x && cast_y==world_y)return;
+        cast_x=world_x;cast_y=world_y;cast_angle=angle;cast_valid=1u;
+        cast_scene();
+        column_pass_dirty=0;
+    }
+    for(uint8_t i=0;i<RAY_COLUMNS_PER_UPDATE;++i) {
+        uint8_t c=(uint8_t)(next_column+i);
+        uint8_t t=top[c],height=wall_height[depth[c]];
+        uint8_t u=(uint8_t)(tex_u[c]&7u);
+        if(old_height[c]!=0 && old_top[c]==t && old_height[c]==height &&
+           old_tex[c]==u && old_style[c]==wall_style[c] && old_depth[c]==depth[c])continue;
+        uint8_t first=t,last=(uint8_t)(t+height);
+        if(old_height[c]) {
+            if(old_top[c]<first)first=old_top[c];
+            uint8_t old_last=(uint8_t)(old_top[c]+old_height[c]);
+            if(old_last>last)last=old_last;
+        }
+        column_pass_dirty=1u;
+        column_upload((uint8_t)(c<<1),first,last,c,u);
+        column_upload((uint8_t)((c<<1)+1u),first,last,c,(uint8_t)((u+2u)&7u));
+        old_top[c]=t;old_height[c]=height;old_tex[c]=u;old_style[c]=wall_style[c];old_depth[c]=depth[c];
+    }
+    next_column=(uint8_t)((next_column+RAY_COLUMNS_PER_UPDATE)&31u);
+    if(next_column==0u && column_pass_dirty)++ray_redraws;
+}
+#endif
 __attribute__((noinline))
 static void publish(uint32_t frame,uint16_t buttons,int16_t moved_x,int16_t moved_y) {
     volatile G2Trace *t=&pce_genre_trace[frame&1];
@@ -258,7 +430,20 @@ static void publish(uint32_t frame,uint16_t buttons,int16_t moved_x,int16_t move
 int main(void) {
     bat_bitmap_setup(colors);
     world_x=3*256+128;world_y=3*256+128;angle=0;
+#if RAY_COLUMN_STREAM
+    column_background_init();
+#endif
     bat_bitmap_display();
+#if RAY_COLUMN_STREAM
+    /* BAT row increment is now 128: one VRAM stream is one screen column. */
+    pce_cpu_irq_disable();
+    pce_vdc_poke(VDC_REG_CONTROL,VDC_CONTROL_ENABLE_BG|
+                 VDC_CONTROL_IRQ_SCANLINE|VDC_CONTROL_IRQ_VBLANK|
+                 VDC_CONTROL_VRAM_ADD_128);
+    pce_cpu_irq_enable();
+    next_column=0;cast_valid=0;ray_bat_words=0;
+    for(uint8_t c=0;c<32;++c)old_height[c]=0;
+#endif
     draw_row=0;ray_redraws=0;
 #if RAY_DOUBLE_BUFFER
     draw_page=1u;
@@ -280,7 +465,11 @@ int main(void) {
             if(material_at(x,world_y))wall_blocked=1;else world_x=x;
             if(material_at(world_x,y))wall_blocked=1;else world_y=y;
         }
+#if RAY_COLUMN_STREAM
+        render_columns();
+#else
         render_slice();
+#endif
         publish(frame,buttons,world_x-old_x,world_y-old_y);++frame;
     }
 }
