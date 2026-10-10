@@ -29,6 +29,15 @@ tile use, and performance. Historical notes and screenshots explain why a
 design exists, but may describe an earlier revision. Cross-check them against
 the current code before repeating their numbers or assumptions.
 
+Target-side arithmetic rule: use 8/16-bit math in new C code. Before changes
+run `make arith-check` from the repository root, and for Mode7/bitmap work
+run `make arith-build` afterwards. Use `libcommon/include/pce_fastmath.h`
+and generated `libcommon/src/mode7_lut.h`; never rely on GCC `-lm`/`-lgcc`
+for a HuC6280 game. Old 32-bit G2TR/P2TR telemetry fields have frozen ABI
+exceptions documented in `workflows/specs/arith-legacy.json`. A clean C
+source scan does not guarantee the compiler avoided software math: inspect
+the linked ELF with `arith_guard.py elf`.
+
 ## Route to the relevant guide
 
 - For the motivation and style rules behind tiny one-subsystem examples, read
@@ -64,7 +73,7 @@ the current code before repeating their numbers or assumptions.
   mouth sprites and palettes; multi mode fits up to 16 BG palettes.
   Require closed/open emulator screenshots showing a change restricted to
   the mouth sprite. Do not claim actual lip sync from a static screenshot.
-- For first-time, single-function learning, use the [95 micro examples](examples/micro/README.md)
+- For first-time, single-function learning, use the [99 micro examples](examples/micro/README.md)
   (audio without graphics, input, VDC/VCE, SuperGrafx, Arcade Card, timer).
 - For scratch projects and worked starter patterns, use the self-contained
   [examples folder](examples/README.md). Code there is marked as pseudocode

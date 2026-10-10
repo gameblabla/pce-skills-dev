@@ -17,6 +17,7 @@ RECIPES = {
     'platformer': '26-platformer-starter',
     'hybrid': '27-platformer-racer',
     'racer': '86-mode7-bitmap-floor',
+    'math': '95-cpu-mul8',
     'audio': '03-psg-tone',
     'graphics': '85-bitmap-128-circle',
     'sprite': '78-vdc-one-sprite',
@@ -58,6 +59,7 @@ def choose(prompt):
         return 'platformer'
     if has_race:
         return 'racer' if re.search(r'mode.?7|bitmap|paired.?bat|512.?x.?224',q) else 'racing_visual'
+    if re.search(r'\b(fast.?math|multiply|multiplication|division|divid|libcommon|software.?math|16.?bit.?math)\b',q):return 'math'
     for key, pat in [('level', r'asset.?pack|tile.?map|tile.?set|level.?generator|level.?editor|generated map'),
                      ('audio', r'psg|sound|music|tone|audio'),
                      ('cd', r'cd.?rom|system card|disc|ipl'),
@@ -71,7 +73,7 @@ def choose(prompt):
 def guidance(kind, request=""):
     proj=RECIPES[kind]
     requested_cd=bool(re.search(r'super\s*cd|cd.?rom|disc|system card|\bcd\b',request,re.I))
-    is_micro = kind in ('audio','racer','graphics','sprite','sgx')
+    is_micro = kind in ('audio','racer','graphics','sprite','sgx','math')
     path=('examples/micro/' if is_micro else 'examples/')+proj
     lines=['Inspect AGENTS.md and SKILL.md before editing.',
            f'Copy {path} through offline.py new; never edit a reference example in place.',
@@ -79,6 +81,7 @@ def guidance(kind, request=""):
            'Use real game state and fresh emulator captures; compiler success is not gameplay proof.',
            'Check linker map, RAM, IRQ/PSG channel ownership before combining subsystems.',
            'Run model_guard.py scan on src before building; classify compiler errors with model_guard.py diagnose LOG.',
+           'For new target C code use only 8/16-bit integers. Run make arith-check offline, then inspect the compiled ELF with arith_guard.py elf.',
            'Do not claim a working CD, player controls, or 60-second level based on a HuCard screenshot.']
     if kind=='hybrid':
         lines+=['Run make rules-check and make simulate for the hybrid JSON spec.',
@@ -87,6 +90,9 @@ def guidance(kind, request=""):
     if kind=='platformer':
         lines+=['Use make trace for P2TR walk/jump/landing; do not run hybrid-only simulate/validate here.',
                 'Keep collision/world coordinates independent of camera and art.']
+    if kind=='math': lines+=['Use libcommon/include/pce_fastmath.h and link libpcecommon.a rather than compiler software multiply/divide.',
+                                'For Mode7, use generated projection lookups; do NOT calculate reciprocal or 16-bit division each line.',
+                                'Generic shift/subtract division is correctness-first, not benchmarked to be faster than compiler-rt.']
     if kind=='audio': lines+=['Never add VDC/VCE/font/sprite drawing to an audio recipe.']
     if kind in ('raycaster_trace','racing_trace','shmup_trace'):
         lines+=['This is an instrumentation-only G2TR probe; it does NOT draw a playable game.',
@@ -276,7 +282,7 @@ def main():
             print(result,end='')
         elif a.cmd=='new':
             key=RECIPES[a.recipe]
-            micro = a.recipe in ('audio','racer','graphics','sprite','sgx')
+            micro = a.recipe in ('audio','racer','graphics','sprite','sgx','math')
             src=EXAMPLES / ('micro' if micro else '') / key
             target=Path(a.out).resolve()
             if not src.is_dir():fail(f'missing template: {src}')
@@ -290,6 +296,16 @@ def main():
                     shutil.copy2(f,target/'micro'/f.name)
                 shutil.copy2(EXAMPLES/'micro'/'common.mk',target/'micro'/'common.mk')
                 shutil.copytree(EXAMPLES/'starter'/'tools',target/'starter'/'tools')
+                # Vendored narrow math and strict linker guard; copied micro
+                # recipes must build without the original toolkit directory.
+                shutil.copytree(EXAMPLES.parent/'libcommon',target/'libcommon',
+                                ignore=shutil.ignore_patterns('build','__pycache__'))
+                (target/'workflows').mkdir()
+                shutil.copy2(Path(__file__).resolve().parent/'arith_guard.py',
+                             target/'workflows'/'arith_guard.py')
+                shutil.copytree(Path(__file__).resolve().parent/'specs',
+                                target/'workflows'/'specs',
+                                ignore=shutil.ignore_patterns('__pycache__'))
                 build_dir=dst
             else:
                 shutil.copytree(src,target,ignore=shutil.ignore_patterns('build','__pycache__','screenshot.png','*.elf','*.mlb','*.map'))

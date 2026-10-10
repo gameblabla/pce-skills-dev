@@ -5,7 +5,7 @@ TOOL := $(ROOT)/workflows/offline.py
 EX := $(ROOT)/examples
 .PHONY: help doctor route project-check micro-lint micro-build games-build game-run hybrid-test trace-test test
 help:
-	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile standalone game and rendered genre projects' '  make agent-check  - reject hallucinated SDK symbols and large inline assets' '  make agent-assets - validate tilemap generator + level JSON' '  make agent-build  - compile generated-map example' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make genre-check  - offline G2TR schemas + visual-novel asset audits' '  make genre-build  - build G2TR probes + visual-novel example' '  make genre-test   - trace genres, rendered scenes and VN mouth in emulator' '  make visual-games-build - build actual shmup/raycaster/racing scenes' '  make visual-games-test - scripted input + screenshot evidence for 3 scenes' '  make interaction-test - exercise projectile hits, wall blocking and racing laps' '  make interaction-replay - offline recheck of captured per-tick G2TR evidence' '  make sat-check - offline VDC sprite admission limits / priority'  '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
+	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile standalone game and rendered genre projects' '  make agent-check  - reject hallucinated SDK symbols and large inline assets' '  make agent-assets - validate tilemap generator + level JSON' '  make agent-build  - compile generated-map example' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make genre-check  - offline G2TR schemas + visual-novel asset audits' '  make genre-build  - build G2TR probes + visual-novel example' '  make genre-test   - trace genres, rendered scenes and VN mouth in emulator' '  make visual-games-build - build actual shmup/raycaster/racing scenes' '  make visual-games-test - scripted input + screenshot evidence for 3 scenes' '  make interaction-test - exercise projectile hits, wall blocking and racing laps' '  make interaction-replay - offline recheck of captured per-tick G2TR evidence' '  make sat-check - offline VDC sprite admission limits / priority'  '  make arith-check - reject new 32/64-bit math and libm/libgcc linking' '  make arith-build - link-audit Mode7, circle, and 4 arithmetic ROMs' '  make arith-audit-all - build and link-audit all 99 micro ROMs' '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
 doctor:
 	$(PYTHON) $(TOOL) doctor
 project-check:
@@ -31,12 +31,12 @@ hybrid-test: games-build
 trace-test: games-build
 	$(MAKE) -C $(EX)/26-platformer-starter trace
 	$(MAKE) -C $(EX)/27-platformer-racer trace
-test: project-check micro-lint agent-check agent-assets genre-check
+test: project-check micro-lint agent-check agent-assets genre-check arith-check
 	$(PYTHON) -m unittest discover -s $(ROOT)/workflows/tests -v
 
 # Offline local-AI failure gates (no download, API calls, or firmware).
 .PHONY: agent-check agent-assets agent-build logs-help
-agent-check:
+agent-check: arith-check
 	$(PYTHON) $(ROOT)/workflows/model_guard.py scan $(EX)/26-platformer-starter
 	$(PYTHON) $(ROOT)/workflows/model_guard.py scan $(EX)/27-platformer-racer
 	$(PYTHON) $(ROOT)/workflows/model_guard.py scan $(EX)/28-generated-level
@@ -84,3 +84,21 @@ interaction-replay:
 .PHONY: sat-check
 sat-check:
 	$(PYTHON) $(ROOT)/workflows/sat_budget.py $(ROOT)/workflows/specs/sat-admission.json --strict
+
+# 8/16-bit arithmetic: sources are checked without SDK; link audit needs LLVM-MOS.
+.PHONY: arith-check arith-build arith-map
+ARITH_ROM_EXAMPLES := 85-bitmap-128-circle 86-mode7-bitmap-floor 95-cpu-mul8 96-cpu-div16by8 97-cpu-signed-mul 98-cpu-mode7-lookup
+arith-check:
+	$(PYTHON) $(ROOT)/workflows/arith_guard.py source $(EX)
+	$(PYTHON) $(ROOT)/workflows/arith_guard.py source $(ROOT)/libcommon
+	$(PYTHON) $(ROOT)/libcommon/tools/gen_mode7_lut.py --check
+	$(PYTHON) $(ROOT)/libcommon/tools/gen_circle_lut.py --check
+arith-build: arith-check
+	@for project in $(ARITH_ROM_EXAMPLES); do \
+	  $(MAKE) -C $(EX)/micro/$$project --no-print-directory || exit 1; \
+	  $(PYTHON) $(ROOT)/workflows/arith_guard.py elf $(EX)/micro/$$project/build/$$project.pce.elf || exit 1; \
+	done
+
+.PHONY: arith-audit-all
+arith-audit-all: micro-build arith-check
+	$(PYTHON) $(ROOT)/workflows/arith_guard.py audit $(EX)/micro --min-roms 99

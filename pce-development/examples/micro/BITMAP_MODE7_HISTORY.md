@@ -86,3 +86,19 @@ the supplied palette zero so it cannot become an unexpected black stripe.
 The ground uses the remaining nine colour indices. No cyan sample markers are
 drawn in the grass. `check.py --smoke` checks the gradient ordering and the
 absence of cyan ground pixels in an actual emulator frame.
+
+## Arithmetic optimization (libcommon)
+
+The previously readable 512×224 paired-BAT implementation still samples a
+128×128 logical texture, but now it uses precomputed 93-depth × five-angle
+coefficient tables generated offline by `libcommon/tools/gen_mode7_lut.py`.
+The VDC mode and raster interrupt remapping are **unchanged**. Each displayed
+logical row takes two `pce_mode7_axis()` table lookups, fixed-point shifts,
+and incremental 16-bit U/V updates instead of target-side division and
+multiplication for perspective. `make arith-build` checks the resulting ELF
+contains neither `__mulhi3` nor `__divhi3`. The static red-circle lesson also
+uses a 40-byte radius table rather than repeated `x*x+y*y` products.
+
+These are bounded, demonstrable arithmetic improvements; they are not yet
+a measured 60 Hz race renderer or a claim that generic shift-and-subtract
+16/8 division is universally faster than compiler-rt.

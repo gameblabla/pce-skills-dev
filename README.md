@@ -75,3 +75,19 @@ old `make visual-games-test` remains independent screenshot evidence.
 sprite-heavy code and see
 [`interaction-and-sat-verification.md`](pce-development/references/interaction-and-sat-verification.md)
 for event names, map checks, budget limits and the evidence ladder.
+
+## No implicit software arithmetic on HuC6280
+
+Run `make arith-check` offline before compiling new ROM code. Newly authored
+CPU sources must use 8/16-bit integer values, not 32/64-bit integers or
+floating-point operations; do not link GCC `-lgcc` or `-lm`. Existing frozen
+P2TR/G2TR wire layouts, legacy game math and hardware address code are
+**46 audited compatibility exceptions** tracked by exact line fingerprints in
+`pce-development/workflows/specs/arith-legacy.json`; these remain migration
+work, not an all-project-wide elimination of wide integers.
+
+Use `pce-development/libcommon` for shift/add narrow math and offline Mode7
+lookups. `make arith-build` compiles/link-audits the BAT circle, Mode7 road and
+four new arithmetic micro demos, refusing `__mul*`, `__div*`, `__mod*` or
+`libm` symbols in those ELF files. The checker is based on actual ELF symbols;
+LLVM-MOS software integer helpers are *not* GCC libm functions.

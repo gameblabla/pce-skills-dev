@@ -7,11 +7,10 @@
 #ifndef PCE_MICRO_FLOOR128_H
 #define PCE_MICRO_FLOOR128_H
 #include "bat_bitmap.h"
-static const int8_t floor_sin[16] = {
-    0,49,90,117,127,117,90,49,0,-49,-90,-117,-127,-117,-90,-49
-};
-static const int8_t floor_cos[16] = {
-    127,117,90,49,0,-49,-90,-117,-127,-117,-90,-49,0,49,90,117
+#include "pce_fastmath.h"
+/* Signed five-pixel camera steps; no runtime multiply/divide. */
+static const int8_t floor_step_sin[16] = {
+    0,1,3,4,5,4,3,1,0,-1,-3,-4,-5,-4,-3,-1
 };
 /* A small repeating track: source texels are indices into a 16-colour VCE
  * palette. Its curves, kerbs and markings make rotation easy to recognize.
@@ -48,21 +47,25 @@ static void floor_setup(void) {
     bat_bitmap_setup(colors);
 }
 static void floor_draw(uint8_t angle,uint8_t cx,uint8_t cy) {
-    int16_t cs=floor_cos[angle&15u], sn=floor_sin[angle&15u];
     for (uint8_t y=0; y<128u; ++y) {
         bat_bitmap_row(y);
         if (y<35u) {
-            /* Seven-step gradient, darkest at top and palest at horizon.
-             * Keep every row monotonic: no alternating bars. */
-            uint8_t sky=(uint8_t)(((uint16_t)y*7u)/35u);
-            for (uint8_t pair=0; pair<64; ++pair)
-                bat_bitmap_pair(sky,sky);
+            uint8_t sky=0;
+            if (y>=30u) sky=6;
+            else if(y>=25u) sky=5;
+            else if(y>=20u) sky=4;
+            else if(y>=15u) sky=3;
+            else if(y>=10u) sky=2;
+            else if(y>=5u) sky=1;
+            for (uint8_t pair=0; pair<64; ++pair) bat_bitmap_pair(sky,sky);
         } else {
-            uint16_t distance=(uint16_t)(1408u/(uint16_t)(y-27u));
-            int16_t du=(int16_t)((cs*(int16_t)distance)/64);
-            int16_t dv=(int16_t)((sn*(int16_t)distance)/64);
-            uint16_t u=((uint16_t)cx<<7)-(int16_t)(sn*distance)-(int16_t)(du*64);
-            uint16_t v=((uint16_t)cy<<7)+(int16_t)(cs*distance)-(int16_t)(dv*64);
+            uint8_t row=(uint8_t)(y-35u);
+            int16_t cp=pce_mode7_axis((uint8_t)(angle+4u),row);
+            int16_t sp=pce_mode7_axis(angle,row);
+            int16_t du=pce_q6(cp);
+            int16_t dv=pce_q6(sp);
+            uint16_t u=(uint16_t)(((uint16_t)cx<<7)-(uint16_t)sp-((uint16_t)du<<6));
+            uint16_t v=(uint16_t)(((uint16_t)cy<<7)+(uint16_t)cp-((uint16_t)dv<<6));
             for (uint8_t pair=0; pair<64; ++pair) {
                 uint8_t a=floor_texel((uint8_t)((u>>7)&127u),(uint8_t)((v>>7)&127u));
                 u+=du; v+=dv;

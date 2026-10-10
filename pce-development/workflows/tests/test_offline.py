@@ -25,6 +25,10 @@ class OfflineWorkflowTests(unittest.TestCase):
         self.assertIn("27-platformer-racer",brief)
         self.assertIn("Unverified features",brief)
         self.assertIn("make run",brief)
+    def test_routes_narrow_math_to_libcommon(self):
+        self.assertEqual(offline.choose('fast multiplication using libcommon'), 'math')
+        brief=offline.agent_brief('fast multiplication using libcommon')
+        self.assertIn('arith_guard.py elf',brief)
     def test_routes_sound_isolated(self):
         self.assertEqual(offline.choose('pure PSG sound effect'), 'audio')
     def test_routes_bitmap(self):
@@ -86,6 +90,8 @@ class OfflineWorkflowTests(unittest.TestCase):
             self.assertEqual(done.returncode,0,done.stderr)
             self.assertTrue((target/'micro/03-psg-tone/main.c').exists())
             self.assertTrue((target/'starter/tools/llvm-mos-sdk.mk').exists())
+            self.assertTrue((target/'libcommon/src/fastmath.c').exists())
+            self.assertTrue((target/'workflows/arith_guard.py').exists())
     def test_romcheck_rejects_bad(self):
         with tempfile.TemporaryDirectory() as work:
             f=Path(work)/'bad.pce';f.write_bytes(bytes(143))

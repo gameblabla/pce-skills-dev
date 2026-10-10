@@ -1,6 +1,6 @@
 # Small, single-purpose PC Engine examples
 
-95 separate LLVM-MOS HuCard C projects. Each contains **one `main.c` and one one-line Makefile**; the build rules and optional tiny helpers are shared at this level. Audio examples never touch the VDC, VCE, screen, graphics, fonts or sprites. New sprite examples use a graphics-only helper, independent of the PSG. No commercial ROM or BIOS is needed to build these.
+99 separate LLVM-MOS HuCard C projects. Each contains **one `main.c` and one one-line Makefile**; the build rules and optional tiny helpers are shared at this level. Audio examples never touch the VDC, VCE, screen, graphics, fonts or sprites. New sprite examples use a graphics-only helper, independent of the PSG. No commercial ROM or BIOS is needed to build these.
 
 Build one: `cd 03-psg-tone && make`. Run through the configured headless frontend via
 `make run` or `make debug`; both forward to the standard project wrapper.
@@ -122,3 +122,17 @@ Do not combine these snippets verbatim without sharing PSG channel ownership, IR
 - [92-cpu-segment-state](92-cpu-segment-state/README.md) — CPU: Switch between platformer and racing rules with an explicit state machine.
 - [93-joypad-jump-edge](93-joypad-jump-edge/README.md) — Input: Treat jump as a new press, not a repeated held-key action.
 - [94-joypad-lane-steer](94-joypad-lane-steer/README.md) — Input: Use held LEFT/RIGHT to steer an independent lane X value without a display.
+
+## Narrow arithmetic micro lessons
+
+- [95-cpu-mul8](95-cpu-mul8/README.md) — CPU: Exact 8x8 multiply via libcommon, debugger-visible result; no renderer.
+- [96-cpu-div16by8](96-cpu-div16by8/README.md) — CPU: Unsigned 16/8 division without compiler software divide. Not a speed benchmark.
+- [97-cpu-signed-mul](97-cpu-signed-mul/README.md) — CPU: Signed 8x8 arithmetic including negative factors, without a runtime multiply.
+- [98-cpu-mode7-lookup](98-cpu-mode7-lookup/README.md) — CPU: Mode7 depth/angle projection generated offline, no 32-bit math or target divide.
+
+## Fast math link verification
+
+`make arith-build` at the repository root checks examples 85 and 86 plus
+95–98 for compiled math helpers, **not just source tokens**. Offline-generated
+lookup tables are shared in `pce-development/libcommon`. Legacy CPU demos 87,
+90 and 91 now use bounded 16-bit Q8/Q4 coordinates instead of 32-bit values.

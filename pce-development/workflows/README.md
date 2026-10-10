@@ -124,3 +124,21 @@ The tool permits a bounded sixteen emulator frames to obtain the next G2TR
 game tick, because complex software rendering may take longer than one VBlank.
 This prevents false failures on slower scenes without accepting a permanently
 stalled game. No SDK/BIOS/image downloads are made by these validators.
+
+### Narrow arithmetic and compiled-helper audit
+
+`python3 arith_guard.py source ../examples` checks for newly introduced
+32/64-bit types, floating point, suffixed wide literals, and libm/libgcc
+link flags, retaining exact-line legacy exceptions.
+
+`python3 arith_guard.py elf path/to/game.pce.elf` checks the final linked
+symbols for software multiply/divide/modulo and floating math. `make
+arith-build` enforces this on Mode7, BAT circle, and four 8/16-bit lessons.
+For hardware-safe code, see `../libcommon/README.md`. Generic 16/8 long
+division is a portable fallback; use a precomputed reciprocal or perspective
+lookup for frame-critical drawing.
+
+`make arith-audit-all` builds and checks **every micro-example ELF** for
+software multiply/divide/modulo and libm symbols (as opposed to only the six
+frame-math lessons). It checks the exact ROM count so a missing binary cannot
+be mistaken for a clean audit.

@@ -17,8 +17,13 @@ int main(void) {
         if (pressed & KEY_RIGHT) ++heading;
         if (pressed & (KEY_UP|KEY_DOWN)) {
             int8_t move=(pressed & KEY_UP)?5:-5;
-            x-=(int16_t)(floor_sin[heading&15]*move)/127;
-            y+=(int16_t)(floor_cos[heading&15]*move)/127;
+            if (move>0) {
+                x-=floor_step_sin[heading&15u];
+                y+=floor_step_sin[(heading+4u)&15u];
+            } else {
+                x+=floor_step_sin[heading&15u];
+                y-=floor_step_sin[(heading+4u)&15u];
+            }
         }
         if (pressed) {
             bat_bitmap_pause();

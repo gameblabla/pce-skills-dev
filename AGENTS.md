@@ -106,3 +106,16 @@ This handles the 64-entry and 16-per-scanline VDC limits, prioritizes essential
 actors, and supports two independent SuperGrafx VDCs. Use the ordered accepted
 list for the game's SAT, not the unsorted source list. Read
 `pce-development/references/interaction-and-sat-verification.md`.
+
+## Arithmetic policy for new game code
+
+Always run `make arith-check` before integrating target-side math and
+`make arith-build` after edits to the BAT-backed examples. Do not introduce
+32/64-bit or floating C data in new HuC6280 gameplay, or link `-lm`/`-lgcc`.
+Keep explicit 8/16-bit world representation (use Q4 for 512-pixel camera
+ranges, Q8 for bounded short offsets), and wrap on purpose. Precompute trig,
+reciprocals and perspective depths offline into `libcommon` rather than
+allowing the linker to pull in `__mulhi3`/`__divhi3`. The frozen compatibility
+manifest must not be enlarged automatically to silence a warning. A user
+request for true 24-bit Arcade Card addresses or P2TR/G2TR 32-bit wire fields
+needs reviewed narrow byte/word helpers or an explicit, justified exception.
