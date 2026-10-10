@@ -66,7 +66,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--lint-only', action='store_true')
     parser.add_argument('--smoke', action='store_true',
-                        help='run and inspect silent audio, visible sprite, and filled bitmap ROMs')
+                        help='build and inspect silent audio, visible sprite, and bitmap ROMs')
+    parser.add_argument('--smoke-only', action='store_true',
+                        help='inspect previously built ROMs without rebuilding every project')
     parser.add_argument('--self-test', action='store_true',
                         help='prove that deliberate audio/video mixing is rejected')
     args = parser.parse_args()
@@ -111,7 +113,7 @@ def main():
         return 0
 
     failed_builds = []
-    for project in projects:
+    for project in ([] if args.smoke_only else projects):
         cmd = ['make', '-s', '--no-print-directory']
         run = subprocess.run(cmd, cwd=project, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, text=True)
@@ -121,8 +123,9 @@ def main():
     if failed_builds:
         print('\n'.join(failed_builds), file=sys.stderr)
         return 1
-    print(f'PASS: {len(projects)}/{len(projects)} micro ROMs built', flush=True)
-    if args.smoke:
+    if not args.smoke_only:
+        print(f'PASS: {len(projects)}/{len(projects)} micro ROMs built', flush=True)
+    if args.smoke or args.smoke_only:
         try:
             from PIL import Image
         except ImportError:
@@ -152,20 +155,38 @@ def main():
                 if not should_be_visible and unique != 1:
                     print(f'FAIL: audio example drew graphics: {image_path}', file=sys.stderr)
                     return 1
-                if name in ('85-bitmap-128-circle', '86-mode7-bitmap-floor'):
-                    # Prevent regression to partially transferred tiles: a red
-                    # crescent can compile and run while most pixels are black.
+                if name == '85-bitmap-128-circle':
+                    # The intentionally monochrome example still must draw a
+                    # complete disk, not the old half-uploaded crescent.
                     red = [(x, y) for y in range(rgb.height) for x in range(rgb.width)
                            if (lambda p: p[0] > 128 and p[0] > 2*p[1] and
                                p[0] > 2*p[2])(rgb.getpixel((x, y)))]
-                    if len(red) < 2000 or not red:
-                        print(f'FAIL: bitmap output missing filled red shape: {image_path}', file=sys.stderr)
+                    if len(red) < 2000:
+                        print(f'FAIL: bitmap circle is too small: {image_path}', file=sys.stderr)
                         return 1
-                    left, right = min(x for x, _ in red), max(x for x, _ in red)
-                    top, bottom = min(y for _, y in red), max(y for _, y in red)
-                    if right - left < 50 or bottom - top < 50:
-                        print(f'FAIL: bitmap shape is unexpectedly small: {image_path}', file=sys.stderr)
+                    if max(x for x, _ in red) - min(x for x, _ in red) < 50 or \
+                       max(y for _, y in red) - min(y for _, y in red) < 50:
+                        print(f'FAIL: bitmap circle is incomplete: {image_path}', file=sys.stderr)
                         return 1
+                if name == '86-mode7-bitmap-floor':
+                    # A textured *racing road* must contain distinct 16-colour
+                    # 4bpp terrain, red/white kerbs and a yellow centreline.
+                    # Merely projecting the old red circle must not pass.
+                    view = rgb.crop((rgb.width//2-64, rgb.height//2-64,
+                                     rgb.width//2+64, rgb.height//2+64))
+                    terrain = list(view.get_flattened_data() if hasattr(view, "get_flattened_data") else view.getdata())
+                    palette = set(terrain)
+                    green = sum(g > r*1.3 and g > b*1.3 for r,g,b in terrain)
+                    yellow = sum(r > 170 and g > 150 and b < 80 for r,g,b in terrain)
+                    red = sum(r > 150 and r > g*2 and r > b*2 for r,g,b in terrain)
+                    gray = sum(55 < r < 180 and abs(r-g) < 9 and abs(r-b) < 9
+                               for r,g,b in terrain)
+                    if len(palette) != 16 or min(green, yellow, red, gray) < 100:
+                        print(f'FAIL: Mode 7 floor missing 16-colour road/grass/kerbs: '
+                              f'{image_path} ({len(palette)} colours, '
+                              f'{green}/{yellow}/{red}/{gray} pixels)', file=sys.stderr)
+                        return 1
+
             print(f'PASS: emulator screenshot {name} ({unique} colors)', flush=True)
     return 0
 

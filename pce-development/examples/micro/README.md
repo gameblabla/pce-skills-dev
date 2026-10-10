@@ -100,7 +100,7 @@ Or build/test all: `python3 check.py`. Use `python3 check.py --lint-only` for st
 - [84-arcade-card-independent-ports](84-arcade-card-independent-ports/README.md) — Arcade Card: Verify port 0 and port 1 have independent address counters.
 
 - [85-bitmap-128-circle](85-bitmap-128-circle/README.md) — Graphics: A true 128x128 *logical* 1-bit framebuffer in RAM, rendered as PCE background tiles; filled red circle with no sound, sprites or fonts.
-- [86-mode7-bitmap-floor](86-mode7-bitmap-floor/README.md) — Graphics: Project a 128x128 red-circle bitmap as a Mode 7-style ground plane, with LEFT/RIGHT rotation and fixed-point U/V sampling.
+- [86-mode7-bitmap-floor](86-mode7-bitmap-floor/README.md) — Graphics: A real 128x128 16-colour Mode 7-style textured racing road, including curved asphalt, red/white kerbs, yellow dashes, grass and sky. Turn LEFT/RIGHT, move UP/DOWN; no circle, sound, fonts, CD or Arcade Card.
 
 The bitmap lessons have a [separate historical note](BITMAP_MODE7_HISTORY.md) tracing Saber Rider's old 19-strip Arcade Card floor, the replacement commit, and the deliberate teaching simplifications.
 

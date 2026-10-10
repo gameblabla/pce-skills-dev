@@ -1,25 +1,24 @@
 #include "../floor128.h"
-static uint8_t texture[BITMAP128_BYTES];
-static uint8_t projected[BITMAP128_BYTES];
+#ifndef MODE7_START_ANGLE
+#define MODE7_START_ANGLE 0
+#endif
+
+/* A textured racing ground, not a transformed circle. 16 colours, 128x128. */
 int main(void) {
-    uint8_t heading = 0, last = 0;
-    bitmap128_clear(texture);
-    bitmap128_circle(texture, 64, 64, 26);
-    bitmap128_screen();
-    floor128_project(texture, projected, heading);
-    bitmap128_present(projected);
-    pce_vdc_bg_enable();
+    uint8_t heading = MODE7_START_ANGLE, cam_x = 64, cam_y = 0, before = 0;
+    floor128_setup();
+    floor128_draw(heading, cam_x, cam_y);
     for (;;) {
-        uint8_t now = (uint8_t)~pce_joypad_read();
-        uint8_t pressed = now & (uint8_t)~last;
-        last = now;
-        if (pressed & (KEY_LEFT | KEY_RIGHT)) {
-            if (pressed & KEY_LEFT) --heading;
-            if (pressed & KEY_RIGHT) ++heading;
-            pce_vdc_bg_disable(); /* No half-updated bitmap is shown. */
-            floor128_project(texture, projected, heading);
-            bitmap128_present(projected);
-            pce_vdc_bg_enable();
+        uint8_t keys = (uint8_t)~pce_joypad_read();
+        uint8_t pressed = keys & (uint8_t)~before;
+        before = keys;
+        if (pressed & KEY_LEFT) --heading;
+        if (pressed & KEY_RIGHT) ++heading;
+        if (pressed & (KEY_UP | KEY_DOWN)) {
+            int8_t move = (pressed & KEY_UP) ? 5 : -5;
+            cam_x -= (int16_t)(floor128_sin[heading & 15] * move) / 127;
+            cam_y += (int16_t)(floor128_cos[heading & 15] * move) / 127;
         }
+        if (pressed) floor128_draw(heading, cam_x, cam_y);
     }
 }
