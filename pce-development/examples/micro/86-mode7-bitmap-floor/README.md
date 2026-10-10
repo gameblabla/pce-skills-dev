@@ -15,11 +15,17 @@ writes the colour **pairs** directly to VRAM:
    128×64 BAT addressing, palette 15, and **just 256 constant pair glyphs**.
 2. `floor_draw()` performs software perspective sampling of a repeating
    128×128 road/grass source texture, with curves, dashed centre line,
-   red/white kerbs, and sky. Every two 4-bit texels become one BAT word.
+   red/white kerbs, and a seven-shade dark-to-light blue sky. Every two
+   4-bit texels become one BAT word.
 3. `bat_bitmap_display()` uses scanline IRQs to remap the BAT's two 64×64
    halves as one **128×128 virtual image** spread across 512×224 output.
 
 **Controls:** LEFT/RIGHT rotate (16 viewpoints); UP/DOWN advance/back up.
+The sky is a monotonic seven-colour palette ramp (no alternating stripes),
+with palette zero mirrored to the backdrop because BG index zero is
+transparent. Grass highlights remain green; the former bright cyan pixels
+were an accidental placeholder pattern, not holes in the BAT data.
+
 Updates are button-triggered and drawn with interrupts/display disabled;
 this example prioritises clear code, not the original game's frame rate.
 No CD-ROM, Arcade Card, PSG, sprite or font is needed.

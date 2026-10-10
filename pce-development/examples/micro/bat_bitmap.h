@@ -43,7 +43,9 @@ static void bat_bitmap_setup(const uint16_t colors[16]) {
     pce_vdc_set_resolution(512,224,VCE_PIXEL_CLOCK_10MHZ);
     pce_vdc_bg_set_size(VDC_BG_SIZE_128_64);
     pce_vdc_set_copy_word();
-    pce_vce_set_color(0, VCE_COLOR(0,0,0));
+    /* Colour zero is transparent on BG tiles: the backdrop supplies it.
+     * Match the backdrop to this example's palette entry zero. */
+    pce_vce_set_color(0, colors[0]);
     for (uint8_t i=0; i<16; ++i) pce_vce_set_color(240u+i, colors[i]);
     bat_bitmap_patterns();
     /* Entire pseudo-bitmap BAT starts at VRAM $0000; use palette 15. */

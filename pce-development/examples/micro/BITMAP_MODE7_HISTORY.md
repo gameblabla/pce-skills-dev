@@ -76,3 +76,13 @@ verification. These are software projections, **not native SNES Mode 7**.
 The SGX pseudo-bitmap approach discussed by PCEdev combines the **two VDCs**
 for up to **241 effective colours**; it is *not* a native 256-colour 8bpp
 framebuffer and is not implemented by these two base-PCE examples.
+
+## Gradient/terrain correctness
+
+The tiny Mode 7 demo now reserves palette indices 0–6 for seven ordered blue
+sky shades (dark at the top, light at the horizon). Index zero is transparent
+in PCE BG characters: for this renderer the VCE backdrop register is set to
+the supplied palette zero so it cannot become an unexpected black stripe.
+The ground uses the remaining nine colour indices. No cyan sample markers are
+drawn in the grass. `check.py --smoke` checks the gradient ordering and the
+absence of cyan ground pixels in an actual emulator frame.

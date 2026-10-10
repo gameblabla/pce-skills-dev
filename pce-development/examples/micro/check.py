@@ -192,10 +192,46 @@ def main():
                     red = sum(r > 150 and r > g*2 and r > b*2 for r,g,b in terrain)
                     gray = sum(55 < r < 180 and abs(r-g) < 9 and abs(r-b) < 9
                                for r,g,b in terrain)
-                    if unique != 16 or min(green, yellow, red, gray) < 100:
-                        print(f'FAIL: Mode 7 floor missing 16-colour road/grass/kerbs: '
-                              f'{image_path} ({unique} colours, '
-                              f'{green}/{yellow}/{red}/{gray} pixels)', file=sys.stderr)
+                    # Ignore black overscan borders: the active 512x224
+                    # image uses exactly the 16 colours in palette 15.
+                    cx = rgb.width // 2
+                    sky_rows = [yy for yy in range(rgb.height // 2)
+                                if (lambda c: c[2] > c[1] and c[2] > c[0])
+                                (rgb.getpixel((cx, yy)))]
+                    sky_steps = []
+                    for yy in sky_rows:
+                        shade = rgb.getpixel((cx, yy))
+                        if not sky_steps or sky_steps[-1] != shade:
+                            sky_steps.append(shade)
+                    # Palette index zero must show as navy, not a black
+                    # band; colours must get progressively lighter towards
+                    # the horizon, without gaps or oscillating stripes.
+                    if (not sky_rows or
+                        sky_rows != list(range(sky_rows[0], sky_rows[-1]+1)) or
+                        len(sky_steps) < 7 or
+                        any(sum(sky_steps[i]) >= sum(sky_steps[i+1])
+                            for i in range(len(sky_steps)-1))):
+                        print(f'FAIL: sky gradient broken: {image_path} '
+                              f'({len(sky_steps)} ramp shades)', file=sys.stderr)
+                        return 1
+                    active = rgb.crop((24, sky_rows[0], rgb.width-24,
+                                       rgb.height-7))
+                    active_pixels = list(active.get_flattened_data() if
+                                         hasattr(active, 'get_flattened_data')
+                                         else active.getdata())
+                    # Restrict the cyan check to ground rows, not pale-blue sky.
+                    ground = rgb.crop((24, sky_rows[-1]+1, rgb.width-24,
+                                       rgb.height-7))
+                    ground_pixels = list(ground.get_flattened_data() if
+                                         hasattr(ground, 'get_flattened_data')
+                                         else ground.getdata())
+                    cyan_ground = sum(g > 130 and b > 130 and g > r*1.4 and
+                                      b > r*1.4 for r,g,b in ground_pixels)
+                    if len(set(active_pixels)) != 16 or min(green, yellow, red, gray) < 100 or cyan_ground:
+                        print(f'FAIL: Mode 7 floor palette/terrain invalid: '
+                              f'{image_path} ({len(set(active_pixels))} active colours, '
+                              f'{green}/{yellow}/{red}/{gray} terrain pixels, '
+                              f'{cyan_ground} cyan pixels)', file=sys.stderr)
                         return 1
 
             print(f'PASS: emulator screenshot {name} ({unique} colors)', flush=True)
