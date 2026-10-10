@@ -15,7 +15,6 @@
         "irq_vdc": 65000,
         "column_upload": 185000,
         "cast_scene": 62000,
-        "pce_memop": 8500,
         "main": 210000
       },
       "min_attributed_pct": 96.0,
@@ -27,7 +26,6 @@
         "irq_vdc": 65000,
         "column_upload": 185000,
         "cast_scene": 62000,
-        "pce_memop": 8500,
         "main": 210000
       },
       "min_attributed_pct": 96.0,

@@ -247,3 +247,16 @@ losslessly compressed 14-row backdrop. `make raycaster-texture-sheets` verifies
 the texture and SGX dual-plane *asset plan* offline; the SGX compositor itself
 is not implemented. The full-resolution assembly-vs-C/TIA benchmark is
 `make raycaster-codegen`. The atomic 128x64 renderer remains independent.
+
+### Short-span raycaster FPS gate
+
+`PCE_HEADLESS=/path/to/rpc-capable/pce-headless make raycaster-scalar-fps`
+compares two **full-resolution 128×128** ROMs containing the same user-provided
+Wolf textures, generated eight-row assembly and sparse IRQ. The optimized ROM
+uses direct VDC writes for the 1–8-word clipped spans where `TIA` setup was
+more expensive; it also avoids unnecessary redraws for depths sharing the
+same projected height, material/shade and texture offset. The test captures
+12 input-driven screens and independent stationary evidence, checks ROM-owned
+changed-view and VRAM-word counters and rejects regressions. The separate
+128×64 atomic ROM is unchanged. This is emulator-measured dirty-view rate,
+not physical-console FPS or a matched-work CPU-cycle claim.

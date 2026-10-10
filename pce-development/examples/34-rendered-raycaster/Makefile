@@ -135,3 +135,16 @@ sheet-fps-check: $(OUT) $(SHEET_SLOW_ROM) sheet-textures-check
 sheet-native-fps: sheet-fps-check
 sheet-art-sgx: sheet-textures-check
 	@echo "SGX preview/plane assets verified offline; there is NO tested SGX 2-VDC runtime ROM."
+
+# Full-detail only: small irregular wall gaps are written directly through the
+# VDC, avoiding TIA setup. The C/TIA fallback is an actual separate ROM with
+# the *same texture sheet*, geometry and generated eight-word wall routines.
+# Atomic (128x64) remains independent and is not part of the FPS comparison.
+.PHONY: scalar-reference scalar-fps
+SCALAR_REFERENCE := build/34-rendered-raycaster-scalar-tia-reference.pce
+$(SCALAR_REFERENCE): src/main.c src/bat_sparse_irq.S src/wall_codegen.S src/ray_tables.h src/sheet_pairs.h src/backdrop_words.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_COLUMN_TIA=1 -DRAY_CANONICAL_WALL_KEY=0 -Itools src/main.c src/bat_sparse_irq.S src/wall_codegen.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+scalar-reference: $(SCALAR_REFERENCE)
+scalar-fps: $(OUT) $(SCALAR_REFERENCE) tables-check
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/compare_scalar.py --reference $(SCALAR_REFERENCE) --optimized $(OUT) --output build/scalar-fps-comparison.json

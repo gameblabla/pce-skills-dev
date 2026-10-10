@@ -309,3 +309,15 @@ lower vertical detail. The C reference ROM remains `make codegen-reference`.
 - For Wolf textures, preserve the original 7x32x32 atlases in example 34's assets. Run `make raycaster-texture-sheets` and rebuild the packed paired-pixel table before claiming a texture change works.
 - Different C vs assembly page-switch screenshots can disagree on precisely one physical row; report it quantitatively. Never claim pixel-perfect equality when the comparison says `matched: false`.
 - SGX two-VDC plane conversion is currently offline-only; do not tell users it is a running 256-colour SGX ROM without a VPC-composited emulator capture.
+
+### Full-detail raycaster scalar-span acceptance
+
+Use `PCE_HEADLESS=/path/to/rpc-capable/pce-headless make raycaster-scalar-fps`
+when optimizing short wall tails. Build **same-art, same-128×128** ROMs with
+`RAY_COLUMN_TIA=1` (reference) and bounded direct VDC writes (optimized).
+The tool checks real input-driven emulator views, VRAM-word counters and a
+600-frame stationary screenshot comparison. Never compare the separate 128×64
+atomic presentation mode as though it renders an equal number of pixels.
+Changing the controller scenario or texture source invalidates the speed
+comparison. Keep the generator-built aligned eight-row assembly writer, and
+never extend the active-display IRQ mask beyond eight BAT words/16 bytes.

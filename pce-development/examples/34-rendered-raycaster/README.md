@@ -250,3 +250,37 @@ this update.** The SGX paired-BAT trick is discussed as approximately
 engine still needs palette selection per BAT entry, VPC priority, independent
 scroll interrupts, and an emulator/hardware capture proving the blend. The
 256-colour source file itself has 105 distinct source colours.
+
+## Native-port fallback for short wall spans (full-detail only)
+
+The generated eight-word writer handles aligned spans. For irregular
+1–8-word leading/trailing spans, using `pce_memop`/TIA has appreciable fixed
+setup overhead. The full-resolution default now uses direct VDC stores for
+those **at-most-16-byte** transfers (`RAY_COLUMN_TIA=0`), preserving the
+raster-interrupt limit. The old TIA behavior remains independently buildable.
+
+Also, when two ray depths project to the **same wall height**, the generated
+texture-V lookup is identical. A depth change without a change in projected
+height, wall-style/shading, or horizontal texture offset is not a new image.
+`RAY_CANONICAL_WALL_KEY=1` avoids that redundant dirty-column upload, and an
+offline test exhaustively verifies the height-to-V-table identity.
+
+```sh
+PCE_HEADLESS=/path/to/rpc-capable/pce-headless make scalar-fps
+```
+
+This compiles both full-detail ROMs from the *same source* and 16-colour atlas,
+executes each through the emulator with the same controller schedule, samples
+real changed-view and BAT-word counters, validates the captured pictures,
+and compares stationary views independently. The atomic 128×64 build is
+**separate**, not used as an apparent FPS gain. The test is not a fixed-work
+cycle comparison because two ROMs can advance to different scene positions.
+
+In the current 540-video-frame emulator scenario, the short-span TIA reference
+completes **6.000** changed views/sec while the direct-write full-detail ROM
+completes **6.333** (5.55% more). The independent stationary comparison has
+**zero different pixels** across the 560×242 emulator capture. The linked ELF
+`.bss` falls from **724 to 692 bytes**, and `.text` from **9,686 to 9,644**
+bytes. These measurements are specific to this scenario and compiler, not a
+prediction of actual console frame rate or a replacement for the much larger
+pixel-fill optimizations described by PCEdev.

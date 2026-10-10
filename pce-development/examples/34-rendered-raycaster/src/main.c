@@ -119,11 +119,25 @@ static uint16_t ray_bat_addresses[128];
 #endif
 static uint8_t next_column,cast_valid,cast_angle;
 static int16_t cast_x,cast_y;
-static uint8_t old_top[32],old_height[32],old_tex[32],old_style[32],old_depth[32];
+/* The raster image is determined by wall height, horizontal texture phase
+ * and material/shade. Two ray depths with equal heights share the same
+ * generated V-table, so depth itself is NOT part of the visual dirty key.
+ * Keep RAY_CANONICAL_WALL_KEY=0 for same-source reference comparisons. */
+#ifndef RAY_CANONICAL_WALL_KEY
+#define RAY_CANONICAL_WALL_KEY 1
+#endif
+static uint8_t old_top[32],old_height[32],old_tex[32],old_style[32];
+#if !RAY_CANONICAL_WALL_KEY
+static uint8_t old_depth[32];
+#endif
 static uint8_t column_pass_dirty;
 volatile uint16_t ray_bat_words;
+/* Irregular spans are at most eight BAT words (16 bytes). On measured
+ * HuC6280 builds, direct VDC writes beat TIA setup for these short tails;
+ * generated full eight-word blocks remain the preferred fast path. Set
+ * RAY_COLUMN_TIA=1 to reproduce the previous implementation. */
 #ifndef RAY_COLUMN_TIA
-#define RAY_COLUMN_TIA 1
+#define RAY_COLUMN_TIA 0
 #endif
 /* PCEdev-style generated eight-word vertical writer. Keep a C/TIA
  * reference build (-DRAY_WALL_CODEGEN=0) for exact visual comparisons. */
@@ -477,7 +491,11 @@ static void render_columns(void) {
         uint8_t t=top[c],height=wall_height[depth[c]];
         uint8_t u=(uint8_t)(tex_u[c]&RAY_U_MASK);
         if(old_height[c]!=0 && old_top[c]==t && old_height[c]==height &&
-           old_tex[c]==u && old_style[c]==wall_style[c] && old_depth[c]==depth[c])continue;
+           old_tex[c]==u && old_style[c]==wall_style[c]
+#if !RAY_CANONICAL_WALL_KEY
+           && old_depth[c]==depth[c]
+#endif
+           )continue;
         uint8_t first=t,last=(uint8_t)(t+height);
         if(old_height[c]) {
             if(old_top[c]<first)first=old_top[c];
@@ -487,7 +505,10 @@ static void render_columns(void) {
         column_pass_dirty=1u;
         column_upload((uint8_t)(c<<1),first,last,c,u);
         column_upload((uint8_t)((c<<1)+1u),first,last,c,(uint8_t)((u+2u)&RAY_U_MASK));
-        old_top[c]=t;old_height[c]=height;old_tex[c]=u;old_style[c]=wall_style[c];old_depth[c]=depth[c];
+        old_top[c]=t;old_height[c]=height;old_tex[c]=u;old_style[c]=wall_style[c];
+#if !RAY_CANONICAL_WALL_KEY
+        old_depth[c]=depth[c];
+#endif
     }
     next_column=(uint8_t)((next_column+RAY_COLUMNS_PER_UPDATE)&31u);
     if(next_column==0u && column_pass_dirty)++ray_redraws;
