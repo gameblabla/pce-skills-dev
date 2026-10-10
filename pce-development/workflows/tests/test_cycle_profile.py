@@ -27,6 +27,23 @@ class ProfileTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'no ROM span'):c.rom_labels(f)
             f.write_text('PcePrgRom:24-b3:irq_vdc\nPcePrgRom:50-70:main\n')
             self.assertEqual(c.rom_labels(f)[0],(0x24,0xb3,'irq_vdc'))
+    def test_sdk_block_transfer_uses_verified_linker_section(self):
+        with tempfile.TemporaryDirectory() as d:
+            mlb=Path(d)/'x.mlb'
+            mp=Path(d)/'x.pce.map'
+            mlb.write_text('PcePrgRom:b8:pce_memop\nPcePrgRom:d4:nmi\n')
+            mp.write_text('    e0b8 e0b8 1c 1 libc.a:(.text.pce_memop)\n')
+            self.assertEqual(c.rom_labels(mlb),[(0xb8,0xb8,'pce_memop'),(0xd4,0xd4,'nmi')])
+            self.assertIn((0xb8,0xd3,'pce_memop'),c.rom_labels(mlb,mp))
+            names,unmapped=c.mapped_names(c.rom_labels(mlb,mp),{0xc6:90,0xd4:30})
+            self.assertEqual(names['pce_memop'],90)
+            self.assertEqual(unmapped,0)
+            for start,size in [('e0b9','1c'),('e0b8','0'),('e0b8','400')]:
+                mp.write_text(f'    {start} {start} {size} 1 libc.a:(.text.pce_memop)\n')
+                with self.assertRaises(ValueError):c.rom_labels(mlb,mp)
+            mp.write_text('    e0b8 e0b8 1d 1 libc.a:(.text.pce_memop)\n')
+            with self.assertRaisesRegex(ValueError,'overlaps'):c.rom_labels(mlb,mp)
+
     def test_duplicate_and_malformed_raw_profiles(self):
         with tempfile.TemporaryDirectory() as d:
             f=Path(d)/'raw.txt'
@@ -82,6 +99,13 @@ class ProfileTests(unittest.TestCase):
         partial=c.check_budget(r,{'segments':{'turn':{'min_attributed_pct':99}}})
         self.assertEqual(partial['result'],'failed')
         self.assertIn('only 75.00%',partial['issues'][0])
+        no_transfer=c.check_budget(r,{'segments':{'turn':{'max_unmapped_ticks_per_frame':50}}})
+        self.assertEqual(no_transfer['result'],'passed')
+        s['unmapped_master_ticks']=800
+        too_much=c.check_budget(r,{'segments':{'turn':{'max_unmapped_ticks_per_frame':70}}})
+        self.assertEqual(too_much['result'],'failed')
+        with self.assertRaisesRegex(ValueError,'max_unmapped_ticks_per_frame'):
+            c.check_budget(r,{'segments':{'turn':{'max_unmapped_ticks_per_frame':-1}}})
         with self.assertRaisesRegex(ValueError,'min_attributed_pct'):
             c.check_budget(r,{'segments':{'turn':{'min_attributed_pct':120}}})
         missing=c.check_budget(r,{'segments':{'turn':{'max_ticks_per_frame_by_symbol':{'nonexistent_render':100}}}})

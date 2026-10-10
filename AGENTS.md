@@ -184,9 +184,10 @@ a per-function comparison if the old/new ROMs complete different game update
 counts under the same scripted input. Matching counts alone are not hardware
 verification: inspect scene state and screenshots separately.
 
-The measured 512x224 raycaster spends over half its emulated CPU master
-cycles servicing the raster IRQ, with far fewer than 60 completed game
-updates per 60 VBlanks. Do **not** blindly use `noinline` on the inner bitmap
+The older C-IRQ 512x224 raycaster spent over half its measured emulated
+master-clock time servicing raster IRQs; the native IRQ cut that cost,
+but the raster work remains substantial and the game loop still runs
+less often than the emulator video frames. Do **not** blindly use `noinline` on the inner bitmap
 slice writer to make a prettier profile: a compiler/timing variant caused
 intermittent incomplete frames. The current working renderer keeps that loop
 inline, preserving the existing bitmap, rotation and collision tests. If a
@@ -210,3 +211,31 @@ capture, and `make cycles-ray` / `make cycles-all`. Reject faster versions
 with blank/incomplete frames. Report emulator *master ticks per frame* and
 game-update counts separately, and don't call per-routine before/after
 costs comparable when the counts of completed updates differ.
+
+## Mandatory BAT publication / completed-redraw acceptance
+
+The 512x224 textured raycaster now transfers **8 logical BAT rows / game
+update**, with **one 128-byte HuC6280 TIA** per logical row, during VBlank.
+`TIA` alternates the destination byte ports `$0002/$0003`, so the VDC data
+word advances correctly. Keep the ordinary raster IRQ active during display,
+but do NOT begin long active-display TIA bursts; they mask interrupts.
+`make raycaster-throughput` builds an independently instrumented 4-row TIA
+comparison ROM, checks six actual emulator screenshots per ROM, counts
+completed 128-row BAT passes (post-upload, not G2TR updates), and rejects
+a throughput regression or incomplete/sky-only view. The measured six-stage
+scenario completed 10 vs 16 passes in 1,080 identical emulator frames;
+**that is redraw throughput, not a 60 FPS claim**. Each frame may show a
+progressive partial redraw. Do not claim atomic image swaps.
+
+For physical BAT address planning, logical rows 0..63 map to words
+`row*128`, and logical rows 64..127 map to words `((row&63)*128)+64`.
+`workflows/specs/raycaster-tia-vblank.json` validates eight 128-byte
+VBlank-only transfers including the page boundary. A generic raster plan
+still rejects uninterruptible blocks longer than 16 bytes during active
+display. A passing offline budget is not a proven hardware VBlank deadline.
+
+When profiling LLVM-MOS SDK block moves, note that `pce_memop` has a
+single-byte `.mlb` symbol. `cycle_profile.py` uses only the explicit
+`.pce.map` section length to label that routine; the emulator still charges
+some TIA transfer time to synthetic non-ROM PC values. Budget those as
+**unmapped ticks** rather than inventing a performance win or hiding them.

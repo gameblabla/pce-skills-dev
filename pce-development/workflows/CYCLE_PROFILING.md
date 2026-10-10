@@ -137,3 +137,31 @@ logical rows: `((y & 63) << 3) - 1` has a borrow for `y` of 0, 32, 64,
 and 96. A prior assembly attempt borrowed only when `y & 63 == 0`,
 which created two dark lines in the Mode 7 sky. The micro screenshot smoke
 and `test_native_bitmap_irq.py` now catch this regression.
+
+## BAT redraw throughput and the TIA attribution caveat
+
+The 512x224 raycaster's eight-row VBlank `TIA` upload was benchmarked against
+an independently compiled **four-row TIA** configuration of the exact same
+instrumented C source. The test counts `ray_redraws` after every fully
+transferred 128-row BAT pass, not before a rendering iteration. In six
+180-frame emulator segments (idle, two right turns, forward, left, idle),
+**10 vs 16** completed passes were measured, a 60% improvement in completed
+redraws per fixed emulator interval. Screenshots in all six segments were
+validated independently for wall/floor geometry, and the turning screenshots
+have different pixel content. Use `make raycaster-throughput`.
+
+The 8-row version has a higher raster IRQ tick count per *video frame* than
+the old 4-row C uploader, while its *completed redraw* throughput improves.
+This is not evidence that its IRQ code slowed down: the TIA upload changes
+interrupt-masking and scheduling, and both variants complete different work.
+Only comparable full-image throughput is claimed here.
+
+LLVM-MOS's shipped `pce_memop` assembly has a singleton `.mlb` symbol. The
+linker's `.pce.map` specifies the exact `.text.pce_memop` section extent;
+`cycle_profile.py` now uses that *verified* section size instead of guessing
+where SDK code ends. The Mednafen core still records some block-transfer
+ticks at synthetic non-ROM PCs (e.g. `$1F0003`), which cannot honestly be
+charged to a ROM function. The revised `raycaster-budget.json` requires >=98%
+attribution and caps these **unmapped master-clock ticks per frame** rather
+than inventing a per-function cycle saving. Do not equate missing attribution
+with free CPU time.

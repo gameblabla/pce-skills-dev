@@ -60,6 +60,25 @@ class VramPlannerTests(unittest.TestCase):
     def test_no_long_block_moves_under_raster(self):
         with self.assertRaisesRegex(ValueError,'16'):v.plan(base(max_chunk_bytes=64))
 
+    def test_large_tia_allowed_only_with_explicit_vblank(self):
+        example=json.loads((ROOT/'specs/raycaster-tia-vblank.json').read_text())
+        p=v.plan(example)
+        self.assertTrue(p['ok'])
+        self.assertEqual(p['scheduled_bytes'],1024)
+        self.assertEqual(len(p['timeline'][0]['chunks']),8)
+        self.assertTrue(all(x['bytes']==128 and x['vblank_only']
+                            for x in p['timeline'][0]['chunks']))
+        # The two BAT halves have interleaved physical addresses, not 128
+        # consecutive words. Cross the y=64 boundary correctly.
+        self.assertEqual([x['start_word'] for x in p['timeline'][0]['chunks']][3:5],
+                         [8064,64])
+        example['uploads'][0]['vblank_only']=False
+        with self.assertRaisesRegex(ValueError,'visible VRAM'):
+            v.plan(example)
+        example['uploads'][0]['vblank_only']=True
+        example['vblank_max_chunk_bytes']=127
+        with self.assertRaisesRegex(ValueError,'even'):v.plan(example)
+
     def test_bad_sizes_and_bounds(self):
         for d in [base(bytes_per_frame=3),base(max_chunk_bytes=7),
                   base(regions=[{'id':'bat','start_word':32760,'words':16}]),

@@ -180,10 +180,27 @@ The 512x224 paired-BAT **Mode 7** and **raycaster** now use an opt-in,
 register-preserving HuC6280 raster IRQ from `libcommon/src/bat_bitmap_irq.S`
 (the standalone raycaster vendors the same assembly). This retains all 223
 scheduled scanline events while making IRQ register updates much cheaper:
-about 49% fewer emulated raster-IRQ master ticks in Mode 7 and
-56–58% fewer in the raycaster, with the full ROM symbol range accounted for. The raycaster
+about half the emulated raster-IRQ master ticks in Mode 7 and 59–60% fewer
+in the raycaster, with the full ROM symbol range accounted for. The raycaster
 also advances more game updates under matched controller inputs; update
 counts differ from baseline, so this is *not* a same-work timing comparison.
-Use `make cycles-ray`, `make raycaster-bitmap-test` and `make test` before
-claiming a performance improvement. See
+Use `make cycles-ray`, `make raycaster-bitmap-test`,
+`make raycaster-throughput`, and `make test` before claiming a performance improvement. See
 [`CYCLE_PROFILING.md`](pce-development/workflows/CYCLE_PROFILING.md).
+
+### Faster textured raycaster BAT publication
+
+The raycaster now stages **8 logical bitmap rows** per game update and
+transfers each row with the HuC6280 `TIA` instruction to the alternating
+VDC data ports during VBlank. This reduces a 128-row redraw from 32 to
+16 updates while retaining the native raster IRQ. The camera's floor sample
+origin stays constant across a whole redraw. The repo includes a second
+four-row TIA build for controlled performance comparisons.
+
+`make raycaster-throughput` checks six actual emulator screenshots and
+post-upload completed-redraw counters from *both* ROMs. In 1,080 equal
+emulated video frames, four-row TIA completed 10 bitmap passes and eight-row
+TIA completed 16 (**60% more**). This improves completed image throughput,
+not game-update FPS; the eight-row version executes fewer game updates
+because each update does more work. Real PC Engine timing is still untested.
+Do not substitute this for physical-hardware testing.

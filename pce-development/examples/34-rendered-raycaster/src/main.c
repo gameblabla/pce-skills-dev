@@ -35,9 +35,28 @@ static uint8_t angle,wall_blocked;
 static uint16_t near_depth,far_depth,hit_count;
 /* 32 real rays, four logical pixels wide. No per-pixel ray traversal. */
 static uint8_t depth[32],top[32],tex_u[32],wall_kind[32];
-/* Four scanlines in RAM for a VBlank-only 512-byte BAT upload.
- * The complete framebuffer remains the 8 Kiword VDC BAT, not CPU RAM. */
-static uint16_t scan_words[4][64];
+/* Explicit renderer variants for reproducible SAME-SOURCE benchmarks.
+ * Default: eight logical rows via TIA during VBlank (1024 bytes).
+ * Benchmark variant: four rows (512 bytes) with the same TIA transfer path.
+ * This transfers BAT words only; no software framebuffer or planar conversion.
+ */
+#ifndef RAY_SLICE_ROWS
+#define RAY_SLICE_ROWS 8
+#endif
+#ifndef RAY_UPLOAD_TIA
+#define RAY_UPLOAD_TIA 1
+#endif
+#if RAY_SLICE_ROWS != 4 && RAY_SLICE_ROWS != 8
+#error "RAY_SLICE_ROWS must be 4 or 8, dividing 128 exactly"
+#endif
+#if RAY_UPLOAD_TIA != 0 && RAY_UPLOAD_TIA != 1
+#error "RAY_UPLOAD_TIA must be 0 or 1"
+#endif
+static uint16_t scan_words[RAY_SLICE_ROWS][64];
+/* Independently observable completed BAT passes; increment only AFTER VRAM
+ * data has been transferred, never when a render begins or a trace publishes. */
+volatile uint16_t ray_redraws;
+static int16_t render_world_x,render_world_y;
 static uint8_t draw_row;
 
 static uint8_t material_at(int16_t x,int16_t y) {
@@ -123,18 +142,24 @@ static uint8_t bitmap_pair(uint8_t pair,uint8_t y) {
         case 1: fu=(uint8_t)(pair<<1);fv=(uint8_t)(y<<1);delta=1;break;
         default:fu=pair;fv=y;delta=1;break;
     }
-    fu=(uint8_t)(fu+(uint8_t)(world_x>>5));
-    fv=(uint8_t)(fv+(uint8_t)(world_y>>5));
+    fu=(uint8_t)(fu+(uint8_t)(render_world_x>>5));
+    fv=(uint8_t)(fv+(uint8_t)(render_world_y>>5));
     return (uint8_t)((floor_color(fu,fv)<<4)|floor_color((uint8_t)(fu+delta),fv));
 }
-/* Render four logical bitmap lines into RAM, then commit in VBlank.
- * Unlike active-display writes, this cannot starve the per-scanline raster
- * callback; missed HBlank IRQs otherwise left most of the picture sky-blue.
- * This example assumes the 4*64-word upload fits in VBlank; hardware
- * cycle timing has not yet been measured. */
+/* Build a bounded RAM staging batch, then transfer BAT entries ONLY in VBlank.
+ * Each TIA sends 128 bytes to alternating VDC data ports ($0002/$0003),
+ * autoincrementing the VRAM word address. TIA masks IRQs until completion:
+ * the bounded eight-row / 1024-byte batch MUST remain within VBlank.
+ * Unsupported larger batches have NOT been validated on hardware.
+ * Cache camera position once per 128-row redraw so its textured floor never
+ * combines pixels from multiple player positions inside the same pass.
+ */
 static void render_slice(void) {
-    if(draw_row==0u)cast_scene();
-    for(uint8_t i=0;i<4u;++i) {
+    if(draw_row==0u) {
+        render_world_x=world_x;render_world_y=world_y;
+        cast_scene();
+    }
+    for(uint8_t i=0;i<RAY_SLICE_ROWS;++i) {
         uint8_t y=(uint8_t)(draw_row+i);
         for(uint8_t pair=0;pair<64u;++pair)
             scan_words[i][pair]=(uint16_t)(0xf200u|bitmap_pair(pair,y));
@@ -144,15 +169,21 @@ static void render_slice(void) {
     uint8_t before=bat_frames;
     while(bat_frames==before){}
     pce_cpu_irq_disable();
-    for(uint8_t i=0;i<4u;++i) {
+    for(uint8_t i=0;i<RAY_SLICE_ROWS;++i) {
         uint8_t y=(uint8_t)(draw_row+i);
         uint16_t address=((uint16_t)(y&63u)<<7)+((y&64u)?64u:0u);
         pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,address);
         *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
+
+#if RAY_UPLOAD_TIA
+        pce_memop((void *)IO_VDC_DATA, scan_words[i], 128u, PCE_MEMOP_INCR_ALT);
+#else
         for(uint8_t pair=0;pair<64u;++pair)*IO_VDC_DATA=scan_words[i][pair];
+#endif
     }
     pce_cpu_irq_enable();
-    draw_row=(draw_row+4u)&127u;
+    draw_row=(draw_row+RAY_SLICE_ROWS)&127u;
+    if(draw_row==0u)++ray_redraws;
 }
 __attribute__((noinline))
 static void publish(uint32_t frame,uint16_t buttons,int16_t moved_x,int16_t moved_y) {
@@ -175,7 +206,7 @@ int main(void) {
     bat_bitmap_setup(colors);
     world_x=3*256+128;world_y=3*256+128;angle=0;
     bat_bitmap_display();
-    draw_row=0;
+    draw_row=0;ray_redraws=0;
     uint32_t frame=0;
     for(;;) {
         uint8_t before=bat_frames;while(before==bat_frames){}

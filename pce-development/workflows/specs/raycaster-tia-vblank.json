@@ -1,0 +1,97 @@
+{
+  "system": "pce",
+  "max_frames": 1,
+  "raster_irqs": true,
+  "max_chunk_bytes": 16,
+  "vblank_max_chunk_bytes": 128,
+  "bytes_per_frame": 1024,
+  "regions": [
+    {
+      "id": "bat",
+      "start_word": 0,
+      "words": 8192,
+      "visibility": "front"
+    },
+    {
+      "id": "permanent-pairs",
+      "start_word": 8192,
+      "words": 4096,
+      "visibility": "static"
+    }
+  ],
+  "uploads": [
+    {
+      "id": "row-60",
+      "region": "bat",
+      "offset_words": 7680,
+      "bytes": 128,
+      "earliest_frame": 0,
+      "deadline_frame": 0,
+      "vblank_only": true
+    },
+    {
+      "id": "row-61",
+      "region": "bat",
+      "offset_words": 7808,
+      "bytes": 128,
+      "earliest_frame": 0,
+      "deadline_frame": 0,
+      "vblank_only": true
+    },
+    {
+      "id": "row-62",
+      "region": "bat",
+      "offset_words": 7936,
+      "bytes": 128,
+      "earliest_frame": 0,
+      "deadline_frame": 0,
+      "vblank_only": true
+    },
+    {
+      "id": "row-63",
+      "region": "bat",
+      "offset_words": 8064,
+      "bytes": 128,
+      "earliest_frame": 0,
+      "deadline_frame": 0,
+      "vblank_only": true
+    },
+    {
+      "id": "row-64",
+      "region": "bat",
+      "offset_words": 64,
+      "bytes": 128,
+      "earliest_frame": 0,
+      "deadline_frame": 0,
+      "vblank_only": true
+    },
+    {
+      "id": "row-65",
+      "region": "bat",
+      "offset_words": 192,
+      "bytes": 128,
+      "earliest_frame": 0,
+      "deadline_frame": 0,
+      "vblank_only": true
+    },
+    {
+      "id": "row-66",
+      "region": "bat",
+      "offset_words": 320,
+      "bytes": 128,
+      "earliest_frame": 0,
+      "deadline_frame": 0,
+      "vblank_only": true
+    },
+    {
+      "id": "row-67",
+      "region": "bat",
+      "offset_words": 448,
+      "bytes": 128,
+      "earliest_frame": 0,
+      "deadline_frame": 0,
+      "vblank_only": true
+    }
+  ],
+  "comments": "8 logical rows straddling the BAT half-page boundary (y=64), 128-byte TIA each; timing NOT guaranteed"
+}

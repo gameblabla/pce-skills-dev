@@ -37,7 +37,7 @@ def read_profile(path):
     return totals
 
 
-def rom_labels(path):
+def rom_labels(path, linker_map=None):
     """Read exactly the physical *ROM offset* ranges in LLVM-MOS's MLB map."""
     spans=[]
     for line in Path(path).read_text().splitlines():
@@ -52,6 +52,31 @@ def rom_labels(path):
             raise ValueError('irq_vdc has no ROM span: assembly handler needs .type and .size for cycle attribution')
         spans.append((lo,hi,m[3]))
     if not spans:raise ValueError('no PcePrgRom symbols: require an LLVM-MOS .mlb file')
+    # LLVM-MOS SDK's pce_memop is hand-written assembly without a .size,
+    # so its MLB entry covers *one byte* even though a TIA burst executes
+    # several instructions in that routine. The linked map records the
+    # precise .text.pce_memop section's byte count. Extend ONLY this known
+    # assembly symbol, and ONLY when the map verifies both its address and
+    # finite section length. Guessing the length from adjacent labels would
+    # silently misattribute unknown code and corrupt cycle reports.
+    if linker_map is not None and Path(linker_map).is_file():
+        for line in Path(linker_map).read_text().splitlines():
+            match=re.fullmatch(
+                r'\s*([0-9a-fA-F]+)\s+[0-9a-fA-F]+\s+([0-9a-fA-F]+)\s+\d+\s+.*\(\.text\.pce_memop\)\s*',line)
+            if not match:continue
+            cpu_addr=int(match[1],16);size=int(match[2],16)
+            matches=[(i,lo) for i,(lo,hi,name) in enumerate(spans)
+                     if name=='pce_memop' and lo==hi]
+            if len(matches)!=1 or not 2<=size<=128:
+                raise ValueError('pce_memop linker section is ambiguous or implausible')
+            i,lo=matches[0]
+            if (cpu_addr&0x1fff)!=(lo&0x1fff):
+                raise ValueError('pce_memop ROM address mismatch between MLB and map')
+            end=lo+size-1
+            if any(start<=end and hi>=lo and name!='pce_memop'
+                   for start,hi,name in spans):
+                raise ValueError('pce_memop section overlaps another ROM symbol')
+            spans[i]=(lo,end,'pce_memop')
     spans.sort(key=lambda x:(x[0],x[1]-x[0]))
     return spans
 
@@ -201,7 +226,9 @@ def report_markdown(report):
 
 def profile(exe,rom,mlb,scenario,out):
     data=validate_scenario(json.loads(Path(scenario).read_text()))
-    labels=rom_labels(mlb)
+    # The LLD section map resolves the SDK's un-sized pce_memop routine.
+    # Missing maps remain visibly unattributed and can fail the strict gate.
+    labels=rom_labels(mlb,Path(mlb).with_suffix('.pce.map'))
     out=Path(out).resolve();out.mkdir(parents=True,exist_ok=True)
     exe=Path(exe).resolve();rom=Path(rom).resolve()
     for p in (exe,rom):
@@ -261,6 +288,13 @@ def check_budget(report,limits):
                 raise ValueError('min_attributed_pct must be in (0,100]')
             if s.get('attributed_pct',0)<bound:
                 issues.append(f'{name}: only {s.get("attributed_pct",0):.2f}% of cycles have a ROM symbol; require >= {bound}%')
+        if 'max_unmapped_ticks_per_frame' in b:
+            cap=b['max_unmapped_ticks_per_frame']
+            if not isinstance(cap,(int,float)) or cap<0:
+                raise ValueError('max_unmapped_ticks_per_frame must be >= 0')
+            actual=s.get('unmapped_master_ticks',0)/s['frames']
+            if actual>cap:
+                issues.append(f'{name}: unattributed {actual:.1f} > {cap:.1f} ticks/frame')
         if 'min_game_updates' in b:
             bound=b['min_game_updates']
             if not isinstance(bound,int) or bound<1:raise ValueError('min_game_updates must be positive integer')

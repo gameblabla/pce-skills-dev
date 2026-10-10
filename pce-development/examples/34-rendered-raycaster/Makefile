@@ -30,3 +30,17 @@ interaction-replay:
 .PHONY: tables-check
 tables-check:
 	python3 tools/gen_ray_tables.py --check
+
+# Same-source 4-row and 8-row HuC6280 TIA upload benchmarks. Both runs
+# verify six actual emulator screenshots and count completed VRAM passes.
+.PHONY: bitmap-stress bitmap-throughput
+BASELINE_ROM := build/34-rendered-raycaster-four-row.pce
+$(BASELINE_ROM): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h tools/genre_trace.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_SLICE_ROWS=4 -DRAY_UPLOAD_TIA=1 -Itools src/main.c src/bat_bitmap_irq.S -o $@
+bitmap-stress: $(OUT)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(OUT) --elf $(OUT).elf --output build/bitmap-stress.json
+bitmap-throughput: $(OUT) $(BASELINE_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(BASELINE_ROM) --elf $(BASELINE_ROM).elf --output build/bitmap-baseline.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(OUT) --elf $(OUT).elf --output build/bitmap-optimized.json
+	python3 tools/bitmap_compare.py --baseline build/bitmap-baseline.json --optimized build/bitmap-optimized.json --output build/bitmap-comparison.json

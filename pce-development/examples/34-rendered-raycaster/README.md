@@ -24,14 +24,31 @@ ISR; `libcommon/src/bat_bitmap_irq.S` is the same implementation for Mode 7.
 The handler preserves CPU registers and owns only VDC raster registers.
 Its `.type`/`.size` declarations are essential for accurate ROM cycle maps.
 
-A *working textured starter*, not a high-frame-rate Wolf3D engine: the
-renderer stages four logical rows per game update in a 512-byte RAM buffer,
-then uploads them on the following VBlank. The display stays enabled and a
-complete 128-row redraw spans **32 updates**, displayed progressively.
-`make visual-test`, `make bitmap-test`, and `make interaction-test` are
-mandatory regressions when editing this driver: an alternative sparse
-scanline schedule looked faster, but missed IRQs produced sky-only frames
-under sustained controller input, so that experiment was rejected.
+A *working textured starter*, not a 60 FPS Wolf3D engine: the renderer
+stages **eight logical rows per game update** in 1024 bytes of work RAM,
+then uploads them using eight bounded HuC6280 `TIA` transfers to the two
+alternating VDC data ports (`$0002/$0003`) during VBlank. The BAT, rather
+than RAM, remains the framebuffer. A complete 128-row pass now spans
+**16 updates** rather than 32. The game caches the floor's camera origin
+for the entire pass instead of mixing camera coordinates halfway through.
+
+HuC6280 `TIA` stalls interrupts for the duration of each transfer, so the
+size of the batch and the VBlank timing matter. The naïve **eight-row C-loop
+upload failed the emulator bitmap test** and was rejected; a sparse raster
+IRQ schedule also intermittently showed sky-only frames. This implementation
+keeps the native per-scanline IRQ and commits only during VBlank. The
+`bitmap-stress` test checks six real screenshots and counts full BAT passes.
+Do not increase to 16 rows without independent raster timing validation.
+
+Over an identical **1,080-emulated-frame** input script, two instrumented
+variants of this same source completed **10** full redraws with four rows
+per `TIA` update and **16** with eight rows: **60% more completed BAT passes**.
+These are actual ROM-owned post-VRAM-commit counters, not estimates from
+G2TR game-update counts. Game-update counts differ (347 vs 263), so per-game-
+update instruction savings cannot be inferred. Progressive BAT writes are
+not atomic fullscreen swaps and physical-hardware timing is unverified.
+`make visual-test`, `make bitmap-test`, `make bitmap-stress`,
+`make bitmap-throughput` and `make interaction-test` test the different risks.
 
 Measured emulator master-clock raster-IRQ savings are documented in
 `../../workflows/CYCLE_PROFILING.md`; they do not establish hardware FPS.
@@ -42,5 +59,21 @@ Measured emulator master-clock raster-IRQ savings are documented in
 for distinct ceiling, wall and floor colours, visibly textured wall regions,
 and absence of the cyan palette holes seen in earlier Mode 7 prototypes.
 The game emits G2TR telemetry separately: wall collision tests validate
-actual map movement. The renderer's BAT writes are sliced across 32 game
+actual map movement. The renderer's BAT writes are sliced across 16 game
 updates, so a complete new viewpoint is progressive rather than instant.
+
+## Completed redraw benchmark
+
+```sh
+PCE_HEADLESS=/path/to/rpc-capable/pce-headless make bitmap-throughput
+```
+
+This builds the same C source in two configurations: four rows/update and
+eight rows/update, both with TIA uploads. It runs the **same six 180-frame
+controller segments** on both ROMs, checks the actual emulator pixels at
+every capture (allowing either grey metal or warm brick textures), rejects
+stalled game loops and incomplete BAT passes, and compares the RAM counter
+`ray_redraws`, incremented only after the last BAT row reaches VDC VRAM.
+Results and emulator PNGs are under `build/bitmap-{baseline,optimized}*`.
+`tools/bitmap_compare.py` refuses different controller scripts and incomplete
+visual evidence. Neither a passing compile nor G2TR-only state is accepted.

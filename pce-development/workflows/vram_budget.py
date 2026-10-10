@@ -8,6 +8,11 @@ planning assumptions, NOT measured timings or guaranteed VBlank capacity.
 Use this before writing BAT, sprite patterns or SAT copy code. A successful
 plan only proves allocations and byte budgets, not that an emulator displays
 correct frames or that an IRQ handler will meet deadlines.
+
+Active raster transfers must be <=16 bytes; explicitly VBlank-only uploads
+may use an additional, separately declared bounded TIA chunk size. This does
+NOT assert a given VBlank has enough actual HuC6280 cycles: that requires a
+cycle profile and the emulator screenshot/interrupt stress tests.
 """
 import argparse
 import json
@@ -37,6 +42,8 @@ def parse(spec):
     if type(raster)!=bool: raise ValueError('raster_irqs must be boolean')
     chunk=integer(spec.get('max_chunk_bytes',16 if raster else 64),'max_chunk_bytes',2,256)
     if chunk&1:raise ValueError('max_chunk_bytes must be even')
+    vblank_chunk=integer(spec.get('vblank_max_chunk_bytes',chunk),'vblank_max_chunk_bytes',2,1024)
+    if vblank_chunk&1:raise ValueError('vblank_max_chunk_bytes must be even')
     # Saber Rider's old scanline IRQ had very little interrupt latency slack.
     # A long HuC6280 block transfer is not IRQ-preemptible.
     if raster and chunk>16:
@@ -85,14 +92,15 @@ def parse(spec):
         if 'vblank_only' in u and type(u['vblank_only'])!=bool:
             raise ValueError(f'{name}: vblank_only must be boolean')
         requests.append({'id':name,'region':region,'offset':offset,'total_bytes':count,
+                         'vblank_only':u.get('vblank_only',False),
                          'remaining_bytes':count,'earliest':early,'deadline':deadline,'order':order})
     if sum(r['total_bytes'] for r in requests)>4*1024*1024:
         raise ValueError('total scheduled uploads exceed 4 MiB offline planning limit')
-    return budget,frames,chunk,raster,requests,banks
+    return budget,frames,chunk,vblank_chunk,raster,requests,banks
 
 
 def plan(spec):
-    budget,frames,chunk,raster,requests,banks=parse(spec)
+    budget,frames,chunk,vblank_chunk,raster,requests,banks=parse(spec)
     timeline=[]
     for frame in range(frames):
         room=budget
@@ -103,11 +111,12 @@ def plan(spec):
                       key=lambda r:(r['deadline'],r['order']))
         for req in active:
             while room>=2 and req['remaining_bytes']:
-                n=min(room,chunk,req['remaining_bytes']) & ~1
+                limit=vblank_chunk if req['vblank_only'] else chunk
+                n=min(room,limit,req['remaining_bytes']) & ~1
                 addr=req['region']['start_word']+req['offset']+(req['total_bytes']-req['remaining_bytes'])//2
                 allocations.append({'id':req['id'],'region':req['region']['id'],'vdc':req['region']['vdc'],
                                     'start_word':addr,'bytes':n,'chunk_bytes':n,
-                                    'vblank_only':req['region']['visibility']=='front'})
+                                    'vblank_only':req['vblank_only']})
                 room-=n;req['remaining_bytes']-=n
         if allocations:
             timeline.append({'frame':frame,'bytes':budget-room,'chunks':allocations})
@@ -124,6 +133,7 @@ def plan(spec):
     return {'ok':not incomplete and not late,'regions':sum(len(b) for b in banks),
             'vdc_count':len(banks),'raster_irqs':raster,
             'bytes_per_frame':budget,'max_chunk_bytes':chunk,
+            'vblank_max_chunk_bytes':vblank_chunk,
             'scheduled_bytes':sum(t['bytes'] for t in timeline),
             'frames_used':len(timeline),'timeline':timeline,
             'incomplete':incomplete,'late_uploads':late,
