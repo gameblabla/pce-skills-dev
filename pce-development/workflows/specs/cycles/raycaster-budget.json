@@ -1,0 +1,26 @@
+{
+  "segments": {
+    "idle": {
+      "min_game_updates": 5,
+      "max_ticks_per_frame_by_symbol": {
+        "irq_vdc": 225000,
+        "wall_pixel": 55000,
+        "cast_scene": 15000
+      }
+    },
+    "turn": {
+      "min_game_updates": 5,
+      "max_ticks_per_frame_by_symbol": {
+        "irq_vdc": 250000,
+        "wall_pixel": 55000
+      }
+    },
+    "walk": {
+      "min_game_updates": 5,
+      "max_ticks_per_frame_by_symbol": {
+        "irq_vdc": 250000,
+        "cast_scene": 15000
+      }
+    }
+  }
+}

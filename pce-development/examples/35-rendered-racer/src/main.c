@@ -19,7 +19,7 @@ static uint8_t crash_cooldown,checkpoint_hold,collision_hold;
  * Every phase is bounded to 0..175; all target arithmetic is 8/16 bit. */
 static uint8_t traffic_phase[3],traffic_remainder[3];
 static const uint8_t traffic_offset[3]={0,55,110};
-static void advance_traffic(uint8_t speed) {
+__attribute__((noinline)) static void advance_traffic(uint8_t speed) {
     for(uint8_t i=0;i<3;++i) {
         uint8_t remainder=(uint8_t)(traffic_remainder[i]+speed);
         uint8_t denom=(uint8_t)(i+1u);

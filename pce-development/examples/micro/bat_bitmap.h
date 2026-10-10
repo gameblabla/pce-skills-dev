@@ -24,9 +24,12 @@ static void bat_bitmap_patterns(void) {
     for (uint16_t pair=0; pair<256; ++pair) {
         uint8_t a = (uint8_t)(pair >> 4), b = (uint8_t)(pair & 15);
         uint16_t planes[4];
-        for (uint8_t bit=0; bit<4; ++bit)
-            planes[bit] = ((a & (1u << bit)) ? 0xf0u : 0u) |
-                          ((b & (1u << bit)) ? 0x0fu : 0u);
+        uint8_t mask=1u;
+        for (uint8_t bit=0; bit<4; ++bit) {
+            planes[bit] = ((a & mask) ? 0xf0u : 0u) |
+                          ((b & mask) ? 0x0fu : 0u);
+            mask=(uint8_t)(mask<<1);
+        }
         pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,
                      (uint16_t)(BAT_BITMAP_TILE_WORD + pair*16u));
         *IO_VDC_INDEX = VDC_REG_VRAM_DATA;

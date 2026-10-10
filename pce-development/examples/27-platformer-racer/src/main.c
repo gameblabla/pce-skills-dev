@@ -31,7 +31,7 @@ static void enter_platformer(void) {
     demo_draw_sprite_slot(0,32,PCE_DEMO_FLOOR_TOP-P4_PLAYER_W,
                           DEMO_PLAYER_PATTERN,VDC_SPRITE_COLOR(1));
 }
-static void race_tick(uint8_t pad) {
+__attribute__((noinline)) static void race_tick(uint8_t pad) {
     uint16_t lane=hybrid_race_lane_px;
     if((pad&KEY_LEFT)&&!(pad&KEY_RIGHT))lane=(lane>HYBRID_LANE_MIN+2)?lane-2:HYBRID_LANE_MIN;
     if((pad&KEY_RIGHT)&&!(pad&KEY_LEFT))lane=(lane<HYBRID_LANE_MAX-2)?lane+2:HYBRID_LANE_MAX;

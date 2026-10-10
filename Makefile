@@ -5,7 +5,7 @@ TOOL := $(ROOT)/workflows/offline.py
 EX := $(ROOT)/examples
 .PHONY: help doctor route project-check micro-lint micro-build games-build game-run hybrid-test trace-test test
 help:
-	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile standalone game and rendered genre projects' '  make agent-check  - reject hallucinated SDK symbols and large inline assets' '  make agent-assets - validate tilemap generator + level JSON' '  make agent-build  - compile generated-map example' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make genre-check  - offline G2TR schemas + visual-novel asset audits' '  make genre-build  - build G2TR probes + visual-novel example' '  make genre-test   - trace genres, rendered scenes and VN mouth in emulator' '  make visual-games-build - build actual shmup/raycaster/racing scenes' '  make visual-games-test - scripted input + screenshot evidence for 3 scenes' '  make raycaster-bitmap-test - verify 512x224 paired-BAT raycaster screenshot' '  make interaction-test - exercise projectile hits, wall blocking and racing laps' '  make interaction-replay - offline recheck of captured per-tick G2TR evidence' '  make sat-check - offline VDC sprite admission limits / priority'  '  make arith-check - reject new 32/64-bit math and libm/libgcc linking' '  make arith-build - link-audit Mode7, circle, and 4 arithmetic ROMs' '  make arith-audit-all - build and link-audit all 99 micro ROMs' '  make arith-games - audit rendered shmup/raycaster/racer + two platformer ELFs' '  make vram-check - validate generic and generated scene VRAM upload plans' '  make performance-check - run VRAM and 8/16-bit arithmetic source gates' '  make platformer-test - 16-bit P4TR walk/jump + hybrid return-gameplay checks' '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
+	@printf '%s\n' 'Offline PC Engine toolkit:' '  make doctor       - inspect compiler, emulator, BIOS env (no network)' '  make project-check - validate specs and game source rules' '  make micro-lint   - enforce no graphics in audio examples' '  make micro-build  - compile every tiny HuCard project' '  make games-build  - compile standalone game and rendered genre projects' '  make agent-check  - reject hallucinated SDK symbols and large inline assets' '  make agent-assets - validate tilemap generator + level JSON' '  make agent-build  - compile generated-map example' '  make game-run     - headless game smoke, needs PCE_HEADLESS' '  make hybrid-test  - input-driven ROM scene changes (newer RPC)' '  make trace-test   - platformer deterministic P2TR, needs PCE_HEADLESS' '  make genre-check  - offline G2TR schemas + visual-novel asset audits' '  make genre-build  - build G2TR probes + visual-novel example' '  make genre-test   - trace genres, rendered scenes and VN mouth in emulator' '  make visual-games-build - build actual shmup/raycaster/racing scenes' '  make visual-games-test - scripted input + screenshot evidence for 3 scenes' '  make raycaster-bitmap-test - verify 512x224 paired-BAT raycaster screenshot' '  make interaction-test - exercise projectile hits, wall blocking and racing laps' '  make interaction-replay - offline recheck of captured per-tick G2TR evidence' '  make sat-check - offline VDC sprite admission limits / priority'  '  make arith-check - reject new 32/64-bit math and libm/libgcc linking' '  make arith-build - link-audit Mode7, circle, and 4 arithmetic ROMs' '  make arith-audit-all - build and link-audit all 99 micro ROMs' '  make arith-games - audit rendered shmup/raycaster/racer + two platformer ELFs' '  make vram-check - validate generic and generated scene VRAM upload plans' '  make performance-check - run VRAM and 8/16-bit arithmetic source gates' '  make cycles-check - offline master-clock profiling / attribution tests' '  make cycles-ray - profile and enforce raycaster IRQ/render budgets (needs RPC emulator)' '  make cycles-all - profile platformer, raycaster, racer and Mode 7 ROMs' '  make platformer-test - 16-bit P4TR walk/jump + hybrid return-gameplay checks' '  make test         - offline unit and source checks' '  python3 $(TOOL) route "platformer plus racing"'
 doctor:
 	$(PYTHON) $(TOOL) doctor
 project-check:
@@ -146,3 +146,25 @@ platformer-perf:
 .PHONY: raycaster-bitmap-test
 raycaster-bitmap-test:
 	$(MAKE) -C $(EX)/34-rendered-raycaster bitmap-test
+
+# Real emulated HuC6280 master-clock profiling by physical ROM symbol. Unlike
+# --cov instruction counts, this attributes per-instruction elapsed bus/CPU
+# master ticks to the linked .mlb's physical offsets. Never claim real-hardware
+# speedup from these emulator reports.
+.PHONY: cycles-check cycles-ray cycles-all
+CYCLE_TOOL := $(ROOT)/workflows/cycle_profile.py
+CYCLE_SPECS := $(ROOT)/workflows/specs/cycles
+cycles-check:
+	$(PYTHON) -m unittest discover -s $(ROOT)/workflows/tests -p 'test_cycle_profile.py' -v
+cycles-ray:
+	@test -n "$(PCE_HEADLESS)" && test -x "$(PCE_HEADLESS)" || { echo 'Set PCE_HEADLESS=/absolute/path/to/RPC-capable/pce-headless' >&2; exit 2; }
+	$(MAKE) -C $(EX)/34-rendered-raycaster all
+	$(PYTHON) $(CYCLE_TOOL) run --emulator "$(PCE_HEADLESS)" --rom $(EX)/34-rendered-raycaster/build/34-rendered-raycaster.pce --mlb $(EX)/34-rendered-raycaster/build/34-rendered-raycaster.mlb --scenario $(CYCLE_SPECS)/raycaster.json --out build/cycles/raycaster
+	$(PYTHON) $(CYCLE_TOOL) gate --report build/cycles/raycaster/report.json --budget $(CYCLE_SPECS)/raycaster-budget.json
+cycles-all: cycles-ray
+	$(MAKE) -C $(EX)/26-platformer-starter all
+	$(MAKE) -C $(EX)/35-rendered-racer all
+	$(MAKE) -C $(EX)/micro/86-mode7-bitmap-floor all
+	$(PYTHON) $(CYCLE_TOOL) run --emulator "$(PCE_HEADLESS)" --rom $(EX)/26-platformer-starter/build/26-platformer-starter.pce --mlb $(EX)/26-platformer-starter/build/26-platformer-starter.mlb --scenario $(CYCLE_SPECS)/platformer.json --out build/cycles/platformer
+	$(PYTHON) $(CYCLE_TOOL) run --emulator "$(PCE_HEADLESS)" --rom $(EX)/35-rendered-racer/build/35-rendered-racer.pce --mlb $(EX)/35-rendered-racer/build/35-rendered-racer.mlb --scenario $(CYCLE_SPECS)/racer.json --out build/cycles/racer
+	$(PYTHON) $(CYCLE_TOOL) run --emulator "$(PCE_HEADLESS)" --rom $(EX)/micro/86-mode7-bitmap-floor/build/86-mode7-bitmap-floor.pce --mlb $(EX)/micro/86-mode7-bitmap-floor/build/86-mode7-bitmap-floor.mlb --scenario $(CYCLE_SPECS)/mode7.json --out build/cycles/mode7

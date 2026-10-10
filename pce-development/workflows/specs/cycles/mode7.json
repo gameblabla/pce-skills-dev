@@ -1,0 +1,1 @@
+{"warmup_frames":120,"segments":[{"name":"idle","frames":60,"buttons":[]},{"name":"turn","frames":60,"buttons":["right"]},{"name":"forward","frames":60,"buttons":["up"]}]}

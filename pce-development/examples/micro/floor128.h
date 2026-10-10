@@ -46,7 +46,7 @@ static void floor_setup(void) {
     };
     bat_bitmap_setup(colors);
 }
-static void floor_draw(uint8_t angle,uint8_t cx,uint8_t cy) {
+__attribute__((noinline)) static void floor_draw(uint8_t angle,uint8_t cx,uint8_t cy) {
     for (uint8_t y=0; y<128u; ++y) {
         bat_bitmap_row(y);
         if (y<35u) {

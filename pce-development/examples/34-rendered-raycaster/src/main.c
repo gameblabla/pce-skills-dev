@@ -64,7 +64,7 @@ static uint8_t cast_ray(uint8_t col) {
     tex_u[col]=0;wall_kind[col]=1;
     return 32;
 }
-static void cast_scene(void) {
+__attribute__((noinline)) static void cast_scene(void) {
     near_depth=0xffff;far_depth=0;hit_count=0;
     for(uint8_t c=0;c<32;++c) {
         uint8_t d=cast_ray(c);
@@ -113,10 +113,18 @@ static uint8_t bitmap_pair(uint8_t pair,uint8_t y) {
     }
     /* A perspective floor: two nearby horizontal samples, independent
      * palette nibbles, and no runtime multiply/divide. */
-    uint8_t shift=floor_shift[y];
-    uint8_t fu=(uint8_t)((pair<<shift)+(uint8_t)(world_x>>5));
-    uint8_t fv=(uint8_t)((y<<shift)+(uint8_t)(world_y>>5));
-    uint8_t delta=shift?((uint8_t)1u<<(shift-1u)):1u;
+    /* The perspective scale has only 5 possible values. Constant ASLs
+     * beat the compiler's variable 16-bit __ashlhi3 helper (measured). */
+    uint8_t fu,fv,delta;
+    switch(floor_shift[y]) {
+        case 4: fu=(uint8_t)(pair<<4);fv=(uint8_t)(y<<4);delta=8;break;
+        case 3: fu=(uint8_t)(pair<<3);fv=(uint8_t)(y<<3);delta=4;break;
+        case 2: fu=(uint8_t)(pair<<2);fv=(uint8_t)(y<<2);delta=2;break;
+        case 1: fu=(uint8_t)(pair<<1);fv=(uint8_t)(y<<1);delta=1;break;
+        default:fu=pair;fv=y;delta=1;break;
+    }
+    fu=(uint8_t)(fu+(uint8_t)(world_x>>5));
+    fv=(uint8_t)(fv+(uint8_t)(world_y>>5));
     return (uint8_t)((floor_color(fu,fv)<<4)|floor_color((uint8_t)(fu+delta),fv));
 }
 /* Render four logical bitmap lines into RAM, then commit in VBlank.
@@ -146,6 +154,7 @@ static void render_slice(void) {
     pce_cpu_irq_enable();
     draw_row=(draw_row+4u)&127u;
 }
+__attribute__((noinline))
 static void publish(uint32_t frame,uint16_t buttons,int16_t moved_x,int16_t moved_y) {
     volatile G2Trace *t=&pce_genre_trace[frame&1];
     uint16_t n=(uint16_t)(frame<<1);

@@ -162,3 +162,33 @@ Do not re-run `demo_video_init()` on every scene handoff. Prefer a background
 restore and bounded per-frame VDC word writes for SAT entries. Validate the
 screen separately from RAM telemetry. `make arith-games` audits the linked
 platformer ELFs in addition to the shmup, racer and raycaster.
+
+## Mandatory measured cycle profiling before performance claims
+
+**Do not call emulator video frames CPU frame rate.** For changes touching
+raycaster bitmap pixels, Mode 7 sampling, IRQ code, fast math, collision or
+platformer motion, run `make cycles-check` (offline) and use an RPC-capable
+headless emulator with `PCE_HEADLESS=/path/to/pce-headless make cycles-all`.
+The CPU core exposes physical HuC6280 **master-clock timestamps** via
+`prof_start`/`prof_dump`. `workflows/cycle_profile.py` attributes them using
+linked `.mlb` *physical ROM offsets*, not logical CPU program counters.
+
+Use `build/cycles/*/report.json` and `report.md` to find actual bottlenecks.
+Use the reported `game_updates` and `updates_per_emulator_frame` to detect
+rendering that keeps VBlank running while barely updating gameplay.
+Run `make cycles-ray` to enforce interrupt, wall pixel and casting budgets.
+Never claim a speedup based on a lower overall frame total (the frame's
+master-clock budget is fixed), or on lower `main` cycles after an inlined
+routine was split into a separate symbol. `cycle_profile.py compare` refuses
+a per-function comparison if the old/new ROMs complete different game update
+counts under the same scripted input. Matching counts alone are not hardware
+verification: inspect scene state and screenshots separately.
+
+The measured 512x224 raycaster spends over half its emulated CPU master
+cycles servicing the raster IRQ, with far fewer than 60 completed game
+updates per 60 VBlanks. Do **not** blindly use `noinline` on the inner bitmap
+slice writer to make a prettier profile: a compiler/timing variant caused
+intermittent incomplete frames. The current working renderer keeps that loop
+inline, preserving the existing bitmap, rotation and collision tests. If a
+profiling change modifies output, reject it even if the profiler is cleaner.
+Hardware stopwatch/logic-analyzer measurements remain a separate requirement.

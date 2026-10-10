@@ -1,0 +1,30 @@
+{
+  "warmup_frames": 120,
+  "segments": [
+    {
+      "name": "idle",
+      "frames": 60,
+      "buttons": []
+    },
+    {
+      "name": "walk",
+      "frames": 60,
+      "buttons": [
+        "right"
+      ]
+    },
+    {
+      "name": "jump_walk",
+      "frames": 60,
+      "buttons": [
+        "right",
+        "i"
+      ]
+    }
+  ],
+  "progress": {
+    "kind": "counter",
+    "ram_symbol": "frame",
+    "width": 2
+  }
+}

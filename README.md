@@ -152,3 +152,24 @@ The report is `build/platformer-perf/comparison.json`. It compares compiled
 BSS, linked compiler helper symbols, unique executed PC addresses and emulator
 instruction counts across 240 equal-length idle-input frames. These are **not
 CPU-cycle measurements**, and the busy-wait work limits speed conclusions.
+
+## CPU cycle attribution (not only instruction counts)
+
+The bundled Mednafen-derived headless emulator has `prof_start` and `prof_dump`
+RPC commands. `pce-development/workflows/cycle_profile.py` maps their **physical
+HuC6280 master-clock counts** to the linked ROM's `PcePrgRom` addresses in
+LLVM-MOS's `.mlb`. It does not mistake logical `$E000` for a physical ROM
+address or classify VBlank wait cycles as game logic. It reports functions,
+interrupts, software helpers, unknown physical addresses and game-state
+progress, using the same scripted inputs in each run.
+
+```sh
+PCE_HEADLESS=/absolute/path/to/pce-headless make cycles-ray
+PCE_HEADLESS=/absolute/path/to/pce-headless make cycles-all
+make cycles-check # completely offline; no compiler/emulator download
+```
+
+See `pce-development/workflows/CYCLE_PROFILING.md` for method, actual emulator
+results, measurement caveats, per-routine budgets and regression instructions.
+**These are cycle costs in the emulator, not physical-hardware benchmarks or
+host CPU wall time.** Real screenshot and input trace validation remain required.

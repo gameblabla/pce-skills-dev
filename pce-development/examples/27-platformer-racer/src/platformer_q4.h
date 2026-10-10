@@ -46,7 +46,7 @@ static uint8_t p4_supported(const P4Motion *p) {
            p4_overlaps(p,&pce_demo_surfaces[i]))return 1;
     return 0;
 }
-static uint8_t p4_tick(P4Motion *p,uint8_t buttons,uint8_t *events) {
+__attribute__((noinline)) static uint8_t p4_tick(P4Motion *p,uint8_t buttons,uint8_t *events) {
     int16_t old_feet=p->y+P4(P4_BOX_DY+P4_BOX_H);
     int16_t new_feet;
     uint8_t i, blocked=0, jump=(uint8_t)((buttons&KEY_1)!=0);

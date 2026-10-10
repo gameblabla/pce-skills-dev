@@ -1,0 +1,29 @@
+{
+  "warmup_frames": 120,
+  "segments": [
+    {
+      "name": "idle",
+      "frames": 60,
+      "buttons": []
+    },
+    {
+      "name": "accelerate",
+      "frames": 60,
+      "buttons": [
+        "up"
+      ]
+    },
+    {
+      "name": "steer",
+      "frames": 60,
+      "buttons": [
+        "right",
+        "up"
+      ]
+    }
+  ],
+  "progress": {
+    "kind": "g2tr",
+    "ram_symbol": "pce_genre_trace"
+  }
+}
