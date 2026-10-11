@@ -64,14 +64,15 @@ static const __attribute__((unused)) uint16_t colors[16]={
 static int16_t world_x,world_y;
 static uint8_t angle,wall_blocked;
 static uint16_t near_depth,far_depth,hit_count;
-/* 64 ray samples: one paired BAT word (two logical pixels) per sample. */
-static uint8_t depth[64],top[64],tex_u[64],wall_kind[64];
+/* 128 independently directed rays; two pixels packed into each of 64 BAT words. */
+static uint8_t depth[128],top[128],tex_u[128],wall_kind[128];
 /* Fourteen pre-quantized source-sheet material/shade classes in full detail. */
-static uint8_t wall_style[64];
+static uint8_t wall_style[128];
 /* The exact hit cell guards interpolation across occlusion boundaries. */
-static uint8_t ray_hit_cell[64];
+static uint8_t ray_hit_cell[128];
+static uint8_t ray_tex_phase[128];
 #ifndef RAY_ADAPTIVE_RAYS
-#define RAY_ADAPTIVE_RAYS 1
+#define RAY_ADAPTIVE_RAYS 2
 #endif
 #ifndef RAY_WALL_LOOKUP
 #define RAY_WALL_LOOKUP 1
@@ -117,7 +118,9 @@ static uint16_t ray_bat_addresses[128];
 #define RAY_BAT_ADDRESS(y,pair) ((uint16_t)((((uint16_t)((y)&63u))<<7)+(((y)&64u)?64u:0u)+(pair)))
 #endif
 #ifndef RAY_COLUMNS_PER_UPDATE
-#define RAY_COLUMNS_PER_UPDATE 16u
+/* More than eight BAT pairs per step overloads the raster presentation
+ * during sustained 128-ray rotation on the current engine. */
+#define RAY_COLUMNS_PER_UPDATE 8u
 #endif
 #ifndef RAY_COLUMN_CHUNK_WORDS
 #define RAY_COLUMN_CHUNK_WORDS 8u
@@ -131,9 +134,9 @@ static int16_t cast_x,cast_y;
 #ifndef RAY_CANONICAL_WALL_KEY
 #define RAY_CANONICAL_WALL_KEY 1
 #endif
-static uint8_t old_top[64],old_height[64],old_tex[64],old_style[64];
+static uint8_t old_top[128],old_height[128],old_tex[128],old_style[128];
 #if !RAY_CANONICAL_WALL_KEY
-static uint8_t old_depth[64];
+static uint8_t old_depth[128];
 #endif
 static uint8_t column_pass_dirty;
 volatile uint16_t ray_bat_words;
@@ -159,6 +162,8 @@ extern void ray_codegen_emit_legacy(void);
 volatile uint16_t ray_codegen_target;
 volatile uint16_t ray_codegen_vram_address;
 volatile uint8_t ray_codegen_variant;
+volatile uint8_t ray_codegen_variant_right;
+volatile uint8_t ray_codegen_low_nibble;
 volatile uint16_t ray_codegen_words;
 #endif
 static uint16_t column_words[RAY_COLUMN_CHUNK_WORDS];
@@ -174,8 +179,9 @@ static uint8_t draw_page;
 #endif
 
 static uint8_t material_at(int16_t x,int16_t y) {
-    int16_t tx=x>>8,ty=y>>8;
-    if(tx<0||tx>=8||ty<0||ty>=8)return 1;
+    uint8_t tx=(uint8_t)(((uint16_t)x)>>8);
+    uint8_t ty=(uint8_t)(((uint16_t)y)>>8);
+    if(tx>=8u||ty>=8u)return 1;
     return map[ty][tx];
 }
 static uint8_t cast_ray(uint8_t col) {
@@ -186,7 +192,8 @@ static uint8_t cast_ray(uint8_t col) {
         x+=dx;y+=dy;
         /* No grid boundary crossed: the next cell is necessarily empty.
          * Avoid a map lookup on almost every sub-cell march. */
-        if((px>>8)==(x>>8) && (py>>8)==(y>>8))continue;
+        if(((uint16_t)px>>8)==((uint16_t)x>>8) &&
+           ((uint16_t)py>>8)==((uint16_t)y>>8))continue;
         uint8_t m=material_at(x,y);
         if(m) {
             /* One sub-cell midpoint refinement locates the first solid cell within
@@ -198,55 +205,63 @@ static uint8_t cast_ray(uint8_t col) {
                 if(material_at(mx,my)) {x=mx;y=my;}
                 else {px=mx;py=my;}
             }
-            tex_u[col]=(uint8_t)((((px>>8)!=(x>>8))?y:x)>>4)&RAY_U_MASK;
-            if((px>>8)!=(x>>8))m|=0x80u;
+            ray_tex_phase[col]=(uint8_t)((((uint16_t)px>>8)!=((uint16_t)x>>8))?y:x);
+            tex_u[col]=ray_tex_phase[col]>>4;
+            if(((uint16_t)px>>8)!=((uint16_t)x>>8))m|=0x80u;
             wall_kind[col]=m;
-            ray_hit_cell[col]=(uint8_t)((((uint8_t)(y>>8))<<3) | (uint8_t)(x>>8));
+            ray_hit_cell[col]=(uint8_t)((((uint8_t)(((uint16_t)y)>>8))<<3) | (uint8_t)(((uint16_t)x)>>8));
             return n;
         }
     }
-    tex_u[col]=0;wall_kind[col]=1;ray_hit_cell[col]=0xffu;
+    tex_u[col]=0;ray_tex_phase[col]=0;wall_kind[col]=1;ray_hit_cell[col]=0xffu;
     return 32;
 }
 
+/* Conservative NES-style sparse ray refinement. Source directions remain
+ * 128 entries; only flat same-cell regions are interpolated. All wall edges
+ * and texture-phase discontinuities are cast at their exact sample angle. */
+#if RAY_ADAPTIVE_RAYS
+static void cast_or_interpolate(uint8_t c,uint8_t l,uint8_t r) {
+    if(ray_hit_cell[l]!=ray_hit_cell[r] ||
+       wall_kind[l]!=wall_kind[r] ||
+       (depth[l]>depth[r]+3u) || (depth[r]>depth[l]+3u)) {
+        depth[c]=cast_ray(c);return;
+    }
+    uint8_t ul=tex_u[l],ur=tex_u[r];
+    if((ul<=3u && ur>=12u) || (ur<=3u && ul>=12u)) {
+        depth[c]=cast_ray(c);return;
+    }
+    int8_t du=(int8_t)(ur-ul);
+    if(du>8)du-=16;
+    if(du< -8)du+=16;
+    if(du< -4 || du>4) {
+        depth[c]=cast_ray(c);return;
+    }
+    depth[c]=(uint8_t)((depth[l]+depth[r]+1u)>>1);
+    ray_tex_phase[c]=(uint8_t)(((uint16_t)ray_tex_phase[l]+ray_tex_phase[r]+1u)>>1);
+    tex_u[c]=ray_tex_phase[c]>>4;
+    wall_kind[c]=wall_kind[l];
+    ray_hit_cell[c]=ray_hit_cell[l];
+}
+#endif
 __attribute__((noinline)) static void cast_scene(void) {
     near_depth=0xffff;far_depth=0;hit_count=0;
-#if RAY_ADAPTIVE_RAYS
-    /* One exact intersection per two display pairs on flat walls. Fill the
-     * intervening pair only when both neighbours hit the SAME grid cell,
-     * face and continuous U interval; otherwise raycast it normally. This
-     * halves most of the expensive map probes without inventing wall edges. */
-    for(uint8_t c=0;c<64;c+=2u) depth[c]=cast_ray(c);
-    for(uint8_t c=1;c<64;c+=2u) {
-        if(c==63u || ray_hit_cell[c-1]!=ray_hit_cell[c+1] ||
-           wall_kind[c-1]!=wall_kind[c+1] ||
-           (depth[c-1]>depth[c+1]+3u) || (depth[c+1]>depth[c-1]+3u)) {
-            depth[c]=cast_ray(c);
-            continue;
-        }
-        /* U wraps at a tile edge. Even two rays hitting the same grid
-         * cell/face can straddle a corner; never invent that middle ray. */
-        uint8_t ul=tex_u[c-1],ur=tex_u[c+1];
-        if((ul<=3u && ur>=12u) || (ur<=3u && ul>=12u)) {
-            depth[c]=cast_ray(c);
-            continue;
-        }
-        int8_t du=(int8_t)(ur-ul);
-        if(du>8)du-=16;
-        if(du< -8)du+=16;
-        if(du< -4 || du>4) {
-            depth[c]=cast_ray(c);
-            continue;
-        }
-        depth[c]=(uint8_t)((depth[c-1]+depth[c+1]+1u)>>1);
-        tex_u[c]=(uint8_t)(ul+(du>=0 ? ((du+1)>>1) : -((1-du)>>1)))&RAY_U_MASK;
-        wall_kind[c]=wall_kind[c-1];
-        ray_hit_cell[c]=ray_hit_cell[c-1];
-    }
+#if RAY_ADAPTIVE_RAYS == 2
+    /* Four-sample anchors, then exact edges and two refinement levels.
+     * Explicit last two rays prevent reading past the 128-element table. */
+    for(uint8_t c=0;c<128;c+=4u)depth[c]=cast_ray(c);
+    depth[126]=cast_ray(126u);
+    depth[127]=cast_ray(127u);
+    for(uint8_t c=2;c<126;c+=4u)cast_or_interpolate(c,c-2u,c+2u);
+    for(uint8_t c=1;c<127;c+=2u)cast_or_interpolate(c,c-1u,c+1u);
+#elif RAY_ADAPTIVE_RAYS == 1
+    for(uint8_t c=0;c<128;c+=2u)depth[c]=cast_ray(c);
+    for(uint8_t c=1;c<127;c+=2u)cast_or_interpolate(c,c-1u,c+1u);
+    depth[127]=cast_ray(127u);
 #else
-    for(uint8_t c=0;c<64;++c)depth[c]=cast_ray(c);
+    for(uint8_t c=0;c<128;++c)depth[c]=cast_ray(c);
 #endif
-    for(uint8_t c=0;c<64;++c) {
+    for(uint8_t c=0;c<128;++c) {
         uint8_t d=depth[c];
         top[c]=(uint8_t)((128u-wall_height[d])>>1);
         if(d<near_depth)near_depth=d;
@@ -291,40 +306,63 @@ static __attribute__((unused)) uint8_t floor_color(uint8_t u,uint8_t v) {
 /* Return two independent 4-bit pixel indices packed into one BAT word.
  * Unlike a flat-column renderer, both halves of the pair are sampled. */
 static __attribute__((unused)) uint8_t bitmap_pair(uint8_t pair,uint8_t y) {
-    uint8_t c=pair;
-    uint8_t d=depth[c],t=top[c];
-    if(y<t) {
-        uint8_t sky=y<16u?0u:y<32u?1u:y<48u?2u:3u;
-        return (uint8_t)((sky<<4)|sky);
-    }
-    if((uint8_t)(y-t)<wall_height[d]) {
-        uint8_t u=(uint8_t)(tex_u[c])&RAY_U_MASK;
+    const uint8_t l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
+    const uint8_t lt=top[l],rt=top[r],ld=depth[l],rd=depth[r];
+    const uint8_t left_wall=(uint8_t)(y>=lt && (uint8_t)(y-lt)<wall_height[ld]);
+    const uint8_t right_wall=(uint8_t)(y>=rt && (uint8_t)(y-rt)<wall_height[rd]);
+    uint8_t result;
+    /* Do not calculate a perspective floor (or the sky) behind two wall
+     * pixels. The atomic page is a CPU-bound alternative to column mode. */
+    if(left_wall && right_wall) {
 #if RAY_WALL_LOOKUP
-        /* One ROM lookup yields both 4-bit texels. All table strides are
-         * powers of two: no runtime multiply/divide, texture branching or
-         * duplicate wall shader evaluations in the inner BAT row loop. */
-        uint8_t v=wall_tex_v[d][(uint8_t)(y-t)>>1];
-        return RAY_ACTIVE_PAIRS[wall_style[c]][u][v];
+        uint8_t lval=RAY_ACTIVE_PAIRS[wall_style[l]][tex_u[l]&RAY_U_MASK]
+            [wall_tex_v[ld][(uint8_t)(y-lt)>>1]];
+        uint8_t rval=RAY_ACTIVE_PAIRS[wall_style[r]][tex_u[r]&RAY_U_MASK]
+            [wall_tex_v[rd][(uint8_t)(y-rt)>>1]];
+        return (uint8_t)((lval&0xf0u)|(rval>>4));
 #else
-        return (uint8_t)((wall_pixel(c,u,y)<<4)|wall_pixel(c,(u+1u)&RAY_U_MASK,y));
+        return (uint8_t)((wall_pixel(l,tex_u[l]&RAY_U_MASK,y)<<4)|
+               wall_pixel(r,tex_u[r]&RAY_U_MASK,y));
 #endif
     }
-    /* A perspective floor: two nearby horizontal samples, independent
-     * palette nibbles, and no runtime multiply/divide. */
-    /* The perspective scale has only 5 possible values. Constant ASLs
-     * beat the compiler's variable 16-bit __ashlhi3 helper (measured). */
-    uint8_t fu,fv,delta;
-    switch(floor_shift[y]) {
-        case 4: fu=(uint8_t)(pair<<4);fv=(uint8_t)(y<<4);delta=8;break;
-        case 3: fu=(uint8_t)(pair<<3);fv=(uint8_t)(y<<3);delta=4;break;
-        case 2: fu=(uint8_t)(pair<<2);fv=(uint8_t)(y<<2);delta=2;break;
-        case 1: fu=(uint8_t)(pair<<1);fv=(uint8_t)(y<<1);delta=1;break;
-        default:fu=pair;fv=y;delta=1;break;
+    if(y<64u) {
+        uint8_t sky=y<16u?0u:y<32u?1u:y<48u?2u:3u;
+        result=(uint8_t)((sky<<4)|sky);
+    } else {
+        uint8_t fu,fv,delta;
+        switch(floor_shift[y]) {
+            case 4:fu=(uint8_t)(pair<<4);fv=(uint8_t)(y<<4);delta=8;break;
+            case 3:fu=(uint8_t)(pair<<3);fv=(uint8_t)(y<<3);delta=4;break;
+            case 2:fu=(uint8_t)(pair<<2);fv=(uint8_t)(y<<2);delta=2;break;
+            case 1:fu=(uint8_t)(pair<<1);fv=(uint8_t)(y<<1);delta=1;break;
+            default:fu=pair;fv=y;delta=1;break;
+        }
+        fu=(uint8_t)(fu+(uint8_t)(render_world_x>>5));
+        fv=(uint8_t)(fv+(uint8_t)(render_world_y>>5));
+        result=(uint8_t)((floor_color(fu,fv)<<4)|floor_color((uint8_t)(fu+delta),fv));
     }
-    fu=(uint8_t)(fu+(uint8_t)(render_world_x>>5));
-    fv=(uint8_t)(fv+(uint8_t)(render_world_y>>5));
-    return (uint8_t)((floor_color(fu,fv)<<4)|floor_color((uint8_t)(fu+delta),fv));
+    if(left_wall) {
+#if RAY_WALL_LOOKUP
+        uint8_t pix=RAY_ACTIVE_PAIRS[wall_style[l]][tex_u[l]&RAY_U_MASK]
+            [wall_tex_v[ld][(uint8_t)(y-lt)>>1]];
+        result=(uint8_t)((result&0x0fu)|(pix&0xf0u));
+#else
+        result=(uint8_t)((result&0x0fu)|
+                   (wall_pixel(l,tex_u[l]&RAY_U_MASK,y)<<4));
+#endif
+    }
+    if(right_wall) {
+#if RAY_WALL_LOOKUP
+        uint8_t pix=RAY_ACTIVE_PAIRS[wall_style[r]][tex_u[r]&RAY_U_MASK]
+            [wall_tex_v[rd][(uint8_t)(y-rt)>>1]];
+        result=(uint8_t)((result&0xf0u)|(pix>>4));
+#else
+        result=(uint8_t)((result&0xf0u)|wall_pixel(r,tex_u[r]&RAY_U_MASK,y));
+#endif
+    }
+    return result;
 }
+
 /* Build a bounded RAM staging batch, then transfer BAT entries ONLY in VBlank.
  * Each TIA sends 128 bytes to alternating VDC data ports ($0002/$0003),
  * autoincrementing the VRAM word address. TIA masks IRQs until completion:
@@ -338,37 +376,6 @@ static __attribute__((unused)) void render_slice(void) {
         render_world_x=world_x;render_world_y=world_y;
         cast_scene();
     }
-#if RAY_FAST_SPANS && !RAY_DOUBLE_BUFFER
-    /* Entire base is ROM-resident paired BAT words. Copying has no
-     * divide/texture branches; CPU work scales with visible wall spans,
-     * not the complete sky/floor raster. The atomic variant remains a
-     * separate rendering mode and uses the original shader. */
-    for(uint8_t i=0;i<RAY_SLICE_ROWS;++i) {
-        uint8_t y=(uint8_t)(draw_row+i);
-        for(uint8_t pair=0;pair<64u;++pair)
-            scan_words[i][pair]=ray_backdrop_row(y)[pair];
-    }
-    for(uint8_t c=0;c<64u;++c) {
-        uint8_t t=top[c],h=wall_height[depth[c]];
-        uint8_t first=(t>draw_row)?t:draw_row;
-        uint8_t limit=(uint8_t)(draw_row+RAY_SLICE_ROWS);
-        uint8_t bottom=(uint8_t)(t+h);
-        if(bottom<limit)limit=bottom;
-        if(first>=limit)continue;
-        uint8_t u=(uint8_t)(tex_u[c]&RAY_U_MASK);
-        const uint8_t *a=RAY_ACTIVE_PAIRS[wall_style[c]][u];
-                const uint8_t *v=&wall_tex_v[depth[c]][(uint8_t)(first-t)>>1];
-        uint8_t odd=(uint8_t)(first-t)&1u;
-        uint16_t *dst=&scan_words[first-draw_row][c];
-        for(uint8_t y=first;y<limit;++y) {
-            uint8_t index=*v;
-            dst[0]=(uint16_t)(0xf200u|a[index]);
-            dst+=64;
-            if(odd)++v;
-            odd^=1u;
-        }
-    }
-#else
     for(uint8_t i=0;i<RAY_SLICE_ROWS;++i) {
         uint8_t y=(uint8_t)(draw_row+i);
 #if RAY_DOUBLE_BUFFER
@@ -378,7 +385,6 @@ static __attribute__((unused)) void render_slice(void) {
         for(uint8_t pair=0;pair<64u;++pair)
             scan_words[i][pair]=(uint16_t)(0xf200u|bitmap_pair(pair,y));
     }
-#endif
     /* Wait specifically for the NEXT vertical blank. No RCR writes execute
      * while interrupts are masked; the raster remap is idle in VBlank. */
 #if !RAY_DIRECT_CHUNKS
@@ -449,74 +455,74 @@ static void column_background_init(void) {
         pce_memop((void*)IO_VDC_DATA,ray_backdrop_row(y),128u,PCE_MEMOP_INCR_ALT);
     }
 }
-static void column_upload(uint8_t pair,uint8_t first,uint8_t last,
-                          uint8_t c,uint8_t u) {
-    const uint8_t t=top[c],end=(uint8_t)(t+wall_height[depth[c]]);
-    const uint8_t *wall=RAY_ACTIVE_PAIRS[wall_style[c]][u];
-    const uint8_t *tex=wall_tex_v[depth[c]];
-
-    uint8_t texphase=0u;
-    if(first>t) {
-        uint8_t off=(uint8_t)(first-t);
-        tex+=off>>1;
-        texphase=off&1u;
-    }
+/* Word renderer: two genuinely different 128-ray samples, with a fast
+ * paired-texel shortcut only where both projected lanes exactly agree.
+ * Generated eight-row native writer remains valid for those common cases;
+ * other rows compose the two 4-bit pixels without updating pattern VRAM. */
+static __attribute__((unused)) uint8_t ray_pair_fast(uint8_t left,uint8_t right) {
+    /* Both pixels share height and V phase, but can have different textures,
+     * U coordinates, shading and material. The native writer fuses them. */
+    return (uint8_t)(top[left]==top[right] &&
+        wall_height[depth[left]]==wall_height[depth[right]]);
+}
+static void column_upload(uint8_t pair,uint8_t first,uint8_t last) {
+    const uint8_t l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
+    const uint8_t tl=top[l],tr=top[r];
+    const uint8_t el=(uint8_t)(tl+wall_height[depth[l]]);
+    const uint8_t er=(uint8_t)(tr+wall_height[depth[r]]);
+    const uint8_t *wl=RAY_ACTIVE_PAIRS[wall_style[l]][tex_u[l]&RAY_U_MASK];
+    const uint8_t *wr=RAY_ACTIVE_PAIRS[wall_style[r]][tex_u[r]&RAY_U_MASK];
+    const uint8_t *vl=wall_tex_v[depth[l]],*vr=wall_tex_v[depth[r]];
+#if RAY_WALL_CODEGEN
+    const uint8_t fast=ray_pair_fast(l,r);
+#endif
     for(uint8_t y=first;y<last;) {
 #if RAY_WALL_CODEGEN
-        /* A complete 8-pixel wall block needs no staging, loop, or V
-         * index computations on the target. The generated instruction
-         * sequence reads fixed ROM texture offsets and writes the VDC.
-         * Only short IRQ-masked bursts are permitted; never cross either
-         * 64-row BAT half or the old/new dirty-span boundary. */
-        if(y>=t && (uint8_t)(y-t)%8u==0u &&
-           (uint16_t)y+8u<=last && (uint16_t)y+8u<=end &&
+        if(fast && y>=tl && (uint8_t)(y-tl)%8u==0u &&
+           (uint16_t)y+8u<=last && (uint16_t)y+8u<=el &&
            (y&63u)<=56u) {
-            uint16_t entry=ray_codegen_handlers[depth[c]][(uint8_t)(y-t)>>3];
+            uint16_t entry=ray_codegen_handlers[depth[l]][(uint8_t)(y-tl)>>3];
             if(entry) {
                 ray_codegen_target=entry;
-                ray_codegen_variant=(uint8_t)((wall_style[c]<<4)|u);
-                uint16_t address=RAY_BAT_ADDRESS(y,pair);
+                ray_codegen_variant=(uint8_t)((wall_style[l]<<4)|(tex_u[l]&RAY_U_MASK));
+                ray_codegen_variant_right=(uint8_t)((wall_style[r]<<4)|((tex_u[r]-1u)&RAY_U_MASK));
+                ray_codegen_vram_address=RAY_BAT_ADDRESS(y,pair);
                 pce_cpu_irq_disable();
 #if RAY_CODEGEN_FAST_SETUP
-                ray_codegen_vram_address=address;
                 ray_codegen_emit();
 #else
-                pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,address);
+                pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,ray_codegen_vram_address);
                 *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
                 ray_codegen_emit_legacy();
 #endif
                 pce_cpu_irq_enable();
                 ray_codegen_words=(uint16_t)(ray_codegen_words+8u);
                 ray_bat_words=(uint16_t)(ray_bat_words+8u);
-
-                tex+=4u;
                 y=(uint8_t)(y+8u);
                 continue;
             }
         }
 #endif
-        uint8_t n=0;
-        uint8_t stop=(uint8_t)((y&64u)?128u:64u);
+        uint8_t n=0,stop=(uint8_t)((y&64u)?128u:64u),yy=y;
         uint16_t *out=column_words;
-        uint8_t yy=y;
         while(n<RAY_COLUMN_CHUNK_WORDS && yy<last && yy<stop) {
-            if(yy>=t && yy<end) {
-                *out++=(uint16_t)(0xf200u|wall[*tex]);
-                if(texphase)++tex;
-                texphase^=1u;
-            } else *out++=ray_backdrop_row(yy)[pair];
-            ++n;
-            ++yy;
+            uint16_t word=ray_backdrop_row(yy)[pair];
+            if(yy>=tl && yy<el) {
+                uint8_t pixel=wl[vl[(uint8_t)(yy-tl)>>1]];
+                word=(uint16_t)((word&0xff0fu)|(pixel&0xf0u));
+            }
+            if(yy>=tr && yy<er) {
+                uint8_t pixel=wr[vr[(uint8_t)(yy-tr)>>1]];
+                word=(uint16_t)((word&0xfff0u)|(pixel>>4));
+            }
+            *out++=word;
+            ++n;++yy;
 #if RAY_WALL_CODEGEN
-            /* Stop the scalar prefix exactly at the next generated
-             * eight-row span. Otherwise a displaced old wall top makes
-             * every later batch misaligned and bypasses all microcode. */
-            if(yy>=t && yy<end && ((uint8_t)(yy-t)&7u)==0u)break;
+            if(fast && yy>=tl && yy<el && ((uint8_t)(yy-tl)&7u)==0u)break;
 #endif
         }
-        uint16_t addr=RAY_BAT_ADDRESS(y,pair);
         pce_cpu_irq_disable();
-        pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,addr);
+        pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,RAY_BAT_ADDRESS(y,pair));
         *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
 #if RAY_COLUMN_TIA
         pce_memop((void*)IO_VDC_DATA,column_words,(uint16_t)(n<<1),PCE_MEMOP_INCR_ALT);
@@ -533,35 +539,43 @@ static void render_columns(void) {
         if(cast_valid && cast_angle==angle &&
            cast_x==world_x && cast_y==world_y)return;
         cast_x=world_x;cast_y=world_y;cast_angle=angle;cast_valid=1u;
-        cast_scene();
-        column_pass_dirty=0;
+        cast_scene();column_pass_dirty=0;
     }
     for(uint8_t i=0;i<RAY_COLUMNS_PER_UPDATE;++i) {
-        uint8_t c=(uint8_t)(next_column+i);
-        uint8_t t=top[c],height=wall_height[depth[c]];
-        uint8_t u=(uint8_t)(tex_u[c]&RAY_U_MASK);
-        if(old_height[c]!=0 && old_top[c]==t && old_height[c]==height &&
-           old_tex[c]==u && old_style[c]==wall_style[c]
+        uint8_t pair=(uint8_t)(next_column+i),l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
+        uint8_t dirty=0,first=128u,last=0u;
+        for(uint8_t c=l;c<=r;++c) {
+            uint8_t t=top[c],h=wall_height[depth[c]],u=tex_u[c]&RAY_U_MASK;
+            if(old_height[c]!=0 && old_top[c]==t && old_height[c]==h &&
+               old_tex[c]==u && old_style[c]==wall_style[c]
 #if !RAY_CANONICAL_WALL_KEY
-           && old_depth[c]==depth[c]
+               && old_depth[c]==depth[c]
 #endif
-           )continue;
-        uint8_t first=t,last=(uint8_t)(t+height);
-        if(old_height[c]) {
-            if(old_top[c]<first)first=old_top[c];
-            uint8_t old_last=(uint8_t)(old_top[c]+old_height[c]);
-            if(old_last>last)last=old_last;
+               )continue;
+            dirty=1u;
+            if(t<first)first=t;
+            if((uint8_t)(t+h)>last)last=(uint8_t)(t+h);
+            if(old_height[c]) {
+                if(old_top[c]<first)first=old_top[c];
+                uint8_t end=(uint8_t)(old_top[c]+old_height[c]);
+                if(end>last)last=end;
+            }
         }
+        if(!dirty)continue;
         column_pass_dirty=1u;
-        column_upload(c,first,last,c,u);
-        old_top[c]=t;old_height[c]=height;old_tex[c]=u;old_style[c]=wall_style[c];
+        column_upload(pair,first,last);
+        for(uint8_t c=l;c<=r;++c) {
+            old_top[c]=top[c];old_height[c]=wall_height[depth[c]];
+            old_tex[c]=tex_u[c]&RAY_U_MASK;old_style[c]=wall_style[c];
 #if !RAY_CANONICAL_WALL_KEY
-        old_depth[c]=depth[c];
+            old_depth[c]=depth[c];
 #endif
+        }
     }
     next_column=(uint8_t)((next_column+RAY_COLUMNS_PER_UPDATE)&63u);
     if(next_column==0u && column_pass_dirty)++ray_redraws;
 }
+
 #endif
 __attribute__((noinline))
 static void publish(uint32_t frame,uint16_t buttons,int16_t moved_x,int16_t moved_y) {
@@ -576,7 +590,7 @@ static void publish(uint32_t frame,uint16_t buttons,int16_t moved_x,int16_t move
     t->x_q8=world_x;t->y_q8=world_y;t->vx_q8=moved_x;t->vy_q8=moved_y;
     t->camera_x_q8=t->camera_y_q8=0;
     t->screen_x_q8=t->screen_y_q8=0;
-    t->state[0]=64;t->state[1]=hit_count;
+    t->state[0]=128;t->state[1]=hit_count;
     t->state[2]=near_depth<<6;t->state[3]=far_depth<<6;
     t->sequence=n;
 }
@@ -602,7 +616,7 @@ int main(void) {
 #if RAY_WALL_CODEGEN
     ray_codegen_words=0;
 #endif
-    for(uint8_t c=0;c<64;++c)old_height[c]=0;
+    for(uint8_t c=0;c<128;++c)old_height[c]=0;
 #endif
     draw_row=0;ray_redraws=0;
 #if RAY_DOUBLE_BUFFER

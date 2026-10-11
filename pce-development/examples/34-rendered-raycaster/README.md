@@ -1,13 +1,84 @@
 # 34 — fast 128×128 VRAM-resident raycaster (HuC6280)
 
-This is a **real 64-sample textured raycaster** using the paired-BAT technique in
+This is a **128-sample textured raycaster** using the paired-BAT technique in
 [PCEdev's Wolfenstein article](https://pcedev.wordpress.com/2015/11/25/wolfenstein-3d-on-the-pc-engine/)
 and [bitmap-mode article](https://pcedev.wordpress.com/2015/12/10/pce-bitmap-mode/).
 It sets physical **512×224** and keeps **128×128 logical 4-bit pixels** in the
 VDC's 128×64 BAT, with two pixels per word and 256 fixed glyphs. It is **not**
 128×64 atomic mode and does not create 8×8 planar tiles every frame.
 
-## 64-column wall quality pass (2026-10)
+## Current 128-ray revision: NES-inspired sparse projection and two-lane BAT
+
+The full-resolution default now projects **128 horizontal sample rays**, one
+per logical screen pixel. Every **single BAT word** still stores two independent
+4-bit texels in VRAM; the left and right rays have their *own* wall cell,
+face, projected height, material/shade and texture coordinate. Older 64-ray
+versions treated the two screen pixels as a single ray with adjacent texels.
+This is still the exact PCEdev tile-map pseudo-bitmap technique; neither a
+planar framebuffer nor a per-frame CHR pattern upload was added.
+
+On the HuC6280, two unrelated wall texels cannot reuse the old one-ray
+vertical writer. `tools/gen_wall_codegen.py` now emits **dual-index 8-word
+native writers** (`X` for the left ray and `Y` for the right). It combines the
+high and low colour nibbles from two different sheet coordinates while the
+VDC increments its address by 128 words. This fast path is only used when
+both rays have matching wall top and projected height; mixed depths, edges
+and transitions use independently composited scalar BAT words. An old-wall
+and new-wall span union restores both halves before marking a pair clean.
+
+As in classic NES raycasters, the expensive math and distance projection are
+precomputed. `RAY_ADAPTIVE_RAYS=2` casts **one ray every four screen pixels**
+where possible, then refines the remaining screen directions, *forcing true
+intersection casts* at wall-face/cell changes, depth discontinuities, material
+boundaries and texture wraps. This prioritizes corner topology; projected
+heights and sub-texel phases are still approximations, not mathematically
+identical to 128 exact DDA intersections. To disable interpolation entirely,
+compile with `-DRAY_ADAPTIVE_RAYS=0`. The host reference checker exercises
+270,336 ray samples over 8x8-map camera positions and all 16 angles, and
+requires **zero fabricated wall cells or faces**. It also measures, rather
+than conceals, remaining height/texture differences.
+
+In the same 540-emulated-video-frame benchmark, the previous 64-ray build
+achieved **6.33 progressive changed-view commits/s** while turning. The
+128-ray build currently achieves **3.00** using eight-pair rendering steps,
+versus the slower C writer's **3.00** changed-view commits/s under the same
+turning test. The native writer still uploads about **63% of BAT words** in
+eight-word assembly bursts, and processes more controller updates in some
+movement scenes; these metrics are not a fixed-work, end-to-end FPS speedup.
+The eight-pair limit reduces graphics/interrupt interference but at the cost
+of redraw throughput. **The older 64-ray version is faster.** Neither result
+is complete atomic FPS or measured on real console hardware. The full-height
+progressive renderer still exhibits intermittent lost raster presentation
+(sky-only frame) under the 1,080-frame repeated-turn/movement acceptance;
+`make column-regression` currently detects this and fails. This is an
+unresolved limitation, not a verified tearing fix. The optional
+128x64 atomic page-swap mode remains independently buildable, with the
+same two-ray-per-word shading; it trades resolution and throughput for
+tear-free completed pages. The atomic version is independently validated by
+`make atomic-test`: 26 completed pages over 1,080 emulated video frames
+(about 1.44 presented pages/s), and it avoids the long-run progressive-mode
+raster failure. Choose this build for consistent page presentation rather
+than for high FPS.
+
+The native generator masks the left and right texel nibbles *separately*.
+Without both masks, unrelated colour bits from the right texture corrupt
+the left half of a BAT word. The 600-frame C reference comparison matches
+except for one explicitly reported 504-pixel page-latch scanline. This is
+tested rather than hidden by a relaxed screenshot threshold.
+
+This follows the NESdev discussion of avoiding large CHR pattern updates,
+using precomputed ray/distance tables and reducing drawing work, while
+retaining PCEdev's much more appropriate VRAM BAT layout:
+[NES raycaster discussion](https://forums.nesdev.org/viewtopic.php?t=12180)
+and [PCE bitmap mode](https://pcedev.wordpress.com/2015/12/10/pce-bitmap-mode/).
+
+To verify: `make tables-check codegen-benchmark`, `make atomic-test`, and
+`make -C ../../.. cycles-ray` (with a compatible native RPC emulator).
+`make column-regression` is intentionally retained as a strict **known-failing**
+acceptance test for the remaining 128x128 progressive raster instability.
+
+## Historical 64-column wall quality pass (2026-10)
+
 
 The original build used 32 rays: each cast result occupied **two** BAT words
 (four logical pixels/16 physical horizontal pixels), producing pronounced
@@ -47,10 +118,9 @@ The fast **full-detail** default now:
 
 1. Generates an exact **16 KiB screen-anchored sky/earth BAT backdrop offline**
    (`tools/gen_backdrop.py`) and installs it in VRAM once at startup.
-2. Resolves 64 wall columns only when the camera moves or turns, casting
-   the even rays exactly and safely interpolating between rays only when the
-   two neighbors hit the same map cell, face and texture span. Edge cases
-   (texture wrapping, wall corners or depth discontinuities) are ray-cast.
+2. Resolves 64 wall BAT words representing **128 separately shaded ray
+   pixels** only when the camera moves or turns. Conservative interpolation
+   checks require matching wall cells/faces and continuous texture spans.
 3. Compares wall depth, texture phase, height and shading against the last
    drawn view. Unchanged columns incur **zero VRAM writes**.
 4. Writes only the union of old/new wall spans, using the VDC's
@@ -79,9 +149,9 @@ than only linking a precomputed texture table. Run
 `python3 tools/gen_wall_codegen.py` to regenerate `src/wall_codegen.S`;
 `make tables-check` fails if the file is stale. The generator converts each
 wall height (23 distinct values for 33 distances) into unrolled eight-row
-instruction sequences. Each embeds scaled texture V addresses in `LDA
-ray_codegen_pixels+constant,X`, then writes two duplicate-height pixels
-using direct `STA $0002`/`ST2 #$f2`. `X` selects one of 40 shaded
+instruction sequences. Each embeds scaled texture V addresses in `LDA ray_codegen_pixels+constant,X` and `ORA
+ray_codegen_pixels+constant,Y`, then writes two vertically duplicated pixel pairs
+using direct `STA $0002`/`ST2 #$f2`. `X` and `Y` select independent entries among 224 shaded
 material/horizontal texture phases. There is no pixel loop, C array
 indexing, software multiplication, or division in the generated path.
 
@@ -144,8 +214,8 @@ fabricated dirty-view counts without actual BAT writes and idle-rendering
 loops that would falsely inflate FPS. The earlier *32-ray* benchmark measured **23 changed-view commits in 540
 video frames**, including **17 in 180 turning frames**, or **5.667 changed
 views per emulated second while turning**. This is archival context rather
-than a measurement for the current 64-column build. The current emulator run
-records **27 commits in 540 frames** (19 during 180 turning frames) and **65
+than a measurement for the historical 64-column build. The historical 64-ray emulator run
+recorded **27 commits in 540 frames** (19 during 180 turning frames) and **65
 commits in the 1,080-frame stress test**. These are not atomic images or guaranteed continuous
 motion, and this turning rate remains below PCEdev's projected **12–15 FPS
 for typical action / up to 30 FPS in open areas**; the original blog figure was an *estimate

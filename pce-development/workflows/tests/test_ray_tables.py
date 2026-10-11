@@ -21,15 +21,15 @@ class RayTableTests(unittest.TestCase):
 
     def test_ray_steps_match_signed_truncation(self):
         data=r.generate()
-        xx=get_table(data,'ray_step_x',16*64)
-        yy=get_table(data,'ray_step_y',16*64)
+        xx=get_table(data,'ray_step_x',16*128)
+        yy=get_table(data,'ray_step_y',16*128)
         for angle in range(16):
-            for column in range(64):
-                side=column-32
-                dx=r.COS[angle]-r.truncdiv(r.SIN[angle]*side,80)
-                dy=r.SIN[angle]+r.truncdiv(r.COS[angle]*side,80)
-                self.assertEqual(xx[angle*64+column],r.truncdiv(dx,2))
-                self.assertEqual(yy[angle*64+column],r.truncdiv(dy,2))
+            for column in range(128):
+                side=column-64
+                dx=r.COS[angle]-r.truncdiv(r.SIN[angle]*side,160)
+                dy=r.SIN[angle]+r.truncdiv(r.COS[angle]*side,160)
+                self.assertEqual(xx[angle*128+column],r.truncdiv(dx,2))
+                self.assertEqual(yy[angle*128+column],r.truncdiv(dy,2))
 
     def test_bitmap_height_and_texel_lookup(self):
         data=r.generate()

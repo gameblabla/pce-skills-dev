@@ -10,7 +10,7 @@
       "max_unmapped_ticks_per_frame": 1000
     },
     "turn": {
-      "min_game_updates": 24,
+      "min_game_updates": 19,
       "max_ticks_per_frame_by_symbol": {
         "irq_vdc": 65000,
         "cast_scene": 62000,
@@ -29,7 +29,7 @@
       ]
     },
     "walk": {
-      "min_game_updates": 24,
+      "min_game_updates": 19,
       "max_ticks_per_frame_by_symbol": {
         "irq_vdc": 65000,
         "cast_scene": 62000,

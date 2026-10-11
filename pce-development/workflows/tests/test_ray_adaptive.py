@@ -1,6 +1,6 @@
 """Host-side oracle for the higher-detail paired-BAT raycaster.
 
-Exercises 64 actual rays against the 8x8 map at many camera positions.
+Exercises 128 displayed ray samples against the 8x8 map at many camera positions.
 The interpolation gate must never blend distinct hit cells or wall faces,
 including at a texture U wrap (a frequent source of striped/corner artifacts).
 """
@@ -29,9 +29,9 @@ def material(x,y):
 
 
 def exact_cast(angle,column,x,y):
-    side=column-32
-    dx=rays.truncdiv(rays.COS[angle]-rays.truncdiv(rays.SIN[angle]*side,80),2)
-    dy=rays.truncdiv(rays.SIN[angle]+rays.truncdiv(rays.COS[angle]*side,80),2)
+    side=column-64
+    dx=rays.truncdiv(rays.COS[angle]-rays.truncdiv(rays.SIN[angle]*side,160),2)
+    dy=rays.truncdiv(rays.SIN[angle]+rays.truncdiv(rays.COS[angle]*side,160),2)
     for step in range(1,33):
         px,py=x,y
         x+=dx;y+=dy
@@ -63,14 +63,18 @@ def can_interpolate(left,right):
 
 
 class RayAdaptiveTests(unittest.TestCase):
-    def test_one_vdc_bat_word_per_ray_and_bounded_chunks(self):
+    def test_two_independent_pixels_per_bat_word_and_bounded_chunks(self):
         text=(ROOT/'src/main.c').read_text()
-        self.assertIn('depth[64]',text)
-        self.assertIn('column_upload(c,first,last,c,u)',text)
-        self.assertIn('RAY_COLUMNS_PER_UPDATE 16u',text)
+        self.assertIn('depth[128]',text)
+        self.assertIn('ray_tex_phase[128]',text)
+        self.assertIn('column_upload(pair,first,last)',text)
+        self.assertIn('ray_codegen_variant_right',text)
+        self.assertIn('const uint8_t l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u)',text)
+        self.assertIn('RAY_COLUMNS_PER_UPDATE 8u',text)
         self.assertIn('RAY_COLUMN_CHUNK_WORDS 8u',text)
-        self.assertIn('ray_hit_cell[c-1]!=ray_hit_cell[c+1]',text)
+        self.assertIn('ray_hit_cell[l]!=ray_hit_cell[r]',text)
         self.assertIn('ul<=3u && ur>=12u',text)
+        self.assertIn('#define RAY_ADAPTIVE_RAYS 2',text)
         self.assertNotIn('column_upload((uint8_t)(c<<1)',text)
 
     def test_interpolation_is_safe_on_sampled_map_corners(self):
@@ -81,10 +85,14 @@ class RayAdaptiveTests(unittest.TestCase):
                     if MAP[ty][tx]:continue
                     for ox,oy in ((64,64),(128,128),(192,192),(64,192),(192,64)):
                         x=tx*256+ox;y=ty*256+oy
-                        casts=[exact_cast(angle,c,x,y) for c in range(64)]
-                        for c in range(1,63,2):
+                        casts=[exact_cast(angle,c,x,y) for c in range(128)]
+                        # Test both refinement levels against *independent*
+                        # full-resolution casts, not merely adjacent anchors.
+                        pairs=[(c,c-2,c+2) for c in range(2,126,4)]
+                        pairs += [(c,c-1,c+1) for c in range(1,127,2)]
+                        for c,l,r in pairs:
                             examined+=1
-                            left,right=casts[c-1],casts[c+1]
+                            left,right=casts[l],casts[r]
                             if not can_interpolate(left,right):
                                 if left[3]!=right[3] or left[2]!=right[2]:
                                     corners+=1
@@ -94,7 +102,7 @@ class RayAdaptiveTests(unittest.TestCase):
                             self.assertEqual((left[2],left[3]),(actual[2],actual[3]),
                                 f'wall corner swallowed at {angle=} {x=} {y=} {c=}')
                             self.assertLessEqual(abs(actual[0]-(left[0]+right[0]+1)//2),1)
-        self.assertGreater(examined,10000)
+        self.assertGreater(examined,25000)
         self.assertGreater(interpolated,examined//3)
         self.assertGreater(corners,100)
 

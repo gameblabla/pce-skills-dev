@@ -9,7 +9,7 @@ OUT := build/34-rendered-raycaster.pce
 # BAT backdrop lives in ROM, never in scarce HuC6280 working RAM. Atomic
 # and reference renderers deliberately keep their original 8 KiB layout.
 FAST_ROM_LINK := -Wl,--defsym=__rom_bank0=0x8000,--defsym=__rom_bank0_size=0x8000
-# The 64-ray tables no longer fit the old 8KiB row/atomic prototypes.
+# The 128-ray tables no longer fit the old 8KiB row/atomic prototypes.
 # Keep reference and atomic variants in a contiguous 16KiB HuCard bank.
 ROW_ROM_LINK := -Wl,--defsym=__rom_bank0=0xc000,--defsym=__rom_bank0_size=0x4000
 .PHONY: interaction-test interaction-replay all run trace visual-test bitmap-test clean
@@ -38,6 +38,7 @@ interaction-replay:
 .PHONY: tables-check
 tables-check:
 	python3 tools/gen_ray_tables.py --check
+	python3 tools/check_128_rays.py
 	python3 tools/gen_wall_pairs.py --check
 	python3 tools/gen_backdrop.py --check
 	python3 tools/gen_sparse_irq.py --check

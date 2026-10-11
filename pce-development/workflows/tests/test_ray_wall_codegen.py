@@ -14,6 +14,10 @@ class WallMicrocodeTests(unittest.TestCase):
         self.assertEqual((PROJECT/'src/wall_codegen.S').read_text(),g.generate())
         asm=g.generate()
         self.assertIn('lda ray_codegen_pixels+',asm)
+        self.assertIn('and #$0f',asm)
+        self.assertIn('and #$f0',asm)
+        self.assertIn('ora ray_codegen_low_nibble',asm)
+        self.assertNotRegex(asm, r'ora ray_codegen_pixels\+')
         self.assertIn('st2 #$f2',asm)
         self.assertIn('jmp (ray_codegen_target)',asm)
         self.assertIn('.size ray_codegen_h116_s0',asm)
@@ -35,8 +39,9 @@ class WallMicrocodeTests(unittest.TestCase):
         self.assertIn('pce_cpu_irq_enable();',src)
         self.assertIn('ray_codegen_words=',src)
         self.assertIn('ray_backdrop_row(yy)[pair]',src)
-        self.assertIn('yy>=t && yy<end',src)
-        self.assertIn('(yy-t)&7u',src)
+        self.assertIn('yy>=tl && yy<el',src)
+        self.assertIn('yy>=tr && yy<er',src)
+        self.assertIn('(yy-tl)&7u',src)
         self.assertIn('RAY_WALL_CODEGEN=0', (PROJECT/'Makefile').read_text())
 
     def example(self):
