@@ -35,6 +35,33 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertEqual(sum(1 for y in range(128) if y==64),1)
         self.assertNotIn('st2 #2\n.Lno_page:',gen_sparse_irq.gen().split('cpy #64')[0])
 
+    def test_second_page_scroll_guard_matches_staged_upload_wrap(self):
+        # Logical y=64 must resolve to the *same physical BAT row* that
+        # was active immediately before the mid-screen BXR page flip.
+        # A stale BYR then draws wall pixels instead of a floor-colored line.
+        self.assertEqual(gen_sparse_irq.bat_row(63),63)
+        self.assertEqual(gen_sparse_irq.bat_row(64),63)
+        self.assertEqual(gen_sparse_irq.bat_row(65),0)
+        self.assertEqual(gen_sparse_irq.bat_row(127),62)
+        self.assertEqual(set(gen_sparse_irq.bat_row(y) for y in range(64,128)),set(range(64)))
+        src=(ROOT/'src/main.c').read_text()
+        self.assertIn('((y-1u)&63u)',src)
+        self.assertIn('if(n>until_page)n=until_page;',src)
+        self.assertIn('y==64u?65u:128u',src)
+
+    def test_midpoint_stripe_detector_uses_physical_pixels(self):
+        from PIL import Image,ImageDraw
+        from raster_sweep import midpoint_seam_metrics
+        image=Image.new('RGB',(560,242),(72,72,72))
+        draw=ImageDraw.Draw(image)
+        for x in range(24,536,8):
+            color=(108,72,36) if (x//8)&1 else (72,72,36)
+            draw.rectangle((x,234,x+7,234),fill=color)
+            draw.rectangle((x,124,x+7,124),fill=color)
+        self.assertTrue(midpoint_seam_metrics(image)['defective'])
+        draw.rectangle((24,124,535,124),fill=(72,72,72))
+        self.assertFalse(midpoint_seam_metrics(image)['defective'])
+
     def test_vertical_vram_increment_and_short_irq_masks(self):
         src=(ROOT/'src/main.c').read_text()
         self.assertIn('VDC_CONTROL_VRAM_ADD_128',src)

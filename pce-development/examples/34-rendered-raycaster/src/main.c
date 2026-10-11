@@ -116,7 +116,10 @@ static uint8_t ray_tex_phase[128];
 static uint16_t ray_bat_addresses[128];
 #define RAY_BAT_ADDRESS(y,pair) ((uint16_t)(ray_bat_addresses[(uint8_t)(y)]+(pair)))
 #else
-#define RAY_BAT_ADDRESS(y,pair) ((uint16_t)((((uint16_t)((y)&63u))<<7)+(((y)&64u)?64u:0u)+(pair)))
+/* The second BAT page is circularly shifted by one physical BAT row.
+ * At the 64/65 raster seam the VDC temporarily retains the previous BYR;
+ * both halves must therefore use BAT row 63 for logical y=63/64. */
+#define RAY_BAT_ADDRESS(y,pair) ((uint16_t)((((uint16_t)(((y)&64u)?(((y)-1u)&63u):((y)&63u)))<<7)+(((y)&64u)?64u:0u)+(pair)))
 #endif
 #ifndef RAY_COLUMNS_PER_UPDATE
 /* Limit the number of distinct BAT pairs scheduled per VBlank. Work on a
@@ -475,7 +478,10 @@ static __attribute__((unused)) void render_slice(void) {
 static uint16_t backdrop_init_row[64];
 static void column_background_init(void) {
     for(uint8_t y=0;y<128u;++y) {
-        uint16_t addr=(uint16_t)((((uint16_t)y&63u)<<7)+((y&64u)?64u:0u));
+        /* Rotate the second BAT half so its last row holds logical y=64.
+         * The first page keeps the natural y=0..63 arrangement. */
+        uint8_t bat_y=(uint8_t)((y&64u)?((y-1u)&63u):(y&63u));
+        uint16_t addr=(uint16_t)(((uint16_t)bat_y<<7)+((y&64u)?64u:0u));
 #if RAY_BAT_ADDRESS_LUT
         ray_bat_addresses[y]=addr;
 #endif
@@ -516,7 +522,7 @@ static __attribute__((unused)) void column_upload(uint8_t pair,uint8_t first,uin
 #if RAY_WALL_CODEGEN
         if(fast && y>=tl && (uint8_t)(y-tl)%8u==0u &&
            (uint16_t)y+8u<=last && (uint16_t)y+8u<=el &&
-           (y&63u)<=56u) {
+           ((y&64u)?((y-1u)&63u):(y&63u))<=56u) {
             uint16_t entry=ray_codegen_handlers[depth[l]][(uint8_t)(y-tl)>>3];
             if(entry) {
                 ray_codegen_target=entry;
@@ -539,7 +545,7 @@ static __attribute__((unused)) void column_upload(uint8_t pair,uint8_t first,uin
             }
         }
 #endif
-        uint8_t n=0,stop=(uint8_t)((y&64u)?128u:64u),yy=y;
+        uint8_t n=0,stop=(uint8_t)(y<64u?64u:(y==64u?65u:128u)),yy=y;
         uint16_t *out=column_words;
         while(n<RAY_COLUMN_CHUNK_WORDS && yy<last && yy<stop) {
             uint16_t word=ray_backdrop_word(yy,pair);
@@ -755,7 +761,10 @@ static void render_columns(void) {
     while(done<staged_count) {
         uint8_t y=(uint8_t)(staged_first+done);
         uint8_t n=(uint8_t)(staged_count-done);
-        uint8_t until_page=(uint8_t)(64u-(y&63u));
+        /* Page 2 starts at physical BAT row 63 (logical y=64) and wraps
+         * to row 0 at logical y=65, so never stride across that wrap. */
+        uint8_t physical_row=(uint8_t)((y&64u)?((y-1u)&63u):(y&63u));
+        uint8_t until_page=(uint8_t)(64u-physical_row);
         if(n>8u)n=8u;
         if(n>until_page)n=until_page;
         pce_cpu_irq_disable();

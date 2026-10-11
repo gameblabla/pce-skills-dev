@@ -13,12 +13,34 @@ import platformer_trace
 import genre_trace
 
 
+
+def midpoint_seam_metrics(image):
+    """Detect the PCE BAT page-flip artefact as a floor row inside walls.
+
+    The raster IRQ changes BXR at logical y=64. With the natural second
+    BAT-page layout, BYR can be one scanline late: the old scroll points at
+    the last BAT row, so the picture briefly shows an EXACT floor-row copy.
+    Compare actual pixels, not a global color-count proxy (which missed it).
+    """
+    def pixels(y):
+        return list(image.crop((24,y,536,y+1)).get_flattened_data())
+    above, mid, below, bottom = (pixels(y) for y in (123,124,125,234))
+    def similarity(a,b):
+        return sum(x==y for x,y in zip(a,b))/len(a)
+    floor_copy = similarity(mid,bottom)
+    upper_change = 1-similarity(mid,above)
+    lower_change = 1-similarity(mid,below)
+    defective = floor_copy>=0.90 and upper_change>=0.75 and lower_change>=0.75
+    return {'floor_copy':round(floor_copy,4),
+            'upper_change':round(upper_change,4),
+            'lower_change':round(lower_change,4), 'defective':defective}
+
 def run(rom, elf, output, frames=540, warmup=180):
     rom=Path(rom).resolve();output=Path(output).resolve();output.parent.mkdir(parents=True,exist_ok=True)
     address=platformer_trace.resolve_trace_address(elf,'pce_genre_trace')
     binary=platformer_trace._find_binary(str(rom))
     client=platformer_trace.NativeControl(str(binary),str(rom),output.parent/(output.stem+'-rpc'),initial_frames=2)
-    counts={};lowest=256;start=end=0
+    counts={};lowest=256;start=end=0;highest_floor_copy=0.0
     frame=output.parent/(output.stem+'-latest.png')
     try:
         client.call('input',0)
@@ -36,6 +58,10 @@ def run(rom, elf, output, frames=540, warmup=180):
                 im=raw.convert('RGB')
                 if im.size!=(560,242):raise ValueError('unexpected raster screenshot size')
                 colors=len(im.getcolors(200000) or [])
+                seam=midpoint_seam_metrics(im)
+                highest_floor_copy=max(highest_floor_copy,seam['floor_copy'])
+                if seam['defective']:
+                    raise ValueError(f'midpoint BAT page-flip floor stripe at frame {i+1}: {seam}')
             lowest=min(lowest,colors)
             counts[colors]=counts.get(colors,0)+1
             if colors<5:raise ValueError(f'sky-only or blank raster at turning frame {i+1}: {colors} colors')
@@ -44,6 +70,7 @@ def run(rom, elf, output, frames=540, warmup=180):
     if end-start<frames//2:raise ValueError('rotation stress stalled game loop')
     report={'passed':True,'emulator_frames':frames,'warmup_frames':warmup,
             'minimum_colors':lowest,'color_counts':counts,'game_updates':end-start,
+            'highest_midpoint_floor_similarity':highest_floor_copy,
             'note':'all screenshots are native emulator pixels, not hardware validation'}
     output.write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report))

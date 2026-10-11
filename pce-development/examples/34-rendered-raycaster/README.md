@@ -7,6 +7,30 @@ It sets physical **512×224** and keeps **128×128 logical 4-bit pixels** in the
 VDC's 128×64 BAT, with two pixels per word and 256 fixed glyphs. It is **not**
 128×64 atomic mode and does not create 8×8 planar tiles every frame.
 
+## Midpoint scanline repair (128×128 only)
+
+The 128×128 raster's BAT page split at logical row 64 previously exposed a
+**one-scanline copy of the bottom floor in the middle of the wall** on some
+video frames. The HuC6270 can apply the horizontal page switch (BXR) before
+the new vertical scroll (BYR); the first line of the new page therefore used
+its physical BAT row 63, which originally contained the floor.
+
+The second BAT half is now **circularly rotated by one tilemap row**:
+logical row 64 occupies physical row 63, rows 65..127 occupy rows 0..62.
+The raster IRQ and the background/wall address table use the same mapping.
+The vertical column uploader additionally splits bursts at the rotated row
+wrap (between logical rows 64 and 65), preventing writes outside the BAT.
+There is no new planar upload, CPU framebuffer or extra work per ray.
+
+The emulator's exact screenshot of the old ROM has **100% floor-row match**
+on the stray center scanline, with abrupt transitions above and below.
+`make raster-sweep` now checks every frame for this defect as well as sky-only
+frames. In the verified 540-frame turn sequence, the floor-row similarity at
+the seam stayed below 10.2%; the 1,080-frame movement stress, 231 offline
+checks and the native cycle budget also passed. Turning throughput remained
+0.667 completed dirty-view passes/second, not complete FPS. This behavior
+is verified in the supplied headless emulator, not on physical hardware.
+
 ## Current visual-quality revision: retain source pixels, blend BAT texels
 
 The **default** 32 KiB ROM now improves what is actually rendered, not the
