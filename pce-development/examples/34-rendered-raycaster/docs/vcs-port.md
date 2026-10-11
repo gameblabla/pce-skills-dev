@@ -49,8 +49,8 @@ per video frame**, not whole-program FPS:
 
 That is approximately 37% less compositor time during turning and 42% less
 during walking in this instrumented comparison. No increase in completed
-view throughput has been established. Raster IRQs and the fixed 96-word
-safe VBlank upload cap continue to limit visible redraw speed, and console
+view throughput has been established. Raster IRQs and the bounded 136-word
+raster-paced BAT upload schedule continue to limit visible redraw speed, and console
 hardware performance is unverified.
 
 To reproduce geometry/source tests: `python3 -m unittest

@@ -34,3 +34,25 @@ class VramPresentationTests(unittest.TestCase):
             compare.compare(self.evidence(),new,self.picture())
 
 if __name__=='__main__':unittest.main()
+
+class PacingComparisonTests(unittest.TestCase):
+    @staticmethod
+    def evidence(views=4):
+        return {'scenario':[{'segment':'turn-right','buttons':['right'],
+                             'emulator_frames':180,'dirty_views':views,
+                             'vram_words':8000,'game_updates':170}],
+                'totals':{'changed_views':views,'turning_views_per_second':views/3,
+                          'vram_words':8000}}
+    def test_equal_image_faster_pass_accepted(self):
+        from importlib import util
+        p=TOOLS/'compare_vram_pacing.py';spec=util.spec_from_file_location('compare_vram_pacing',p)
+        m=util.module_from_spec(spec);spec.loader.exec_module(m)
+        a=m.compare(self.evidence(3),self.evidence(4),{'matched':True,
+                    'differing_pixels':0,'pixel_count':135520})
+        self.assertTrue(a['passed'])
+    def test_different_images_rejected(self):
+        from importlib import util
+        p=TOOLS/'compare_vram_pacing.py';spec=util.spec_from_file_location('compare_vram_pacing',p)
+        m=util.module_from_spec(spec);spec.loader.exec_module(m)
+        with self.assertRaisesRegex(ValueError,'exact stationary image'):
+            m.compare(self.evidence(),self.evidence(),{'matched':False,'differing_pixels':1})

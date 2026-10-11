@@ -10,9 +10,9 @@ The previous 128×64 atomic example was removed, including its build target, pag
 
 The raycaster uses 128 ray directions, center-first paired-column ordering, a fixed 16-colour palette, close-range 32×32 wall texels, and lookup-driven wall shading. A sparse raster IRQ remaps 128 logical rows to 224 scanlines. The second half of the 128×64 **hardware BAT** is circularly shifted by one row to prevent a floor-coloured scanline at the midpoint boundary; this is not an alternate 128×64 image mode.
 
-The staged uploader composes wall BAT words before VBlank and transfers a maximum of **96 words per frame**, in interrupt-bounded bursts of at most eight words. For each physical vertical run, the VDC's auto-increment-by-128 remains active between bursts; the code only reselects the data port after raster IRQs and reprograms the address at a new segment or across the shifted BAT-page wrap. This avoids repeated MAWR register writes for consecutive bursts. A compile-time comparison build can use `-DRAY_PRESENT_CONTIGUOUS=0` to restore per-burst address setup.
+The staged uploader composes wall BAT words before VBlank, then transfers at most **136 BAT words per prepared batch**, in interrupt-masked bursts no larger than **eight words**. Unlike the historical uninterrupted 96-word upload, it **waits for raster IRQ progress between consecutive bursts**. That spreads writes into active scanlines while allowing BYR/RCR remapping to run between them. The VDC's auto-increment-by-128 remains active within physical BAT runs; only a segment change or the rotated BAT-page wrap requires a new MAWR address. Compile with `-DRAY_PRESENT_PACED=0 -DRAY_VBLANK_WORD_BUDGET=96` to restore the older presentation, or `-DRAY_PRESENT_CONTIGUOUS=0` to restore per-burst address setup.
 
-**Important:** More than 96 words per frame has produced raster or incomplete-bitmap regressions in emulator tests, even when a shorter test appeared to pass. This is not a hardware-proven throughput limit. Do not increase the budget, widen burst length, or change the raster IRQ without validating both the 540-frame consecutive-turn sweep *and* the 1,080-frame movement stress. The current renderer is progressive and can visibly tear or respond slowly. A dirty-view commit is not a full-screen FPS measurement.
+**Important:** The 136-word setting is **emulator-tested, not a console-safe hardware specification**. A 144-word paced variant failed sustained movement (incomplete bitmap), while larger *unpaced* budgets produced missing raster interrupts. The upload bursts still briefly mask IRQs and can tear; the renderer is progressive rather than an atomic 128×128 display. Keep both the 540-frame consecutive-turn sweep and 1,080-frame movement stress as mandatory regression checks. Dirty-view commits are not full-screen FPS.
 
 ## Build and verify
 
@@ -22,10 +22,11 @@ With the LLVM-MOS PCE toolchain on `PATH`:
 make                        # 128×128 ROM: build/34-rendered-raycaster.pce
 make tables-check
 PCE_HEADLESS=/path/to/pce-headless make column-regression
+PCE_HEADLESS=/path/to/pce-headless make vram-pacing-compare
 PCE_HEADLESS=/path/to/pce-headless make interaction-test
 ```
 
-`make vram-present-compare` builds both address-setup implementations, checks their exact stationary screenshot pixels, and compares dirty-view counts from the same emulated input sequence. `make column-benchmark` reports VRAM words, loop updates and completed dirty-view passes. `make raster-sweep` captures consecutive turning screenshots and checks for blank frames and the midpoint seam. `make bitmap-stress` tests sustained movement. The optional grid-traversal experiment remains opt-in (`-DRAY_GRID_CROSSING=1`), because earlier measurements showed a CPU-cycle reduction without convincing whole-image throughput improvement.
+`make vram-pacing-compare` builds uninterrupted/96 and raster-paced/136 versions, checks exact stationary pixels, and records VRAM throughput and game-loop updates. `make vram-present-compare` instead compares the address-setup implementations *within the new pacing schedule*. `make column-benchmark` reports VRAM words, loop updates and completed dirty-view passes. `make raster-sweep` captures consecutive turning screenshots and checks for blank frames and the midpoint seam. `make bitmap-stress` tests sustained movement. The optional grid-traversal experiment remains opt-in (`-DRAY_GRID_CROSSING=1`), because earlier measurements showed a CPU-cycle reduction without convincing whole-image throughput improvement.
 
 ## Verified VRAM presentation comparison (emulator only)
 
@@ -40,6 +41,21 @@ The 96-word contiguous build passed 540 consecutive rotation screenshots,
 1,080 movement frames (19 completed dirty-view passes), and the native
 profiler budget. A 104-word variant still failed sustained-movement tests;
 this failed variant is not a release build.
+
+## Verified paced presentation (emulator only)
+
+The same 1,080-video-frame controller benchmark shows **77,017 BAT words**
+transferred by raster-paced/136 versus **60,281** for uninterrupted/96, an
+increase of about **27.8%**. Completed dirty-view passes rise **14 → 17**;
+turning passes rise **1.500 → 1.833 per emulated second** (not full-screen FPS).
+Game-loop updates are **1,056 → 1,051**. Their settled screens match exactly
+across **135,520 RGB pixels**. On the separate 1,080-frame movement stress,
+completed passes are **19 → 25** with no reported blank/partial raster; the
+540-frame screenshot-by-screenshot turn sweep also passes the midpoint seam
+check. Budget 144 failed the movement stress and is not the default. CPU
+profiler gates pass. Input poses may diverge because the game loop can advance
+a different number of updates: these rates are not equal-work raycaster
+benchmarks, and actual PCE console behavior is unverified.
 
 ## Limitations and references
 

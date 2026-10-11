@@ -144,16 +144,29 @@ static uint8_t ray_next_pair(uint8_t pair) {
 #ifndef RAY_PRESENT_CONTIGUOUS
 #define RAY_PRESENT_CONTIGUOUS 1
 #endif
+/* Pace short, IRQ-safe BAT bursts against raster progress instead of
+ * monopolizing VBlank with a single uninterrupted stream. This gives the
+ * scanline IRQ regular opportunities to restore BYR/RCR. The combined
+ * staged word count remains bounded per video frame. */
+#ifndef RAY_PRESENT_PACED
+#define RAY_PRESENT_PACED RAY_STAGE_UPLOAD
+#endif
+#ifndef RAY_PACE_BURSTS
+#define RAY_PACE_BURSTS 1u
+#endif
 /* Short staged BAT bursts use the HuC6280's immediate ST0 instruction,
  * avoiding a general-purpose SDK call in the raster-sensitive loop. */
 #ifndef RAY_INLINE_VDC_ADDRESS
 #define RAY_INLINE_VDC_ADDRESS 1
 #endif
 #ifndef RAY_VBLANK_WORD_BUDGET
-/* Staging computes complex wall pixels before VBlank, so larger transfers
- * can be safely issued as separate <=8-word TIA bursts. The historical
- * in-VBlank renderer retains its conservative 24-word limit. */
-#if RAY_STAGE_UPLOAD
+/* The paced staged writer was validated at 136 words/frame with <=8-word
+ * IRQ-masked bursts and a raster-progress wait between bursts. The old
+ * uninterrupted writer remains limited to 96 words. Higher 144-word paced
+ * and 104-word uninterrupted variants failed sustained raster tests. */
+#if RAY_STAGE_UPLOAD && RAY_PRESENT_PACED
+#define RAY_VBLANK_WORD_BUDGET 136u
+#elif RAY_STAGE_UPLOAD
 #define RAY_VBLANK_WORD_BUDGET 96u
 #else
 #define RAY_VBLANK_WORD_BUDGET 24u
@@ -908,6 +921,11 @@ static void stage_columns(void) {
 static void render_columns(void) {
     if(!staged_ready)return;
     uint8_t offset=0u;
+#if RAY_PRESENT_PACED
+    const uint8_t start_frame=bat_frames;
+    uint8_t last_raster=bat_source_y;
+    uint8_t pace_bursts=0u;
+#endif
     for(uint8_t seg=0u; seg<staged_segments; ++seg) {
         uint8_t pair=staged_segment_pair[seg];
         uint8_t first=staged_segment_first[seg];
@@ -948,6 +966,18 @@ static void render_columns(void) {
             pce_memop((void*)IO_VDC_DATA,staged_words+offset+done,(uint16_t)(n<<1),PCE_MEMOP_INCR_ALT);
             pce_cpu_irq_enable();
             done=(uint8_t)(done+n);
+#if RAY_PRESENT_PACED
+            /* Yield to the raster IRQ between bounded TIAs, not within a
+             * transfer. The frame counter permits a clean rollover if the
+             * next logical scanline event arrives in a later video frame. */
+            if(++pace_bursts==RAY_PACE_BURSTS) {
+                pace_bursts=0u;
+                if(done<count || (uint8_t)(seg+1u)<staged_segments) {
+                    while(last_raster==bat_source_y && start_frame==bat_frames) {}
+                    last_raster=bat_source_y;
+                }
+            }
+#endif
         }
         offset=(uint8_t)(offset+count);
         upload_next_y=(uint8_t)(first+count);
@@ -1020,7 +1050,9 @@ int main(void) {
             if(material_at(world_x,y))wall_blocked=1;else world_y=y;
         }
 #if RAY_COLUMN_STREAM
-        /* Project in active raster time; VDC BAT writes only after VBlank. */
+        /* Prepare during active display. Present only after the next VBlank;
+         * the paced uploader spreads its short IRQ-safe bursts across early
+         * raster progress without masking consecutive scanline events. */
         uint8_t pending=column_prepare();
 #if RAY_STAGE_UPLOAD
         if(pending)stage_columns();

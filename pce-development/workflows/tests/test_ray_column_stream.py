@@ -91,6 +91,20 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertIn('st0 #2',src)
         self.assertIn('y==64u?65u:128u',src)
 
+    def test_raster_paced_bat_stream_preserves_short_interrupt_masks(self):
+        src=(ROOT/'src/main.c').read_text()
+        render=src.rsplit('static void render_columns(void) {',1)[1].split('#endif\n#endif',1)[0]
+        self.assertIn('#define RAY_PRESENT_PACED RAY_STAGE_UPLOAD',src)
+        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 136u',src)
+        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 96u',src)
+        self.assertIn('while(last_raster==bat_source_y && start_frame==bat_frames)',render)
+        self.assertLess(render.index('pce_cpu_irq_enable();'),render.index('while(last_raster==bat_source_y'))
+        self.assertIn('if(n>8u)n=8u;',render)
+        self.assertIn('if(n>until_page)n=until_page;',render)
+        make=(ROOT/'Makefile').read_text()
+        self.assertIn('vram-pacing-compare:',make)
+        self.assertIn('-DRAY_PRESENT_PACED=0 -DRAY_VBLANK_WORD_BUDGET=96',make)
+
     def test_midpoint_stripe_detector_uses_physical_pixels(self):
         from PIL import Image,ImageDraw
         from raster_sweep import midpoint_seam_metrics
@@ -147,7 +161,7 @@ class ColumnStreamTests(unittest.TestCase):
         src=(ROOT/'src/main.c').read_text()
         mk=(ROOT/'Makefile').read_text()
         self.assertIn('-DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0',mk)
-        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 96u',src)
+        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 136u',src)
         self.assertIn('static void stage_pair_words(uint8_t pair,uint8_t first,uint8_t count,uint16_t *dest)',src)
         self.assertIn('ray_wall_hires[sl>>1][ray_tex_phase[l]>>3]',src)
         self.assertIn('if(count)stage_pair_words(pair,local_next,count,staged_words+total);',src)
@@ -186,7 +200,7 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertLess(render.index('pce_cpu_irq_disable();'),render.index('#if RAY_INLINE_VDC_ADDRESS'))
         self.assertLess(render.index('pce_memop((void*)IO_VDC_DATA'),render.index('pce_cpu_irq_enable();'))
         self.assertIn('if(n>8u)n=8u;',render)
-        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 96u',src)
+        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 136u',src)
         self.assertIn('vdc-inline-visual:',mk)
         self.assertIn('-DRAY_INLINE_VDC_ADDRESS=0',mk)
 

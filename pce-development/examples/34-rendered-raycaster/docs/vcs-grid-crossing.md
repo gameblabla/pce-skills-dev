@@ -20,7 +20,7 @@ more than 200,000 actual 128-ray direction/position combinations, including
 one-Q8-unit wall-boundary cases. `make grid-crossing-check` also compiles both
 HuCard ROMs and checks independent rendered emulator images, a 540-frame
 turning raster sweep, 1,080-frame movement stress, and like-for-like
-controller-window counters. The midpoint BAT seam and bounded 96-word VBlank
+controller-window counters. The midpoint BAT seam and bounded 136-word raster-paced
 upload path are unchanged.
 
 ## Measured PCE results
