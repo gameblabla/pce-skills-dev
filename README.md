@@ -218,8 +218,8 @@ sky/floor BAT backdrop once, casts real map rays on camera changes, and writes
 only changed textured wall spans using the VDC's **128-word vertical stride**.
 Short 16-byte TIA bursts are independently interruptible. A generated sparse
 raster IRQ handles 127 logical row transitions instead of 223 physical lines.
-The full-detail 128×128 renderer remains separate from the opt-in 128×64
-atomic page-flip version.
+The only maintained raycaster variant is the 128×128 progressive presentation.
+**Example implementation. Not speed optimized, has issues.**
 
 The faster ROM uses 32 KiB instead of 8 KiB HuCard space, while its BSS
 falls from 1,331 to 487 bytes. **Changed views** and actual BAT words written
@@ -245,9 +245,7 @@ column benchmark and explicitly distinguishes dirty wall updates from complete
 background-and-wall redraws; `make wall-lookup-visual` separately checks that
 one settled screenshot still matches the old shader pixel for pixel.
 
-The 128x64 atomic BAT-half-page mode remains optional, separately compiled
-and tested (`make raycaster-atomic`). Mirrored scenes may be a useful future
-application; they are not part of the current example.
+The 128x64 atomic raycaster example was removed; only the 128x128 progressive version remains.
 
 ### Pre-generated HuC6280 raycaster vertical wall writers
 
@@ -255,7 +253,7 @@ application; they are not part of the current example.
 same-resolution C/TIA and generated-assembly 128×128 raycaster variants,
 compares rendered pixels exactly, and measures actual ROM-authored dirty
 views and generated-code BAT words. The eight-row unrolled paths are
-interrupt-bounded and keep the separate 128×64 atomic renderer unchanged.
+interrupt-bounded at the same 128×128 logical resolution.
 See `pce-development/examples/34-rendered-raycaster/README.md` for tradeoffs.
 
 ### Source texture atlases and measured raycaster writers
@@ -265,7 +263,7 @@ atlas, offline generation of 14 material/shade paired-pixel classes, and a
 losslessly compressed 14-row backdrop. `make raycaster-texture-sheets` verifies
 the texture and SGX dual-plane *asset plan* offline; the SGX compositor itself
 is not implemented. The full-resolution assembly-vs-C/TIA benchmark is
-`make raycaster-codegen`. The atomic 128x64 renderer remains independent.
+`make raycaster-codegen`. The lower-resolution atomic renderer has been removed.
 
 ### Short-span raycaster FPS gate
 
@@ -276,6 +274,5 @@ uses direct VDC writes for the 1–8-word clipped spans where `TIA` setup was
 more expensive; it also avoids unnecessary redraws for depths sharing the
 same projected height, material/shade and texture offset. The test captures
 12 input-driven screens and independent stationary evidence, checks ROM-owned
-changed-view and VRAM-word counters and rejects regressions. The separate
-128×64 atomic ROM is unchanged. This is emulator-measured dirty-view rate,
+changed-view and VRAM-word counters and rejects regressions. The separate lower-resolution ROM has been removed. This is emulator-measured dirty-view rate,
 not physical-console FPS or a matched-work CPU-cycle claim.

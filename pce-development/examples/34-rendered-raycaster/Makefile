@@ -3,14 +3,12 @@ LLVM_MOS_CC ?= mos-pce-clang
 include tools/llvm-mos-sdk.mk
 PCE_FLAGS ?= -std=gnu11 -Os -Wall -Wextra -Werror -mlto-zp=0
 PCE_FLAGS += -DBAT_BITMAP_NATIVE_IRQ
-ATOMIC_FLAGS := -DBAT_BITMAP_DOUBLE_BUFFER=1 -DRAY_DOUBLE_BUFFER=1
 OUT := build/34-rendered-raycaster.pce
 # Full-detail ROM uses 32 KiB of contiguous HuCard ROM: the 16 KiB static
-# BAT backdrop lives in ROM, never in scarce HuC6280 working RAM. Atomic
-# and reference renderers deliberately keep their original 8 KiB layout.
+# BAT backdrop lives in ROM, never in scarce HuC6280 working RAM.
+# 128x128 reference shaders use a smaller, separately linked ROM layout.
 FAST_ROM_LINK := -Wl,--defsym=__rom_bank0=0x8000,--defsym=__rom_bank0_size=0x8000
-# The 128-ray tables no longer fit the old 8KiB row/atomic prototypes.
-# Keep reference and atomic variants in a contiguous 16KiB HuCard bank.
+# The full-resolution reference shader uses a contiguous 16 KiB bank.
 ROW_ROM_LINK := -Wl,--defsym=__rom_bank0=0xc000,--defsym=__rom_bank0_size=0x4000
 .PHONY: interaction-test interaction-replay all run trace visual-test bitmap-test clean
 all: tables-check $(OUT)
@@ -57,27 +55,8 @@ bitmap-stress: $(OUT)
 bitmap-throughput: column-benchmark
 	@echo "NOTE: Column dirty views and old complete BAT passes are different work; no false full-redraw speedup ratio."
 
-# PCEdev-style two half-pages: atomic VBlank BXR flip at 128x64 logical
-# resolution, preserving 512x224 physical timing. Quality vs presentation
-# is a CHOICE; the default remains full-detail 128x128 progressive BAT.
-.PHONY: atomic-rom atomic-bitmap-test atomic-stress atomic-test
-ATOMIC_ROM := build/34-rendered-raycaster-atomic-64.pce
-$(ATOMIC_ROM): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h src/wall_pairs.h tools/genre_trace.h | toolchain
-	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) $(ATOMIC_FLAGS) -DRAY_FAST_SPANS=0 -Itools src/main.c src/bat_bitmap_irq.S -o $@ $(ROW_ROM_LINK) -Wl,-Map,$@.map
-atomic-rom: $(ATOMIC_ROM)
-atomic-bitmap-test: $(ATOMIC_ROM)
-	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/atomic_present.py --rom $(ATOMIC_ROM) --elf $(ATOMIC_ROM).elf --output build/atomic-evidence.json --frames 160
-atomic-stress: $(ATOMIC_ROM)
-	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(ATOMIC_ROM) --elf $(ATOMIC_ROM).elf --mode atomic --output build/atomic-stress.json
-atomic-test: atomic-bitmap-test atomic-stress
-
-.PHONY: presentation-compare
-presentation-compare: bitmap-stress atomic-stress
-	python3 tools/compare_presentation.py --full build/bitmap-stress.json --atomic build/atomic-stress.json --output build/presentation-comparison.json
-
 # Identical scene/geometry with the original branch-per-texel shader. This is
-# for controlled throughput comparisons, NOT an atomic renderer variant.
+# for controlled throughput comparisons, NOT another presentation resolution.
 .PHONY: wall-reference-rom wall-lookup-check
 WALL_REFERENCE_ROM := build/34-rendered-raycaster-wall-reference.pce
 $(WALL_REFERENCE_ROM): src/main.c src/bat_bitmap.h src/bat_bitmap_irq.S src/ray_tables.h src/wall_pairs.h tools/genre_trace.h | toolchain
@@ -88,7 +67,7 @@ wall-lookup-check: tables-check
 	python3 tools/verify_wall_pairs.py
 
 # Compare TWO 128x128 full-detail ROMs (legacy branch shader vs paired
-# lookup). The 128x64 atomic variant is deliberately excluded; redraws
+# lookup). A lower-resolution comparison is not available; redraws
 # with half the pixels are not comparable. Both require six checked PNGs.
 .PHONY: wall-lookup-throughput
 wall-lookup-throughput: column-benchmark
@@ -99,6 +78,19 @@ wall-lookup-throughput: column-benchmark
 .PHONY: wall-lookup-visual
 wall-lookup-visual: $(OUT) codegen-reference wall-lookup-check
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(CODEGEN_REFERENCE) --optimized $(OUT) --output build/wall-lookup-exact.json
+
+# Same 128x128 source, compare contiguous MAWR reuse against conservative
+# per-burst VDC address setup. Pixel equivalence is an independent screenshot.
+.PHONY: vram-present-compare
+VRAM_ADDRESS_REFERENCE := build/34-rendered-raycaster-vram-original.pce
+$(VRAM_ADDRESS_REFERENCE): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/sheet_pairs.h src/backdrop_words.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -DRAY_PRESENT_CONTIGUOUS=0 -Itools src/main.c src/bat_sparse_irq.S -o $@ $(FAST_ROM_LINK)
+vram-present-compare: $(OUT) $(VRAM_ADDRESS_REFERENCE)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(VRAM_ADDRESS_REFERENCE) --elf $(VRAM_ADDRESS_REFERENCE).elf --output build/vram-original-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(OUT) --elf $(OUT).elf --output build/vram-contiguous-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(VRAM_ADDRESS_REFERENCE) --optimized $(OUT) --output build/vram-presentation-visual.json
+	python3 tools/compare_vram_present.py --old build/vram-original-benchmark.json --new build/vram-contiguous-benchmark.json --visual build/vram-presentation-visual.json --output build/vram-presentation-comparison.json
 
 # New full-detail VRAM-resident raycaster acceptance: verifies real changed
 # columns, render state, long controller exercise, and bounded raster IRQ.
@@ -135,7 +127,7 @@ raster-sweep: $(OUT)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/raster_sweep.py --rom $(OUT) --elf $(OUT).elf --output build/raster-sweep.json
 
 # Two same-resolution dirty-column versions: generated HuC6280 unrolled wall
-# writes vs the existing C/TIA loop. Atomic remains a separate build.
+# writes vs the existing C/TIA loop. All comparisons are full resolution.
 .PHONY: codegen-reference codegen-benchmark
 CODEGEN_REFERENCE := build/34-rendered-raycaster-column-reference.pce
 $(CODEGEN_REFERENCE): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/sheet_pairs.h src/sheet_palette.h src/backdrop_words.h tools/genre_trace.h | toolchain
@@ -168,7 +160,7 @@ sheet-art-sgx: sheet-textures-check
 # Full-detail only: small irregular wall gaps are written directly through the
 # VDC, avoiding TIA setup. The C/TIA fallback is an actual separate ROM with
 # the *same texture sheet*, geometry and generated eight-word wall routines.
-# Atomic (128x64) remains independent and is not part of the FPS comparison.
+# Only the 128x128 renderer is maintained.
 .PHONY: scalar-reference scalar-fps
 SCALAR_REFERENCE := build/34-rendered-raycaster-scalar-tia-reference.pce
 $(SCALAR_REFERENCE): src/main.c src/bat_sparse_irq.S src/wall_codegen.S src/ray_tables.h src/sheet_pairs.h src/backdrop_words.h | toolchain

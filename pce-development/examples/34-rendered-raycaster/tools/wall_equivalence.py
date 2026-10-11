@@ -69,7 +69,7 @@ def run(reference, optimized, output, frames=600, emulator=None):
             'reference_screenshot':str(ref),'optimized_screenshot':str(new),
             **compare_pixels(ref,new),
             'limitations':['Only a stationary rendered view; scripted input/throughput checked separately',
-                           'Not a physical-console test; not comparable to 128x64 atomic screenshots']}
+                           'Not a physical-console test; only the 128x128 layout is supported']}
     output.write_text(json.dumps(result,indent=2)+'\n')
     return result
 

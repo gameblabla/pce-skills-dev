@@ -13,7 +13,7 @@ class RayBitmapTests(unittest.TestCase):
     def test_renderer_is_paired_bat_bitmap_not_planar_tile_column(self):
         c=(PROJ/'src/main.c').read_text()
         h=(PROJ/'src/bat_bitmap.h').read_text()
-        self.assertIn('bat_bitmap_setup(colors)',c)
+        self.assertIn('bat_bitmap_setup(ray_sheet_palette)',c)
         self.assertIn('bat_bitmap_display()',c)
         self.assertIn('VDC_BG_SIZE_128_64',h)
         self.assertIn('512,224',h)

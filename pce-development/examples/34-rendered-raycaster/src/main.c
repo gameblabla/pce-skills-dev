@@ -1,6 +1,6 @@
-/* Wolf3D-style 2.5D raycaster rendered through PCEdev's 512x224
- * paired-BAT pseudo-bitmap: default 128x128 logical pixels (optional
- * 128x64 atomic double-page mode), two 4-bit pixels per BAT
+/* Example implementation. Not speed optimized, has issues.
+ * Wolf3D-style 2.5D raycaster rendered through PCEdev's 512x224
+ * paired-BAT pseudo-bitmap: 128x128 logical pixels, two 4-bit pixels per BAT
  * word, 256 permanent patterns. NO per-frame planar tile uploads.
  * Rays, wall geometry, textures, ceiling and floor are all drawn as pixels.
  * LEFT/RIGHT turn, UP/DOWN walk, with independent solid-cell collision.
@@ -10,23 +10,15 @@
 #include "genre_trace.h"
 #include "ray_tables.h"
 #include "wall_pairs.h"
-#ifndef RAY_DOUBLE_BUFFER
-#define RAY_DOUBLE_BUFFER 0
-#endif
-#if !RAY_DOUBLE_BUFFER
 #include "sheet_pairs.h"
 #include "hires_texels.h"
 #include "sheet_palette.h"
 #define RAY_ACTIVE_PAIRS ray_sheet_pairs
 #define RAY_U_MASK 15u
-#else
-#define RAY_ACTIVE_PAIRS ray_wall_pairs
-#define RAY_U_MASK 7u
-#endif
 #ifndef RAY_FAST_SPANS
 #define RAY_FAST_SPANS 1
 #endif
-#if RAY_FAST_SPANS && !RAY_DOUBLE_BUFFER
+#if RAY_FAST_SPANS
 #include "backdrop_words.h"
 #if RAY_BACKDROP_LUT
 #define RAY_BACKDROP_FAST_WORD(y,p) ray_backdrop_lut_word((y),(p))
@@ -35,17 +27,7 @@
 #endif
 #endif
 #include "bat_bitmap.h"
-#ifndef RAY_DOUBLE_BUFFER
-#define RAY_DOUBLE_BUFFER 0
-#endif
-#if RAY_DOUBLE_BUFFER
-#ifndef BAT_BITMAP_DOUBLE_BUFFER
-#error "RAY_DOUBLE_BUFFER requires BAT_BITMAP_DOUBLE_BUFFER in the IRQ"
-#endif
-#define RAY_LOGICAL_ROWS 64u
-#else
 #define RAY_LOGICAL_ROWS 128u
-#endif
 volatile G2Trace pce_genre_trace[2];
 
 static const uint8_t map[8][8]={
@@ -106,10 +88,6 @@ static uint8_t ray_tex_phase[128];
 #ifndef RAY_COLUMN_STREAM
 #define RAY_COLUMN_STREAM 1
 #endif
-#if RAY_DOUBLE_BUFFER
-#undef RAY_COLUMN_STREAM
-#define RAY_COLUMN_STREAM 0
-#endif
 #if RAY_COLUMN_STREAM && !RAY_FAST_SPANS
 #error "Column streaming requires the generated background"
 #endif
@@ -158,6 +136,13 @@ static uint8_t ray_next_pair(uint8_t pair) {
 #endif
 #ifndef RAY_STAGE_UPLOAD
 #define RAY_STAGE_UPLOAD 0
+#endif
+/* In column streams, the VDC automatically advances MAWR by 128 BAT
+ * words per uploaded word. Preserve it across short IRQ-safe TIA bursts;
+ * select DATA again after a raster IRQ rather than resetting MAWR each
+ * time. Explicitly readdress at the BAT page/seam wrap. */
+#ifndef RAY_PRESENT_CONTIGUOUS
+#define RAY_PRESENT_CONTIGUOUS 1
 #endif
 /* Short staged BAT bursts use the HuC6280's immediate ST0 instruction,
  * avoiding a general-purpose SDK call in the raster-sensitive loop. */
@@ -234,9 +219,6 @@ static uint16_t scan_words[RAY_SLICE_ROWS][64];
 volatile uint16_t ray_redraws;
 static int16_t render_world_x,render_world_y;
 static uint8_t draw_row;
-#if RAY_DOUBLE_BUFFER
-static uint8_t draw_page;
-#endif
 
 static uint8_t material_at(int16_t x,int16_t y) {
     uint8_t tx=(uint8_t)(((uint16_t)x)>>8);
@@ -359,14 +341,8 @@ __attribute__((noinline)) static void cast_scene(void) {
         if(d>far_depth)far_depth=d;
         if(d<32)++hit_count;
         uint8_t material=(uint8_t)(wall_kind[c]&0x7fu);
-#if !RAY_DOUBLE_BUFFER
         wall_style[c]=(uint8_t)((((material?material:1u)-1u)<<1) |
              ((d>16u || (wall_kind[c]&0x80u))?1u:0u));
-#else
-        wall_style[c]=(material==3u)?4u:(material==2u)?
-            ((d>13u)?3u:2u):
-            ((d>16u || (wall_kind[c]&0x80u))?1u:0u);
-#endif
     }
 }
 /* Bitmap texel shader: colour indices, not planar tile indices.
@@ -403,7 +379,7 @@ static __attribute__((unused)) uint8_t bitmap_pair(uint8_t pair,uint8_t y) {
     const uint8_t right_wall=(uint8_t)(y>=rt && (uint8_t)(y-rt)<wall_height[rd]);
     uint8_t result;
     /* Do not calculate a perspective floor (or the sky) behind two wall
-     * pixels. The atomic page is a CPU-bound alternative to column mode. */
+     * pixels. This path is used for source-reference comparisons only. */
     if(left_wall && right_wall) {
 #if RAY_WALL_LOOKUP
         uint8_t lval=RAY_ACTIVE_PAIRS[wall_style[l]][tex_u[l]&RAY_U_MASK]
@@ -469,10 +445,6 @@ static __attribute__((unused)) void render_slice(void) {
     }
     for(uint8_t i=0;i<RAY_SLICE_ROWS;++i) {
         uint8_t y=(uint8_t)(draw_row+i);
-#if RAY_DOUBLE_BUFFER
-        /* Vertical 2:1 downsampling buys the second BAT page. */
-        y=(uint8_t)(y<<1);
-#endif
         for(uint8_t pair=0;pair<64u;++pair)
             scan_words[i][pair]=(uint16_t)(0xf200u|bitmap_pair(pair,y));
     }
@@ -485,11 +457,7 @@ static __attribute__((unused)) void render_slice(void) {
 #endif
     for(uint8_t i=0;i<RAY_SLICE_ROWS;++i) {
         uint8_t y=(uint8_t)(draw_row+i);
-#if RAY_DOUBLE_BUFFER
-        uint16_t address=((uint16_t)y<<7)+(draw_page?64u:0u);
-#else
         uint16_t address=((uint16_t)(y&63u)<<7)+((y&64u)?64u:0u);
-#endif
 #if RAY_DIRECT_CHUNKS
         /* Interrupts remain enabled while shading. Each VDC write burst
          * is only eight BAT words (16 bytes), bounded across raster IRQs. */
@@ -516,15 +484,7 @@ static __attribute__((unused)) void render_slice(void) {
 #endif
     draw_row=(draw_row+RAY_SLICE_ROWS)&(RAY_LOGICAL_ROWS-1u);
     if(draw_row==0u) {
-#if RAY_DOUBLE_BUFFER
-        /* Stop until the IRQ has presented this entire back page at VBlank.
-         * Never write a partially rendered image to the visible half. */
-        bat_ready_page=draw_page;
-        while(bat_ready_page!=0xffu){}
-        draw_page^=1u;
-#else
         ++ray_redraws;
-#endif
     }
 }
 #if RAY_COLUMN_STREAM
@@ -963,14 +923,26 @@ static void render_columns(void) {
             if(n>8u)n=8u;
             if(n>until_page)n=until_page;
             pce_cpu_irq_disable();
+#if RAY_PRESENT_CONTIGUOUS
+            /* This branch is only safe for a physically contiguous BAT
+             * column. Page 2's circular row shift wraps at y=65; y=64
+             * switches the BAT half. The VDC word-address increment remains
+             * 128 even while a raster interrupt changes scroll registers. */
+            uint8_t readdress=(uint8_t)(done==0u || y==64u || y==65u);
+#else
+            uint8_t readdress=1u;
+#endif
+            if(readdress) {
 #if RAY_INLINE_VDC_ADDRESS
-            /* ST0 selects MAWR or VWR without an SDK call and does not
-             * clobber the accumulator used by the memory-copy routine. */
-            __asm__ volatile("st0 #0" ::: "memory");
-            *IO_VDC_DATA=RAY_BAT_ADDRESS(y,pair);
+                __asm__ volatile("st0 #0" ::: "memory");
+                *IO_VDC_DATA=RAY_BAT_ADDRESS(y,pair);
+#else
+                pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,RAY_BAT_ADDRESS(y,pair));
+#endif
+            }
+#if RAY_INLINE_VDC_ADDRESS
             __asm__ volatile("st0 #2" ::: "memory");
 #else
-            pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,RAY_BAT_ADDRESS(y,pair));
             *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
 #endif
             pce_memop((void*)IO_VDC_DATA,staged_words+offset+done,(uint16_t)(n<<1),PCE_MEMOP_INCR_ALT);
@@ -1010,11 +982,7 @@ static void publish(uint32_t frame,uint16_t buttons,int16_t moved_x,int16_t move
     t->sequence=n;
 }
 int main(void) {
-#if RAY_DOUBLE_BUFFER
-    bat_bitmap_setup(colors);
-#else
     bat_bitmap_setup(ray_sheet_palette);
-#endif
     world_x=3*256+128;world_y=3*256+128;angle=0;
 #if RAY_COLUMN_STREAM
     column_background_init();
@@ -1035,9 +1003,6 @@ int main(void) {
     for(uint8_t c=0;c<128;++c)old_height[c]=0;
 #endif
     draw_row=0;ray_redraws=0;
-#if RAY_DOUBLE_BUFFER
-    draw_page=1u;
-#endif
     uint32_t frame=0;
     for(;;) {
         uint8_t buttons=(uint8_t)~pce_joypad_read();

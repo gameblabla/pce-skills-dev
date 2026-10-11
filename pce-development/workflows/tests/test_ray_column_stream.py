@@ -28,7 +28,7 @@ class ColumnStreamTests(unittest.TestCase):
     def test_compact_backdrop_lut_preserves_every_pixel_pair(self):
         # Repeating periods follow paired-pixel sky dithering and floor U
         # addressing, not approximate palette quantization. Expand the table
-        # over the complete 128x64 BAT and compare with the source algorithm.
+        # over the complete 128x128 logical image and compare with the source algorithm.
         shifts=[0 if y<66 else 4 if y<73 else 3 if y<82 else 2 if y<101 else 1
                 for y in range(128)]
         periods=[2 if y<64 else 32 >> shifts[y] for y in range(128)]
@@ -83,6 +83,12 @@ class ColumnStreamTests(unittest.TestCase):
         src=(ROOT/'src/main.c').read_text()
         self.assertIn('((y-1u)&63u)',src)
         self.assertIn('if(n>until_page)n=until_page;',src)
+        # VDC MAWR is advanced in hardware between short TIA bursts. Re-select
+        # DATA after an IRQ, but readdress at each BAT-page/row wrap only.
+        self.assertIn('RAY_PRESENT_CONTIGUOUS 1',src)
+        self.assertIn('done==0u || y==64u || y==65u',src)
+        self.assertIn('if(readdress)',src)
+        self.assertIn('st0 #2',src)
         self.assertIn('y==64u?65u:128u',src)
 
     def test_midpoint_stripe_detector_uses_physical_pixels(self):
@@ -112,7 +118,7 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertIn('pce_cpu_irq_enable();',src)
         make=(ROOT/'Makefile').read_text()
         self.assertIn('src/bat_sparse_irq.S',make)
-        self.assertIn('src/bat_bitmap_irq.S',make) # atomic/reference remain independent
+        self.assertIn('src/bat_bitmap_irq.S',make) # reference only
         self.assertIn('__rom_bank0_size=0x8000',make)
         self.assertIn('$(MAKE) raster-sweep',make)
 

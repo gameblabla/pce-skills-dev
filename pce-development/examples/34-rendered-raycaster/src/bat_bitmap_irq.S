@@ -2,17 +2,12 @@
  * Replaces the compiler-generated interrupt prologue and volatile VDC
  * register writes with direct ST0/ST1/ST2. Preserve A/X/Y and RTI.
  * Default: 128 source rows expanded to 224 CRT lines (+4/7 phase),
- * switching BXR at row 64. Optional ATOMIC: two disjoint 64-row
- * half-pages, each expanded to 224 scanlines (+2/7 phase), BXR flipped
- * only in VBlank after all back-page BAT words have been written.
+ * switching BXR at row 64.
  */
 .section .text.irq_vdc,"ax",@progbits
 .global irq_vdc
 .type irq_vdc,@function
 .extern bat_frames,bat_line,bat_source_y,bat_phase
-#if defined(BAT_BITMAP_DOUBLE_BUFFER)
-.extern bat_display_page,bat_ready_page,ray_redraws
-#endif
 irq_vdc:
     pha
     phx
@@ -26,33 +21,9 @@ irq_vdc:
     stz bat_line
     stz bat_source_y
     stz bat_phase
-#if defined(BAT_BITMAP_DOUBLE_BUFFER)
-    /* Atomically publish a completely written back BAT at VBlank.
-     * Front is NEVER modified between presentation events. */
-    lda bat_ready_page
-    cmp #$ff
-    beq .Lno_pending_page
-    sta bat_display_page
-    lda #$ff
-    sta bat_ready_page
-    inc ray_redraws
-    bne .Lno_pending_page
-    inc ray_redraws+1
-.Lno_pending_page:
-    st0 #7
-    st1 #0
-    lda bat_display_page
-    beq .Lfront_left
-    st2 #2                  /* BXR=512 = second BAT half */
-    bra .Lfront_set
-.Lfront_left:
-    st2 #0
-.Lfront_set:
-#else
     st0 #7                       /* BXR=0 */
     st1 #0
     st2 #0
-#endif
     st0 #8                       /* BYR=0 */
     st1 #0
     st2 #0
@@ -69,18 +40,13 @@ irq_vdc:
     inc bat_line
     lda bat_phase
     clc
-#if defined(BAT_BITMAP_DOUBLE_BUFFER)
-    adc #2                  /* 64 logical lines per 224 physical lines */
-#else
     adc #4                  /* 128 logical lines per 224 physical lines */
-#endif
     cmp #7
     bcc .Lphase
     sbc #7                      /* carry set by CMP */
     inc bat_source_y
 .Lphase:
     sta bat_phase
-#if !defined(BAT_BITMAP_DOUBLE_BUFFER)
     lda bat_source_y
     cmp #64
     bne .Lno_switch
@@ -88,7 +54,6 @@ irq_vdc:
     st1 #0
     st2 #2
 .Lno_switch:
-#endif
     st0 #8                       /* BYR = 8 * (y & 63) - 1 */
     lda bat_source_y
     and #$3f

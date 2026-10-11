@@ -85,10 +85,8 @@ def validate(samples, min_completed=1, column_mode=False):
 def run(rom,elf,out,mode="full"):
     out=Path(out).resolve();out.parent.mkdir(parents=True,exist_ok=True)
     rom=Path(rom).resolve();elf=Path(elf).resolve()
-    if mode not in ('full','atomic','column'):
+    if mode not in ('full','column'):
         raise ValueError('unknown bitmap geometry')
-    if mode=='atomic':
-        platformer_trace.resolve_trace_address(elf,'bat_display_page')
     redraw_addr=platformer_trace.resolve_trace_address(elf,'ray_redraws')
     trace_addr=platformer_trace.resolve_trace_address(elf,'pce_genre_trace')
     exe=platformer_trace._find_binary(str(rom))
@@ -115,7 +113,7 @@ def run(rom,elf,out,mode="full"):
     counts=validate(captures,column_mode=(mode=='column'))
     changed=check_pngs(captures[0]['screenshot'],captures[2]['screenshot'],
                        {'min_colors_each':6,'min_changed_pixels':7000})
-    rows=64 if mode=='atomic' else 128
+    rows=128
     if mode=='column':
         counts['changed_views']=counts.pop('completed_redraws')
         counts['logical_framebuffer_size']=[128,128]
@@ -128,7 +126,7 @@ def run(rom,elf,out,mode="full"):
             'rom':str(rom),'segments':captures,'totals':counts,
             'rotation_pixel_evidence':changed,
             'limitations':['HuC6280 emulation, not physical hardware',
-                           'Mode '+mode+': '+('VBlank page swaps, half-height logical image' if mode=='atomic' else 'progressive BAT writes, no atomic full-screen swaps'),
+                           'Mode '+mode+': progressive BAT writes, no atomic full-screen swaps',
                            'Screenshots validate colours/textures, not all pixels',
                           'Column mode changed-view commits are not equivalent to full redraws']}
     out.write_text(json.dumps(report,indent=2)+'\n')
@@ -140,7 +138,7 @@ def main():
     p.add_argument('--rom',required=True)
     p.add_argument('--elf',required=True)
     p.add_argument('--output',required=True)
-    p.add_argument('--mode',choices=('full','atomic','column'),default='full')
+    p.add_argument('--mode',choices=('full','column'),default='full')
     args=p.parse_args()
     try:
         result=run(args.rom,args.elf,args.output,args.mode)

@@ -4,7 +4,7 @@
 Five lighting/material classes encode the existing stone, brick and metal
 shaders. Columns use 8 horizontal phases and 16 vertical texture phases.
 Lookup is 5*8*16 = 640 ROM bytes; indices are powers of two. The full-detail
-128x128 and atomic 128x64 paths share the shader but NOT their framebuffers.
+This generator supplies reference 128x128 wall shading tables.
 """
 import argparse
 from pathlib import Path

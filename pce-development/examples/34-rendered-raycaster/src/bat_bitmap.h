@@ -18,23 +18,17 @@
 #define BAT_BITMAP_TILE_BASE (BAT_BITMAP_TILE_WORD / 16u)
 
 volatile uint8_t bat_line, bat_source_y, bat_phase, bat_frames;
-#ifdef BAT_BITMAP_DOUBLE_BUFFER
-/* Two independent 64x64 BAT half-pages, selected by BXR during VBlank.
- * $ff means no page is ready; the raster IRQ is the ONLY page presenter. */
-volatile uint8_t bat_display_page, bat_ready_page;
-#endif
 
 /* The native tile-set has 256 entries, indexed by (left<<4)|right.
- * In full-detail mode, use a 3+2+3 horizontal transition rather than hard
- * 4+4 color slabs: PCEdev-inspired subpixel blending, with no extra BAT
- * writes or dynamic planar tile updates. Atomic/reference retain 4+4. */
+ * Use a 3+2+3 horizontal transition rather than hard 4+4 color slabs:
+ * PCEdev-inspired subpixel blending, with no dynamic planar tile uploads. */
 static void bat_bitmap_patterns(void) {
     for (uint16_t pair=0; pair<256; ++pair) {
         uint8_t a = (uint8_t)(pair >> 4), b = (uint8_t)(pair & 15);
         uint16_t planes[4];
         uint8_t mask=1u;
         for (uint8_t bit=0; bit<4; ++bit) {
-#if !RAY_DOUBLE_BUFFER && !defined(RAY_NO_SUBPIXEL_BLEND)
+#ifndef RAY_NO_SUBPIXEL_BLEND
             uint8_t mid=ray_palette_blend_packed[pair>>1];
             mid=(uint8_t)((pair&1u)?(mid&15u):(mid>>4));
             planes[bit] = ((a & mask) ? 0xe0u : 0u) |
@@ -66,10 +60,6 @@ static void bat_bitmap_setup(const uint16_t colors[16]) {
      * Match the backdrop to this example's palette entry zero. */
     pce_vce_set_color(0, colors[0]);
     for (uint8_t i=0; i<16; ++i) pce_vce_set_color(240u+i, colors[i]);
-#ifdef BAT_BITMAP_DOUBLE_BUFFER
-    bat_display_page=0u;
-    bat_ready_page=0xffu;
-#endif
     bat_bitmap_patterns();
     /* Entire pseudo-bitmap BAT starts at VRAM $0000; use palette 15. */
     pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,0);
