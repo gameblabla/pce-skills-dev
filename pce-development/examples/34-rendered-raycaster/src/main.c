@@ -159,6 +159,24 @@ static uint8_t ray_next_pair(uint8_t pair) {
 #ifndef RAY_INLINE_VDC_ADDRESS
 #define RAY_INLINE_VDC_ADDRESS 1
 #endif
+/* Experimental VRAM-backed image buffering: a complete 8192-word hidden
+ * bitmap at $4000..$5FFF. The PCE has ONE fixed-origin BAT: this is NOT
+ * a scroll-register page flip. Presenting copies the hidden BAT to $0000.
+ * Limit each DMA to 4096 words; an 8192-word transfer failed equivalence
+ * despite its completion poll. The two smaller DMA copies pass, but are
+ * separate display operations and CAN expose partial presentation.
+ * Do not equate a larger HuCard ROM with additional VDC VRAM. */
+#ifndef RAY_VRAM_DOUBLE_BUFFER
+#define RAY_VRAM_DOUBLE_BUFFER 0
+#endif
+#if RAY_VRAM_DOUBLE_BUFFER && (!RAY_COLUMN_STREAM || !RAY_STAGE_UPLOAD)
+#error "VRAM buffering requires staged column rendering"
+#endif
+#define RAY_VRAM_BACK_BASE 0x4000u
+#if RAY_VRAM_DOUBLE_BUFFER
+static uint8_t ray_present_pending;
+volatile uint16_t ray_dma_presents;
+#endif
 #ifndef RAY_VBLANK_WORD_BUDGET
 /* The paced staged writer is emulator-validated at 138 words/frame with <=8-word
  * IRQ-masked bursts and a raster-progress wait between bursts. The old
@@ -622,7 +640,7 @@ static __attribute__((unused)) void column_upload(uint8_t pair,uint8_t first,uin
 #endif
         }
         pce_cpu_irq_disable();
-        pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,RAY_BAT_ADDRESS(y,pair));
+        pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,(uint16_t)(RAY_BAT_ADDRESS(y,pair) + (RAY_VRAM_DOUBLE_BUFFER?RAY_VRAM_BACK_BASE:0u)));
         *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
 #if RAY_COLUMN_TIA
         pce_memop((void*)IO_VDC_DATA,column_words,(uint16_t)(n<<1),PCE_MEMOP_INCR_ALT);
@@ -657,7 +675,13 @@ static void finish_column(uint8_t pair) {
 #endif
     }
     next_column=ray_next_pair(pair);
-    if(next_column==RAY_FIRST_PAIR && column_pass_dirty)++ray_redraws;
+    if(next_column==RAY_FIRST_PAIR && column_pass_dirty) {
+#if RAY_VRAM_DOUBLE_BUFFER
+        ray_present_pending=1u;
+#else
+        ++ray_redraws;
+#endif
+    }
 }
 #if !RAY_STAGE_UPLOAD
 static void render_columns(void) {
@@ -710,7 +734,14 @@ static void render_columns(void) {
  * only a tiny buffered TIA burst with bounded IRQ masking touches VDC DATA.
  * This prevents missed raster IRQs without lowering the uploaded detail. */
 static uint16_t staged_words[RAY_VBLANK_WORD_BUDGET];
-static uint8_t staged_ready,staged_segments,staged_total_words;
+static uint8_t staged_ready,staged_segments;
+#if RAY_VRAM_DOUBLE_BUFFER
+/* Hidden VRAM staging can exceed 255 words; retain full pointer widths. */
+typedef uint16_t ray_staged_size_t;
+#else
+typedef uint8_t ray_staged_size_t;
+#endif
+static ray_staged_size_t staged_total_words;
 static uint8_t staged_segment_pair[64],staged_segment_first[64],staged_segment_count[64];
 static uint8_t staged_segment_last[64],staged_segment_finish[64];
 
@@ -848,8 +879,9 @@ static void stage_pair_words(uint8_t pair,uint8_t first,uint8_t count,uint16_t *
 }
 
 static void stage_columns(void) {
-    uint8_t budget=RAY_VBLANK_WORD_BUDGET;
-    uint8_t total=0u,segments=0u;
+    ray_staged_size_t budget=RAY_VBLANK_WORD_BUDGET;
+    ray_staged_size_t total=0u;
+    uint8_t segments=0u;
     uint8_t pair_cursor=next_column;
     uint8_t local_active=upload_active;
     uint8_t local_next=upload_next_y;
@@ -904,8 +936,8 @@ static void stage_columns(void) {
         staged_segment_last[segments]=local_last;
         staged_segment_finish[segments]=(count==remaining);
         if(count)stage_pair_words(pair,local_next,count,staged_words+total);
-        total=(uint8_t)(total+count);
-        budget=(uint8_t)(budget-count);
+        total=(ray_staged_size_t)(total+count);
+        budget=(ray_staged_size_t)(budget-count);
         ++segments;
         if(count!=remaining)break;
         local_active=0u;
@@ -920,7 +952,7 @@ static void stage_columns(void) {
 
 static void render_columns(void) {
     if(!staged_ready)return;
-    uint8_t offset=0u;
+    ray_staged_size_t offset=0u;
 #if RAY_PRESENT_PACED
     /* Track the most recently observed raster event AND frame. A single
      * immutable start-frame makes all pacing waits no-ops after the first
@@ -956,9 +988,9 @@ static void render_columns(void) {
             if(readdress) {
 #if RAY_INLINE_VDC_ADDRESS
                 __asm__ volatile("st0 #0" ::: "memory");
-                *IO_VDC_DATA=RAY_BAT_ADDRESS(y,pair);
+                *IO_VDC_DATA=(uint16_t)(RAY_BAT_ADDRESS(y,pair) + (RAY_VRAM_DOUBLE_BUFFER?RAY_VRAM_BACK_BASE:0u));
 #else
-                pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,RAY_BAT_ADDRESS(y,pair));
+                pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,(uint16_t)(RAY_BAT_ADDRESS(y,pair) + (RAY_VRAM_DOUBLE_BUFFER?RAY_VRAM_BACK_BASE:0u)));
 #endif
             }
 #if RAY_INLINE_VDC_ADDRESS
@@ -983,7 +1015,7 @@ static void render_columns(void) {
             }
 #endif
         }
-        offset=(uint8_t)(offset+count);
+        offset=(ray_staged_size_t)(offset+count);
         upload_next_y=(uint8_t)(first+count);
         upload_last_y=staged_segment_last[seg];
         if(staged_segment_finish[seg]) {
@@ -995,6 +1027,27 @@ static void render_columns(void) {
     }
     ray_bat_words=(uint16_t)(ray_bat_words+staged_total_words);
     staged_ready=0u;
+#if RAY_VRAM_DOUBLE_BUFFER
+    if(ray_present_pending) {
+        ray_present_pending=0u;
+        /* Begin presentation only after an entire offscreen view completes.
+         * Never change that buffer during either internal VRAM DMA. */
+        /* The VDC's one visible BAT cannot switch to a different base.
+         * Copy a completed 128x128 image in two independently bounded
+         * VRAM-to-VRAM DMAs. They are not an atomic full-frame swap. */
+        for(uint8_t piece=0u;piece<2u;++piece) {
+            uint8_t before_chunk=bat_frames;
+            while(before_chunk==bat_frames) {}
+            pce_cpu_irq_disable();
+            pce_vdc_dma_start(0u,(uint16_t)(RAY_VRAM_BACK_BASE+((uint16_t)piece<<12)),
+                                   (uint16_t)((uint16_t)piece<<12),4096u);
+            pce_cpu_irq_enable();
+            while(!pce_vdc_dma_finished()) {}
+        }
+        ++ray_dma_presents;
+        ++ray_redraws;
+    }
+#endif
 }
 #endif
 #endif
@@ -1020,6 +1073,12 @@ int main(void) {
     world_x=3*256+128;world_y=3*256+128;angle=0;
 #if RAY_COLUMN_STREAM
     column_background_init();
+#if RAY_VRAM_DOUBLE_BUFFER
+    /* Display still disabled: initialize the hidden complete frame from
+     * the visible BAT, before allowing any raster interrupts. */
+    pce_vdc_dma_start(0u,0u,RAY_VRAM_BACK_BASE,8192u);
+    while(!pce_vdc_dma_finished()) {}
+#endif
 #endif
     bat_bitmap_display();
 #if RAY_COLUMN_STREAM
@@ -1030,6 +1089,9 @@ int main(void) {
                  VDC_CONTROL_VRAM_ADD_128);
     pce_cpu_irq_enable();
     next_column=RAY_FIRST_PAIR;cast_valid=0;upload_active=0;ray_bat_words=0;
+#if RAY_VRAM_DOUBLE_BUFFER
+    ray_present_pending=0u;ray_dma_presents=0u;
+#endif
     column_pairs_per_update=RAY_COLUMNS_PER_UPDATE;
 #if RAY_WALL_CODEGEN
     ray_codegen_words=0;

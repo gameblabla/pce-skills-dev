@@ -50,7 +50,7 @@ class ColumnStreamTests(unittest.TestCase):
     def test_multiple_pairs_fit_the_same_upload_budget(self):
         src=(ROOT/'src/main.c').read_text()
         block=src.split('static void stage_columns(void) {',1)[1].split('static void render_columns(void) {',1)[0]
-        self.assertIn('budget=(uint8_t)(budget-count)',block)
+        self.assertIn('budget=(ray_staged_size_t)(budget-count)',block)
         self.assertIn('staged_segment_count[segments]=count',block)
         self.assertIn('staged_segment_count[segments]=0u',block)
         self.assertIn('if(count!=remaining)break;',block)
@@ -206,7 +206,8 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertIn('#define RAY_INLINE_VDC_ADDRESS 1',src)
         self.assertIn('__asm__ volatile("st0 #0" ::: "memory")',render)
         self.assertIn('__asm__ volatile("st0 #2" ::: "memory")',render)
-        self.assertIn('pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,RAY_BAT_ADDRESS(y,pair))',render)
+        self.assertIn('pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,',render)
+        self.assertIn('RAY_BAT_ADDRESS(y,pair) + (RAY_VRAM_DOUBLE_BUFFER?',render)
         self.assertLess(render.index('pce_cpu_irq_disable();'),render.index('#if RAY_INLINE_VDC_ADDRESS'))
         self.assertLess(render.index('pce_memop((void*)IO_VDC_DATA'),render.index('pce_cpu_irq_enable();'))
         self.assertIn('if(n>8u)n=8u;',render)

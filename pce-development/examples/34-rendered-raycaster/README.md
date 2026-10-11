@@ -4,7 +4,7 @@
 
 This is a demonstration of a 128×128, 16-colour *logical* raycaster on the PC Engine. Its physical display is 512×224, but the paired-BAT trick does not deliver 512 independently drawn horizontal pixels. Two 4-bit colour indices are encoded in each BAT word. The 256 static tile patterns live in VRAM, and the sky/floor backdrop is initialized once. Each frame updates **changed wall spans** within the BAT, not a whole software framebuffer.
 
-The previous 128×64 atomic example was removed, including its build target, page-swap code and tests. The only maintained raycaster presentation is progressive 128×128. Reference shaders remain solely for same-resolution comparisons.
+The previous 128×64 atomic example was removed, including its build target, page-swap code and tests. The only production raycaster presentation is progressive 128×128. An optional VRAM-buffered experiment is documented below; reference shaders remain solely for same-resolution comparisons.
 
 ## Presentation path
 
@@ -13,6 +13,55 @@ The raycaster uses 128 ray directions, center-first paired-column ordering, a fi
 The staged uploader composes wall BAT words before VBlank, then transfers at most **138 BAT words per prepared batch**, in interrupt-masked bursts no larger than **eight words**. Unlike the historical uninterrupted 96-word upload, it **waits for raster IRQ progress between consecutive bursts**. That spreads writes into active scanlines while allowing BYR/RCR remapping to run between them. The VDC's auto-increment-by-128 remains active within physical BAT runs; only a segment change or the rotated BAT-page wrap requires a new MAWR address. Compile with `-DRAY_PRESENT_PACED=0 -DRAY_VBLANK_WORD_BUDGET=96` to restore the older presentation, or `-DRAY_PRESENT_CONTIGUOUS=0` to restore per-burst address setup.
 
 **Important:** The 138-word setting is **emulator-tested, not a console-safe hardware specification**. A 144-word paced variant failed sustained movement (incomplete bitmap), while larger *unpaced* budgets produced missing raster interrupts. The upload bursts still briefly mask IRQs and can tear; the renderer is progressive rather than an atomic 128×128 display. Keep both the 540-frame consecutive-turn sweep and 1,080-frame movement stress as mandatory regression checks. Dirty-view commits are not full-screen FPS.
+
+## Optional VRAM-backed 128×128 image buffer (experimental)
+
+The article [PCE bitmap mode](https://pcedev.wordpress.com/2015/12/10/pce-bitmap-mode/)
+describes the tilemap acting as a bitmap in **VRAM**, and discusses using
+VDC VRAM-to-VRAM DMA for clearing/copying. It does **not** provide an instant
+second BAT-base register. The VDC has only a single visible BAT at `$0000`.
+This 128×128 representation fills its 8,192 words (a 128×64 hardware BAT).
+Increasing the HuCard ROM allowance to **1 MiB** does not enlarge the PCE's
+64 KiB video RAM, nor provide a second display base or faster VRAM access.
+
+A deliberately **opt-in** implementation composes a complete updated
+128×128 image into the free 8,192-word VRAM region `$4000..$5FFF`, keeping
+patterns at `$2000..$2FFF` and the visible BAT at `$0000..$1FFF` untouched
+while rendering. Once complete, it copies the image back into the visible BAT
+with two VDC-to-VRAM DMA transfers of **4,096 words each**. The LLVM-MOS
+`pce_vdc_dma_start()` *implementation* passes `length - 1` straight to the
+hardware word-count register (despite the byte-length wording in its API
+documentation), so the units must be **words**. An unsegmented 8,192-word
+copy failed the pixel-equivalence test; these two bounded copies passed.
+
+**Caution:** these are two distinct display updates across VBlanks; this is
+real offscreen buffering but **not an atomic double-buffer page flip**.
+It can show a mixture of successive views during the DMA copy, and it has
+not demonstrated higher FPS than the stable reduced-IRQ variant. Keep the
+progressive renderer as the default. On the tested emulator the opt-in mode
+made **2.333 completed DMA presentations/sec** during turning, versus
+**2.000 progressive dirty-view commits/sec** for the default renderer in the
+same 1,080-video-frame scenario. A separate reduced-IRQ progressive ROM
+previously achieved 2.167 dirty-view commits/sec.
+These are different kinds of completion and are **not** directly comparable
+FPS. The buffered experiment also requires 8,192 DMA-copy words **per
+presentation** in addition to the offscreen word writes. It passed exact
+settled-image equivalence (0 / 135,520 differing physical pixels), 1,080
+consecutive turn screenshots, 1,080 frames of movement stress, and the
+interaction trace; none of those tests proves atomic presentation.
+
+```sh
+make vram-buffer-rom
+PCE_HEADLESS=/path/to/pce-headless make vram-buffer-compare
+PCE_HEADLESS=/path/to/pce-headless make vram-buffer-stress
+```
+
+The `vram-buffer-compare` target requires **exact** independent emulator
+screenshots before publishing performance numbers, preventing the earlier
+DMA overrun/corruption from being mistaken for a speedup. Both presentation
+modes remain subject to raster and movement stress tests. Hardware timing
+has not been validated; a guaranteed tear-free 128×128 swap on a base PCE
+would require a different representation or additional video hardware.
 
 ## Build and verify
 

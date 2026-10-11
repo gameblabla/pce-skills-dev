@@ -231,6 +231,25 @@ grid-crossing-check: $(OUT) $(GRID_CROSS_ROM)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(GRID_CROSS_ROM) --elf $(GRID_CROSS_ROM).elf --mode column --output build/grid-crossing-stress.json
 	python3 tools/compare_grid_crossing.py --reference build/grid-crossing-default-benchmark.json --experimental build/grid-crossing-experimental-benchmark.json --visual build/grid-crossing-visual.json --raster build/grid-crossing-raster.json --stress build/grid-crossing-stress.json --output build/grid-crossing-evidence.json
 
+# Experimental 128x128 VRAM-backed image buffer. The PCE has NO alternate
+# BAT-base register: presentation requires two 4096-word VDC DMA copies,
+# potentially spanning two display frames. This is NOT an atomic flip and
+# is not faster than the stable reduced-IRQ renderer in the benchmark.
+VRAM_BUFFER_ROM := build/34-rendered-raycaster-vram-buffer-experimental.pce
+$(VRAM_BUFFER_ROM): src/main.c src/bat_bitmap.h src/bat_natural_irq.S src/backdrop_words.h src/ray_tables.h src/hires_texels.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -DRAY_VRAM_DOUBLE_BUFFER=1 -DRAY_PRESENT_PACED=0 -DRAY_VBLANK_WORD_BUDGET=192 -Itools src/main.c src/bat_natural_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+.PHONY: vram-buffer-rom vram-buffer-compare vram-buffer-stress
+vram-buffer-rom: $(VRAM_BUFFER_ROM)
+vram-buffer-compare: $(OUT) $(VRAM_BUFFER_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(OUT) --elf $(OUT).elf --output build/vram-buffer-progressive-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(VRAM_BUFFER_ROM) --elf $(VRAM_BUFFER_ROM).elf --output build/vram-buffer-experimental-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(OUT) --optimized $(VRAM_BUFFER_ROM) --output build/vram-buffer-exact-image.json
+	python3 tools/compare_vram_buffering.py --old build/vram-buffer-progressive-benchmark.json --new build/vram-buffer-experimental-benchmark.json --visual build/vram-buffer-exact-image.json --output build/vram-buffer-comparison.json
+vram-buffer-stress: $(VRAM_BUFFER_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/raster_sweep.py --rom $(VRAM_BUFFER_ROM) --elf $(VRAM_BUFFER_ROM).elf --output build/vram-buffer-raster.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(VRAM_BUFFER_ROM) --elf $(VRAM_BUFFER_ROM).elf --mode column --output build/vram-buffer-stress.json
+
 # Experimental PCE-specific natural-scroll scheduler. It relies on vertical
 # tile pixels being uniform: 59 of 127 logical row transitions can occur from
 # the VDC's own BYR increment. Keep ordinary IRQs around the BXR page switch.
