@@ -96,7 +96,8 @@ def main():
                     assert right==want, 'native right texel nibble mismatch'
                     assert (left|right)&0xf0==left, 'native left texel nibble mismatch'
     expected=m.generate()
-    assert '[16][128]' in expected and 'ray_step_x[16][128]' in expected
+    assert '[8][128]' in expected and 'ray_step_x[8][128]' in expected
+    assert all(steps[a+8][c]==tuple(-v for v in steps[a][c]) for a in range(8) for c in range(128))
     assert min(len(set(steps[angle])) for angle in range(16))>=50
     assert Path(m.OUT).read_text()==expected, 'generated 128-ray table is stale'
     print('128 independent screen columns, 64 BAT words, 16 camera angles; '

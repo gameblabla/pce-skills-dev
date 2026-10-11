@@ -63,13 +63,20 @@ def validate(samples, min_completed=1, column_mode=False):
         redraws=sample['total_redraws'];updates=sample['game_updates']
         if type(redraws) is not int or type(updates) is not int or redraws<0 or updates<0:
             raise ValueError('invalid bitmap counters')
-        if redraws-prev_redraws<(0 if column_mode and index==5 else min_completed):
+        if redraws-prev_redraws<(0 if column_mode and index>=4 else min_completed):
             raise ValueError(f'bitmap stalled: segment {index} completed only {redraws-prev_redraws} redraws')
         if updates<=prev_updates:
             raise ValueError(f'game loop stalled during bitmap segment {index}')
+        # A completed pass can be committed at most once per game update.
+        # This also detects RAM corruption that can otherwise pass screenshot
+        # checks despite impossible (e.g. 11,565) redraw counts.
+        if redraws>updates+1:
+            raise ValueError(f'impossible redraw counter: {redraws} after {updates} game updates')
         if sample.get('bitmap',{}).get('passed') is not True:
             raise ValueError(f'bitmap screenshot {index} not independently verified')
         prev_updates,prev_redraws=updates,redraws
+    if column_mode and samples[-1]['total_redraws']<4:
+        raise ValueError('too few completed dirty passes across input stress')
     return {'completed_redraws':samples[-1]['total_redraws'],
             'game_updates':samples[-1]['game_updates'],
             'emulator_frames':sum(step[0] for step in STEPS)}

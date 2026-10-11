@@ -10,6 +10,7 @@ sys.path.insert(0,str(TOOLS))
 import gen_backdrop
 import gen_sparse_irq
 import column_benchmark
+import bitmap_stress
 
 class ColumnStreamTests(unittest.TestCase):
     def test_background_is_precomputed_and_deterministic(self):
@@ -39,11 +40,16 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertIn('column_pass_dirty',src)
         self.assertIn('ray_bat_words',src)
         self.assertIn('if(cast_valid && cast_angle==angle',src)
+        self.assertIn('if(i && next_column==0u)break;',src)
+        self.assertIn('column_prepare()',src)
+        self.assertIn('upload_next_y=(uint8_t)(upload_next_y+n)',src)
+        self.assertIn('if(upload_active)return 1u;',src)
         self.assertIn('pce_cpu_irq_enable();',src)
         make=(ROOT/'Makefile').read_text()
         self.assertIn('src/bat_sparse_irq.S',make)
         self.assertIn('src/bat_bitmap_irq.S',make) # atomic/reference remain independent
         self.assertIn('__rom_bank0_size=0x8000',make)
+        self.assertIn('$(MAKE) raster-sweep',make)
 
     def sample(self):
         result=[]
@@ -60,7 +66,20 @@ class ColumnStreamTests(unittest.TestCase):
         report=column_benchmark.validate(self.sample())
         self.assertTrue(report['passed'])
         self.assertEqual(report['changed_views'],15)
-        self.assertEqual(report['turning_views_per_second'],round(10*60/180,3))
+        self.assertEqual(report['turning_views_per_second'],
+                         round(10*60/(column_benchmark.SCENARIO[1][1]+column_benchmark.SCENARIO[3][1]),3))
+
+    def test_column_bitmap_stress_allows_incomplete_settle_pass(self):
+        # With bounded/resumable VRAM writes, some controller segments end
+        # in the middle of a changed view; screenshots must still be valid.
+        redraws=(1,2,3,4,4,5)
+        samples=[{'segment':i,'emulator_frames':bitmap_stress.STEPS[i][0],
+                  'total_redraws':r,'game_updates':(i+1)*100,
+                  'bitmap':{'passed':True}} for i,r in enumerate(redraws)]
+        self.assertEqual(bitmap_stress.validate(samples,column_mode=True)['completed_redraws'],5)
+        samples[-1]['total_redraws']=10000
+        with self.assertRaisesRegex(ValueError,'impossible redraw'):
+            bitmap_stress.validate(samples,column_mode=True)
 
     def test_rejects_fake_frame_without_actual_vram_writes(self):
         rows=self.sample();rows[1]['vram_words']=0
@@ -77,7 +96,7 @@ class ColumnStreamTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'stalled'):column_benchmark.validate(rows)
 
     def test_rejects_missing_turns(self):
-        rows=self.sample();rows[1]['dirty_views']=1
+        rows=self.sample();rows[1]['dirty_views']=0;rows[3]['dirty_views']=0
         with self.assertRaisesRegex(ValueError,'rotation failed'):column_benchmark.validate(rows)
 
 if __name__=='__main__':unittest.main()

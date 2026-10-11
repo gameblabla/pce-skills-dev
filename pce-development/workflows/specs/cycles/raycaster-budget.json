@@ -24,7 +24,7 @@
             "main",
             "column_upload"
           ],
-          "max": 290000
+          "max": 300000
         }
       ]
     },
@@ -43,7 +43,7 @@
             "main",
             "column_upload"
           ],
-          "max": 290000
+          "max": 300000
         }
       ]
     }

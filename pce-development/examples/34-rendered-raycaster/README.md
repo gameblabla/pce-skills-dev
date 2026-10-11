@@ -38,33 +38,51 @@ compile with `-DRAY_ADAPTIVE_RAYS=0`. The host reference checker exercises
 requires **zero fabricated wall cells or faces**. It also measures, rather
 than conceals, remaining height/texture differences.
 
-In the same 540-emulated-video-frame benchmark, the previous 64-ray build
-achieved **6.33 progressive changed-view commits/s** while turning. The
-128-ray build currently achieves **3.00** using eight-pair rendering steps,
-versus the slower C writer's **3.00** changed-view commits/s under the same
-turning test. The native writer still uploads about **63% of BAT words** in
-eight-word assembly bursts, and processes more controller updates in some
-movement scenes; these metrics are not a fixed-work, end-to-end FPS speedup.
-The eight-pair limit reduces graphics/interrupt interference but at the cost
-of redraw throughput. **The older 64-ray version is faster.** Neither result
-is complete atomic FPS or measured on real console hardware. The full-height
-progressive renderer still exhibits intermittent lost raster presentation
-(sky-only frame) under the 1,080-frame repeated-turn/movement acceptance;
-`make column-regression` currently detects this and fails. This is an
-unresolved limitation, not a verified tearing fix. The optional
-128x64 atomic page-swap mode remains independently buildable, with the
-same two-ray-per-word shading; it trades resolution and throughput for
-tear-free completed pages. The atomic version is independently validated by
-`make atomic-test`: 26 completed pages over 1,080 emulated video frames
-(about 1.44 presented pages/s), and it avoids the long-run progressive-mode
-raster failure. Choose this build for consistent page presentation rather
-than for high FPS.
+The previous 64-ray build achieved **6.33 changed-view commits/second**
+during turns in the older 540-video-frame test. The first 128-ray eight-pair
+prototype reached **3.00**, but missed raster IRQs during prolonged movement
+and occasionally displayed a sky-only frame. Increasing the number of rays
+alone is **not an FPS improvement**.
+
+The current **128-ray raster-safe configuration** finishes each partial BAT
+column over multiple VBlank periods, with **at most 24 BAT words** scheduled
+per period. Each pair's old dirty key is updated only when its final segment
+has been uploaded. The camera view is recast only after all 64 pairs of the
+previous view are complete; a guard prevents an accidental jump across the
+pass boundary. Sparse native raster IRQs and the generated dual-lane wall
+writer are retained. Both the **1,080-frame movement stress** (six completed
+changed-view commits) and a **540-frame screenshot sweep during uninterrupted
+turning** pass; the latter recorded *at least ten real emulator colours in
+every frame*, with no sky-only image. These checks are now in
+`make column-regression`.
+
+Under an **extended 1,080-video-frame benchmark** (90 idle, 180 turn right,
+180 walk, 180 turn left, 360 settle, 90 quiet), this build measures **0.333
+changed-view commits/second during turning**. These are finished dirty-column
+passes, **not full-screen atomic FPS**. The stable 128-ray version is therefore
+substantially slower than both the original 64-ray version and the faster,
+raster-unsafe 128-ray prototype. The progressive display can still show
+partial view transitions, and physical hardware timing has not been tested.
+The optional 128×64 atomic variant uses page swaps at half vertical
+resolution; it does not use the progressive 128×128 presentation path.
+
+The VBlank scheduler affects instruction attribution in native profiling:
+the enforced `main + column_upload` gate is **300,000 ticks/frame**, up from
+290,000 for the older eight-pair scheduling. It includes idle waiting, so
+its attributed CPU time is not synonymous with the cost of drawing pixels.
+The separate `irq_vdc`, `cast_ray` and `cast_scene` limits remain enforced.
+
+The two direction tables use exact 180-degree rotational symmetry: eight
+stored angles, with sign reversal at runtime, retain all 16 camera angles
+and all 128 ray directions. This removes **2,048 bytes of ROM lookup data**,
+verified against the original integer step calculations.
 
 The native generator masks the left and right texel nibbles *separately*.
 Without both masks, unrelated colour bits from the right texture corrupt
-the left half of a BAT word. The 600-frame C reference comparison matches
-except for one explicitly reported 504-pixel page-latch scanline. This is
-tested rather than hidden by a relaxed screenshot threshold.
+the left half of a BAT word. The current 600-frame C reference comparison matches **pixel-for-pixel**
+on a stationary scene. Earlier revisions had a reproducible 504-pixel
+page-latch scanline discrepancy; exactness is checked explicitly rather
+than inferred from a textured-looking image.
 
 This follows the NESdev discussion of avoiding large CHR pattern updates,
 using precomputed ray/distance tables and reducing drawing work, while
@@ -74,15 +92,17 @@ and [PCE bitmap mode](https://pcedev.wordpress.com/2015/12/10/pce-bitmap-mode/).
 
 To verify: `make tables-check codegen-benchmark`, `make atomic-test`, and
 `make -C ../../.. cycles-ray` (with a compatible native RPC emulator).
-`make column-regression` is intentionally retained as a strict **known-failing**
-acceptance test for the remaining 128x128 progressive raster instability.
+`make column-regression` performs the long raster stability check, the
+input-driven column benchmark and the consecutive-frame raster sweep.
+The raster-safe and faster historical code remain separately identifiable
+in Git so quality/performance decisions can be reproduced.
 
 ## Historical 64-column wall quality pass (2026-10)
 
 
 The original build used 32 rays: each cast result occupied **two** BAT words
 (four logical pixels/16 physical horizontal pixels), producing pronounced
-vertical wall steps and oversized texture strips. The default now renders
+vertical wall steps and oversized texture strips. That historical revision rendered
 **64 wall samples, one BAT word (two logical pixels) per sample**. It remains
 PCEdev's VRAM-resident paired-BAT bitmap mode: 256 fixed glyphs; each BAT
 entry encodes two 4-bit pixel colours. **No software framebuffer or per-frame
@@ -208,7 +228,7 @@ PCE_HEADLESS=/path/to/pce-headless make column-benchmark
 PCE_HEADLESS=/path/to/pce-headless make bitmap-test visual-test interaction-test
 ```
 
-`column-benchmark` includes warm-up, idle, rotation, movement, settling and
+`column-benchmark` includes warm-up, idle, rotation, movement, extended settling and
 quiet periods, plus five/six independently captured screenshots. It rejects
 fabricated dirty-view counts without actual BAT writes and idle-rendering
 loops that would falsely inflate FPS. The earlier *32-ray* benchmark measured **23 changed-view commits in 540

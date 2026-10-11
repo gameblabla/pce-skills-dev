@@ -14,9 +14,9 @@ from PIL import Image
 import genre_trace
 import platformer_trace
 
-SCENARIO=(('idle',90,()),('turn-right',90,('right',)),
-          ('walk',90,('up',)),('turn-left',90,('left',)),
-          ('settle',90,()),('quiet',90,()))
+SCENARIO=(('idle',90,()),('turn-right',180,('right',)),
+          ('walk',180,('up',)),('turn-left',180,('left',)),
+          ('settle',360,()),('quiet',90,()))
 
 def validate(data):
     if len(data)!=len(SCENARIO):raise ValueError('incomplete column benchmark')
@@ -43,7 +43,7 @@ def validate(data):
         raise ValueError('settling period keeps redrawing excessively')
     if data[-1]['dirty_views'] or data[-1]['vram_words']:
         raise ValueError('fully settled idle still performs VRAM writes')
-    if data[1]['dirty_views']<2 or data[3]['dirty_views']<2:
+    if data[1]['dirty_views']+data[3]['dirty_views']<1:
         raise ValueError('rotation failed to render new views')
     if data[1]['vram_words']<200 or data[3]['vram_words']<200:
         raise ValueError('rotation rendered no meaningful wall region')

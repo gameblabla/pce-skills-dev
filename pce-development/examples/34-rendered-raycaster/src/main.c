@@ -118,14 +118,20 @@ static uint16_t ray_bat_addresses[128];
 #define RAY_BAT_ADDRESS(y,pair) ((uint16_t)((((uint16_t)((y)&63u))<<7)+(((y)&64u)?64u:0u)+(pair)))
 #endif
 #ifndef RAY_COLUMNS_PER_UPDATE
-/* More than eight BAT pairs per step overloads the raster presentation
- * during sustained 128-ray rotation on the current engine. */
-#define RAY_COLUMNS_PER_UPDATE 8u
+/* Limit the number of distinct BAT pairs scheduled per VBlank. Work on a
+ * long wall column is resumable across VBlanks below. */
+#define RAY_COLUMNS_PER_UPDATE 2u
 #endif
 #ifndef RAY_COLUMN_CHUNK_WORDS
 #define RAY_COLUMN_CHUNK_WORDS 8u
 #endif
+#ifndef RAY_VBLANK_WORD_BUDGET
+/* Never monopolize the early raster with long full-height wall uploads. */
+#define RAY_VBLANK_WORD_BUDGET 24u
+#endif
 static uint8_t next_column,cast_valid,cast_angle;
+static volatile uint8_t column_pairs_per_update;
+static uint8_t upload_active,upload_next_y,upload_last_y;
 static int16_t cast_x,cast_y;
 /* The raster image is determined by wall height, horizontal texture phase
  * and material/shade. Two ray depths with equal heights share the same
@@ -185,7 +191,8 @@ static uint8_t material_at(int16_t x,int16_t y) {
     return map[ty][tx];
 }
 static uint8_t cast_ray(uint8_t col) {
-    const int8_t dx=ray_step_x[angle][col],dy=ray_step_y[angle][col];
+    int8_t dx=ray_step_x[angle&7u][col],dy=ray_step_y[angle&7u][col];
+    if(angle&8u){dx=(int8_t)-dx;dy=(int8_t)-dy;}
     int16_t x=world_x,y=world_y;
     for(uint8_t n=1;n<=32;++n) {
         int16_t px=x,py=y;
@@ -534,48 +541,73 @@ static void column_upload(uint8_t pair,uint8_t first,uint8_t last) {
         y=yy;
     }
 }
-static void render_columns(void) {
+static uint8_t column_prepare(void) {
+    /* Do not recast or replace current wall samples halfway through an
+     * interrupted vertical column. It must be completed first. */
+    if(upload_active)return 1u;
     if(next_column==0u) {
         if(cast_valid && cast_angle==angle &&
-           cast_x==world_x && cast_y==world_y)return;
+           cast_x==world_x && cast_y==world_y)return 0u;
         cast_x=world_x;cast_y=world_y;cast_angle=angle;cast_valid=1u;
         cast_scene();column_pass_dirty=0;
     }
-    for(uint8_t i=0;i<RAY_COLUMNS_PER_UPDATE;++i) {
-        uint8_t pair=(uint8_t)(next_column+i),l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
-        uint8_t dirty=0,first=128u,last=0u;
-        for(uint8_t c=l;c<=r;++c) {
-            uint8_t t=top[c],h=wall_height[depth[c]],u=tex_u[c]&RAY_U_MASK;
-            if(old_height[c]!=0 && old_top[c]==t && old_height[c]==h &&
-               old_tex[c]==u && old_style[c]==wall_style[c]
+    return 1u;
+}
+static void finish_column(uint8_t pair) {
+    const uint8_t l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
+    for(uint8_t c=l;c<=r;++c) {
+        old_top[c]=top[c];old_height[c]=wall_height[depth[c]];
+        old_tex[c]=tex_u[c]&RAY_U_MASK;old_style[c]=wall_style[c];
 #if !RAY_CANONICAL_WALL_KEY
-               && old_depth[c]==depth[c]
+        old_depth[c]=depth[c];
 #endif
-               )continue;
-            dirty=1u;
-            if(t<first)first=t;
-            if((uint8_t)(t+h)>last)last=(uint8_t)(t+h);
-            if(old_height[c]) {
-                if(old_top[c]<first)first=old_top[c];
-                uint8_t end=(uint8_t)(old_top[c]+old_height[c]);
-                if(end>last)last=end;
-            }
-        }
-        if(!dirty)continue;
-        column_pass_dirty=1u;
-        column_upload(pair,first,last);
-        for(uint8_t c=l;c<=r;++c) {
-            old_top[c]=top[c];old_height[c]=wall_height[depth[c]];
-            old_tex[c]=tex_u[c]&RAY_U_MASK;old_style[c]=wall_style[c];
-#if !RAY_CANONICAL_WALL_KEY
-            old_depth[c]=depth[c];
-#endif
-        }
     }
-    next_column=(uint8_t)((next_column+RAY_COLUMNS_PER_UPDATE)&63u);
+    next_column=(uint8_t)((pair+1u)&63u);
     if(next_column==0u && column_pass_dirty)++ray_redraws;
 }
-
+static void render_columns(void) {
+    uint8_t budget=RAY_VBLANK_WORD_BUDGET;
+    for(uint8_t i=0;i<column_pairs_per_update && budget;++i) {
+        /* Reaching zero commits this view: never begin the next camera
+         * pass in the same VBlank without a fresh projection. */
+        if(i && next_column==0u)break;
+        const uint8_t pair=next_column,l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
+        if(!upload_active) {
+            uint8_t dirty=0,first=128u,last=0u;
+            for(uint8_t c=l;c<=r;++c) {
+                const uint8_t h=wall_height[depth[c]], t=top[c];
+                if(old_height[c]!=h || old_top[c]!=t ||
+                   old_tex[c]!=(tex_u[c]&RAY_U_MASK) ||
+                   old_style[c]!=wall_style[c]
+#if !RAY_CANONICAL_WALL_KEY
+                   || old_depth[c]!=depth[c]
+#endif
+                  ) {
+                    dirty=1u;
+                    if(t<first)first=t;
+                    if((uint8_t)(t+h)>last)last=(uint8_t)(t+h);
+                    if(old_top[c]<first && old_height[c])first=old_top[c];
+                    uint8_t end=(uint8_t)(old_top[c]+old_height[c]);
+                    if(end>last)last=end;
+                }
+            }
+            if(!dirty) {finish_column(pair);continue;}
+            upload_next_y=first;upload_last_y=last;upload_active=1u;
+            column_pass_dirty=1u;
+        }
+        /* This bounded segment may stop mid-column. The next VBlank
+         * continues at upload_next_y, rather than losing the wall suffix
+         * or falsely marking the pair clean. */
+        const uint8_t remain=(uint8_t)(upload_last_y-upload_next_y);
+        const uint8_t n=remain<budget?remain:budget;
+        column_upload(pair,upload_next_y,(uint8_t)(upload_next_y+n));
+        upload_next_y=(uint8_t)(upload_next_y+n);
+        budget=(uint8_t)(budget-n);
+        if(upload_next_y!=upload_last_y)break;
+        upload_active=0u;
+        finish_column(pair);
+    }
+}
 #endif
 __attribute__((noinline))
 static void publish(uint32_t frame,uint16_t buttons,int16_t moved_x,int16_t moved_y) {
@@ -612,7 +644,8 @@ int main(void) {
                  VDC_CONTROL_IRQ_SCANLINE|VDC_CONTROL_IRQ_VBLANK|
                  VDC_CONTROL_VRAM_ADD_128);
     pce_cpu_irq_enable();
-    next_column=0;cast_valid=0;ray_bat_words=0;
+    next_column=0;cast_valid=0;upload_active=0;ray_bat_words=0;
+    column_pairs_per_update=RAY_COLUMNS_PER_UPDATE;
 #if RAY_WALL_CODEGEN
     ray_codegen_words=0;
 #endif
@@ -624,7 +657,6 @@ int main(void) {
 #endif
     uint32_t frame=0;
     for(;;) {
-        uint8_t before=bat_frames;while(before==bat_frames){}
         uint8_t buttons=(uint8_t)~pce_joypad_read();
         if((frame&5u)==0) {
             if(buttons&KEY_LEFT)angle=(angle+15u)&15u;
@@ -640,8 +672,12 @@ int main(void) {
             if(material_at(world_x,y))wall_blocked=1;else world_y=y;
         }
 #if RAY_COLUMN_STREAM
-        render_columns();
+        /* Project in active raster time; VDC BAT writes only after VBlank. */
+        uint8_t pending=column_prepare();
+        uint8_t before=bat_frames;while(before==bat_frames){}
+        if(pending) render_columns();
 #else
+        uint8_t before=bat_frames;while(before==bat_frames){}
         render_slice();
 #endif
         publish(frame,buttons,world_x-old_x,world_y-old_y);++frame;

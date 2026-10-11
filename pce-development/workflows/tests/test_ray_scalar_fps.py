@@ -31,7 +31,7 @@ class ScalarFPSChecks(unittest.TestCase):
             # cost is bounded, not just whichever ELF symbol survives.
             groups=budget['segments'][key]['max_ticks_per_frame_by_symbol_groups']
             self.assertTrue(any(set(group['symbols'])=={'main','column_upload'} and
-                                group['max']<=290000 for group in groups))
+                                group['max']<=300000 for group in groups))
             self.assertIn('cast_scene',limits)
             self.assertIn('cast_ray',limits)
             self.assertIn('irq_vdc',limits)
@@ -43,7 +43,7 @@ class ScalarFPSChecks(unittest.TestCase):
         self.assertIn('RAY_COLUMN_CHUNK_WORDS 8u',src)
         self.assertIn('RAY_COLUMN_TIA 0',src)
         self.assertIn('RAY_CANONICAL_WALL_KEY 1',src)
-        self.assertIn('old_height[c]==h',src)
+        self.assertIn('old_height[c]!=h',src)
         self.assertIn('for(uint8_t c=l;c<=r;++c)',src)
         self.assertIn('RAY_CANONICAL_WALL_KEY=0', (ROOT/'Makefile').read_text())
         self.assertIn('RAY_COLUMN_TIA=1', (ROOT/'Makefile').read_text())

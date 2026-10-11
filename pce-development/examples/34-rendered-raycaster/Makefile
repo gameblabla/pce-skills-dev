@@ -108,6 +108,11 @@ column-benchmark: $(OUT)
 column-regression: $(OUT) tables-check
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(OUT) --elf $(OUT).elf --mode column --output build/column-stress.json
 	$(MAKE) column-benchmark
+	$(MAKE) raster-sweep
+
+.PHONY: raster-sweep
+raster-sweep: $(OUT)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/raster_sweep.py --rom $(OUT) --elf $(OUT).elf --output build/raster-sweep.json
 
 # Two same-resolution dirty-column versions: generated HuC6280 unrolled wall
 # writes vs the existing C/TIA loop. Atomic remains a separate build.
