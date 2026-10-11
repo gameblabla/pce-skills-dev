@@ -39,7 +39,7 @@ class WallMicrocodeTests(unittest.TestCase):
         self.assertIn('pce_cpu_irq_enable();',src)
         self.assertIn('ray_codegen_words=',src)
         self.assertIn('ray_backdrop_word(yy,pair)',src)
-        self.assertIn('pce_memop((void*)IO_VDC_DATA,staged_words+done',src)
+        self.assertIn('pce_memop((void*)IO_VDC_DATA,staged_words+offset+done',src)
         self.assertIn('if(n>8u)n=8u;',src)
         self.assertIn('yy>=tl && yy<el',src)
         self.assertIn('yy>=tr && yy<er',src)

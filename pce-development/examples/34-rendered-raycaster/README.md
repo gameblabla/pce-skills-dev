@@ -7,6 +7,30 @@ It sets physical **512×224** and keeps **128×128 logical 4-bit pixels** in the
 VDC's 128×64 BAT, with two pixels per word and 256 fixed glyphs. It is **not**
 128×64 atomic mode and does not create 8×8 planar tiles every frame.
 
+## Speed revision: compact backdrop LUT and deferred clean pairs
+
+The default 128×128 build now uses an **826-word periodic backdrop ROM
+lookup** instead of recalculating the dithered sky/stone floor for every
+staged wall pixel. The LUT preserves every one of the 8,192 possible BAT
+backdrop entries exactly; the source generator and offline tests verify
+this, including the second BAT page and all horizontal repeats. The wall
+compositor packs its two 4-bit texels using 8-bit arithmetic and adds the
+fixed BAT high byte only once per word.
+
+The 96-word-per-VBlank staging limit and 8-word IRQ-masked transfer bursts
+are **unchanged**. A stage can now represent several dirty wall segments
+and intervening clean BAT pairs; clean metadata is committed only **after**
+all preceding real VRAM transfers finish. No new view starts mid-batch.
+
+In the same 1,080-video-frame emulator input benchmark, this revision
+performed **790 game-loop updates vs 729** (+8.4%), both at **1.333 dirty-view
+commits/second during turns** and **45,733 actual VRAM words**. Game updates
+and dirty-view commits are not complete-frame FPS. The stationary emulator
+image is **pixel-identical** (135,520 RGB pixels), the 540-frame raster sweep
+and 1,080-frame movement stress pass, and the cycle budget passes. Physical
+hardware performance has not been measured. The previous ROM/baseline
+remains in Git history (`15a3652`).
+
 ## Midpoint scanline repair (128×128 only)
 
 The 128×128 raster's BAT page split at logical row 64 previously exposed a

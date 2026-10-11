@@ -25,6 +25,42 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertGreater(len(set(tuple(row) for row in rows[64:])),20)
         self.assertGreater(len(set(v for row in rows for v in row)),14)
 
+    def test_compact_backdrop_lut_preserves_every_pixel_pair(self):
+        # Repeating periods follow paired-pixel sky dithering and floor U
+        # addressing, not approximate palette quantization. Expand the table
+        # over the complete 128x64 BAT and compare with the source algorithm.
+        shifts=[0 if y<66 else 4 if y<73 else 3 if y<82 else 2 if y<101 else 1
+                for y in range(128)]
+        periods=[2 if y<64 else 32 >> shifts[y] for y in range(128)]
+        self.assertEqual(sum(periods),826)
+        offsets=[]
+        table=[]
+        for y,period in enumerate(periods):
+            offsets.append(len(table))
+            table.extend(gen_backdrop.backdrop(y,p) for p in range(period))
+        self.assertEqual(offsets[-1]+periods[-1],len(table))
+        for y in range(128):
+            for p in range(64):
+                self.assertEqual(table[offsets[y]+(p & (periods[y]-1))],
+                                 gen_backdrop.backdrop(y,p), (y,p))
+        src=(ROOT/'src/main.c').read_text()
+        self.assertIn('RAY_BACKDROP_FAST_WORD(y,pair)',src)
+        self.assertIn('RAY_BACKDROP_FAST_WORD(y,p)',src)
+
+    def test_multiple_pairs_fit_the_same_upload_budget(self):
+        src=(ROOT/'src/main.c').read_text()
+        block=src.split('static void stage_columns(void) {',1)[1].split('static void render_columns(void) {',1)[0]
+        self.assertIn('budget=(uint8_t)(budget-count)',block)
+        self.assertIn('staged_segment_count[segments]=count',block)
+        self.assertIn('staged_segment_count[segments]=0u',block)
+        self.assertIn('if(count!=remaining)break;',block)
+        self.assertNotIn('finish_column(pair)',block)
+        # Clean and dirty metadata may only advance the official cursor
+        # after the corresponding real writes complete under the IRQ mask.
+        write=src.rsplit('static void render_columns(void) {',1)[1].split('#endif\n#endif',1)[0]
+        self.assertLess(write.index('pce_memop('),write.index('finish_column(pair)'))
+        self.assertIn('if(n>until_page)n=until_page;',write)
+
     def test_sparse_irq_is_host_generated_and_schedules_127_changes(self):
         self.assertEqual((ROOT/'src/bat_sparse_irq.S').read_text(),gen_sparse_irq.gen())
         lines=[(y*7+3)//4 for y in range(1,128)]
@@ -87,7 +123,7 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertIn('#define RAY_VBLANK_WORD_BUDGET 96u',src)
         self.assertIn('static uint16_t stage_word(uint8_t pair,uint8_t y)',src)
         self.assertIn('ray_wall_hires[wall_style[l]>>1]',src)
-        self.assertIn('staged_words[j]=stage_word(',src)
+        self.assertIn('staged_words[(uint8_t)(total+j)]=stage_word(',src)
         self.assertIn('if(pending)stage_columns();',src)
         self.assertIn('if(pending) render_columns();',src)
         self.assertLess(src.index('if(pending)stage_columns();'),

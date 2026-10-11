@@ -28,6 +28,11 @@
 #endif
 #if RAY_FAST_SPANS && !RAY_DOUBLE_BUFFER
 #include "backdrop_words.h"
+#if RAY_BACKDROP_LUT
+#define RAY_BACKDROP_FAST_WORD(y,p) ray_backdrop_lut_word((y),(p))
+#else
+#define RAY_BACKDROP_FAST_WORD(y,p) ray_backdrop_word((y),(p))
+#endif
 #endif
 #include "bat_bitmap.h"
 #ifndef RAY_DOUBLE_BUFFER
@@ -488,7 +493,7 @@ static void column_background_init(void) {
         pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,addr);
         *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
         /* Generate once, then upload full BAT rows with VDC display off. */
-        for(uint8_t p=0;p<64u;++p)backdrop_init_row[p]=ray_backdrop_word(y,p);
+        for(uint8_t p=0;p<64u;++p)backdrop_init_row[p]=RAY_BACKDROP_FAST_WORD(y,p);
         pce_memop((void*)IO_VDC_DATA,backdrop_init_row,128u,PCE_MEMOP_INCR_ALT);
     }
 }
@@ -685,7 +690,7 @@ static uint8_t staged_segment_last[64],staged_segment_finish[64];
 static uint16_t stage_word(uint8_t pair,uint8_t y) {
     uint8_t l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
     uint8_t tl=top[l],tr=top[r];
-    uint16_t w=ray_backdrop_word(y,pair);
+    uint8_t pixels=(uint8_t)RAY_BACKDROP_FAST_WORD(y,pair);
     if(y>=tl && (uint8_t)(y-tl)<wall_height[depth[l]]) {
         uint8_t pixel;
         if(depth[l]<=RAY_HIRES_MAX_DEPTH) {
@@ -697,7 +702,7 @@ static uint16_t stage_word(uint8_t pair,uint8_t y) {
             uint8_t v=wall_tex_v[depth[l]][(uint8_t)(y-tl)>>1];
             pixel=(uint8_t)(ray_sheet_pairs[wall_style[l]][tex_u[l]&15u][v]>>4);
         }
-        w=(uint16_t)((w&0xff0fu)|((uint16_t)pixel<<4));
+        pixels=(uint8_t)((pixels&0x0fu)|(pixel<<4));
     }
     if(y>=tr && (uint8_t)(y-tr)<wall_height[depth[r]]) {
         uint8_t pixel;
@@ -710,9 +715,9 @@ static uint16_t stage_word(uint8_t pair,uint8_t y) {
             uint8_t v=wall_tex_v[depth[r]][(uint8_t)(y-tr)>>1];
             pixel=(uint8_t)(ray_sheet_pairs[wall_style[r]][tex_u[r]&15u][v]>>4);
         }
-        w=(uint16_t)((w&0xfff0u)|pixel);
+        pixels=(uint8_t)((pixels&0xf0u)|pixel);
     }
-    return w;
+    return (uint16_t)(0xf200u|pixels);
 }
 
 static void stage_columns(void) {
@@ -750,9 +755,15 @@ static void stage_columns(void) {
                 }
             }
             if(!dirty) {
-                if(segments)break;
-                finish_column(pair);
-                pair_cursor=next_column;
+                /* A clean pair consumes no VRAM budget; defer its state
+                 * acknowledgment until previously staged writes complete. */
+                staged_segment_pair[segments]=pair;
+                staged_segment_first[segments]=0u;
+                staged_segment_count[segments]=0u;
+                staged_segment_last[segments]=0u;
+                staged_segment_finish[segments]=1u;
+                ++segments;
+                pair_cursor=(uint8_t)((pair+1u)&63u);
                 continue;
             }
             local_next=first;local_last=last;
