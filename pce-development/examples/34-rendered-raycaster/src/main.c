@@ -711,9 +711,23 @@ static uint8_t staged_ready,staged_segments,staged_total_words;
 static uint8_t staged_segment_pair[64],staged_segment_first[64],staged_segment_count[64];
 static uint8_t staged_segment_last[64],staged_segment_finish[64];
 
+/* The VCS raycaster converter walks between wall-height thresholds rather
+ * than repeatedly classifying each output pixel. Adapt that concept to the
+ * PCE's two independently textured pixels per 16-bit BAT word. Unlike VCS
+ * playfield deltas, the result is still written through the paired-BAT VDC.
+ * Original VCS concept: Guillaume Laudet, MIT, 2018 (see docs/vcs-port.md).
+ */
+#ifndef RAY_VCS_SPAN_CONVERTER
+#define RAY_VCS_SPAN_CONVERTER 1
+#endif
 /* Resolve the texture strips once per BAT pair instead of repeating three-
  * dimensional ROM indexing for every written pixel. Only the generated BAT
  * words (not the VDC presentation schedule) change in this optimization. */
+/* Preserve the stage function as a profiler symbol only for equal-work
+ * native cycle comparisons; normal builds let LLVM-MOS optimize freely. */
+#if defined(RAY_PROFILE_STAGE_WORDS) && RAY_PROFILE_STAGE_WORDS
+__attribute__((noinline))
+#endif
 static void stage_pair_words(uint8_t pair,uint8_t first,uint8_t count,uint16_t *dest) {
     uint8_t l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
     uint8_t tl=top[l],tr=top[r],dl=depth[l],dr=depth[r];
@@ -727,6 +741,77 @@ static void stage_pair_words(uint8_t pair,uint8_t first,uint8_t count,uint16_t *
                                   ray_sheet_pairs[sl][tex_u[l]&15u];
     const uint8_t *wr=detail_r?ray_wall_hires[sr>>1][ray_tex_phase[r]>>3]:
                                   ray_sheet_pairs[sr][tex_u[r]&15u];
+#if RAY_VCS_SPAN_CONVERTER
+#define RAY_STAGE_LEFT_TEXEL do { \
+    uint8_t v=vl[detail_l?(uint8_t)(y-tl):((uint8_t)(y-tl)>>1)]; \
+    uint8_t pixel; \
+    if(detail_l) { \
+    uint8_t both=wl[v>>1]; \
+    pixel=(uint8_t)((v&1u)?(both&15u):(both>>4)); \
+    if(sl&1u)pixel=ray_hires_dark[pixel]; \
+    } else { \
+    pixel=(uint8_t)(wl[v]>>4); \
+    } \
+    pixels=(uint8_t)((pixels&0x0fu)|(pixel<<4)); \
+} while(0)
+#define RAY_STAGE_RIGHT_TEXEL do { \
+    uint8_t v=vr[detail_r?(uint8_t)(y-tr):((uint8_t)(y-tr)>>1)]; \
+    uint8_t pixel; \
+    if(detail_r) { \
+    uint8_t both=wr[v>>1]; \
+    pixel=(uint8_t)((v&1u)?(both&15u):(both>>4)); \
+    if(sr&1u)pixel=ray_hires_dark[pixel]; \
+    } else { \
+    pixel=(uint8_t)(wr[v]>>4); \
+    } \
+    pixels=(uint8_t)((pixels&0xf0u)|pixel); \
+} while(0)
+    /* The source VCS renderer uses min/max wall heights to omit empty
+     * playfield lines. Clip our two wall intervals into horizontal coverage
+     * runs, so the per-pixel loop no longer tests wall visibility. */
+    const uint8_t lbottom=(uint8_t)(tl+hl);
+    const uint8_t rbottom=(uint8_t)(tr+hr);
+    const uint8_t last=(uint8_t)(first+count);
+    for(uint8_t y=first; y<last;) {
+        uint8_t until=last;
+        if(tl>y && tl<until)until=tl;
+        if(lbottom>y && lbottom<until)until=lbottom;
+        if(tr>y && tr<until)until=tr;
+        if(rbottom>y && rbottom<until)until=rbottom;
+        uint8_t coverage=(uint8_t)(((y>=tl && y<lbottom)?2u:0u)|
+                                   ((y>=tr && y<rbottom)?1u:0u));
+        switch(coverage) {
+            case 0:
+                for(;y<until;++y)
+                    *dest++=(uint16_t)(0xf200u|(uint8_t)RAY_BACKDROP_FAST_WORD(y,pair));
+                break;
+            case 1:
+                for(;y<until;++y) {
+                    uint8_t pixels=(uint8_t)RAY_BACKDROP_FAST_WORD(y,pair);
+                    RAY_STAGE_RIGHT_TEXEL;
+                    *dest++=(uint16_t)(0xf200u|pixels);
+                }
+                break;
+            case 2:
+                for(;y<until;++y) {
+                    uint8_t pixels=(uint8_t)RAY_BACKDROP_FAST_WORD(y,pair);
+                    RAY_STAGE_LEFT_TEXEL;
+                    *dest++=(uint16_t)(0xf200u|pixels);
+                }
+                break;
+            default:
+                for(;y<until;++y) {
+                    uint8_t pixels=0u;
+                    RAY_STAGE_LEFT_TEXEL;
+                    RAY_STAGE_RIGHT_TEXEL;
+                    *dest++=(uint16_t)(0xf200u|pixels);
+                }
+                break;
+        }
+    }
+#undef RAY_STAGE_LEFT_TEXEL
+#undef RAY_STAGE_RIGHT_TEXEL
+#else
     for(uint8_t j=0;j<count;++j) {
         uint8_t y=(uint8_t)(first+j);
         uint8_t pixels=(uint8_t)RAY_BACKDROP_FAST_WORD(y,pair);
@@ -756,6 +841,7 @@ static void stage_pair_words(uint8_t pair,uint8_t first,uint8_t count,uint16_t *
         }
         dest[j]=(uint16_t)(0xf200u|pixels);
     }
+#endif
 }
 
 static void stage_columns(void) {

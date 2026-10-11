@@ -588,3 +588,30 @@ larger experiments) still failed the movement raster test. Keep the default
 separately verified raster/presentation redesign resolves those failures.
 Offline unit tests, the native cycle-budget gate, turning stress, long
 movement stress, and visual equivalence remain release requirements.
+
+## Atari VCS raycaster height converter port (October 2026)
+
+The included [VCS raycaster code](../../third_party/vcs-raycaster-reference/README.md)
+uses a compact min/max wall-height representation and a height-threshold
+converter to generate display runs. The **128×128 PC Engine** version now
+adapts that converter to four coverage modes for **two independently textured
+wall rays packed into each BAT word**. The both-wall mode avoids looking up
+any sky/floor pixels, and visibility checks move outside the inner row loop.
+This is a PCE-native reinterpretation: the Atari's TIA playfield writes,
+mirroring and XOR delta stream are not used in the VDC IRQ.
+
+For repeatable comparisons, `-DRAY_VCS_SPAN_CONVERTER=0` restores the old
+per-row wall tests. `make vcs-span-check` builds both ROMs, checks exact
+stationary screenshot pixels, and compares completed dirty-view passes and
+real VRAM word counters. The safe **96-word VBlank total**, 8-word burst
+limit, center-first rendering and midpoint seam layout are unchanged.
+
+The VCS-inspired converter passed 540-frame turning and 1,080-frame
+movement stress and matched the old 128×128 image exactly. **Visible redraw
+throughput remains 1.5 turning dirty-view commits/s** (14 total passes in
+the benchmark). In specially instrumented equal-work builds with a forced
+`stage_pair_words` profiler boundary, compositor self-attributed master-clock
+ticks fell about **37% while turning** and **42% while walking**. These are
+CPU staging costs, not a full-screen FPS improvement. Read
+[`docs/vcs-port.md`](docs/vcs-port.md) for evidence, hardware distinctions,
+original source and MIT attribution.

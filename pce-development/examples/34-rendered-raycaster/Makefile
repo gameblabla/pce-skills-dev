@@ -177,3 +177,16 @@ $(SCALAR_REFERENCE): src/main.c src/bat_sparse_irq.S src/wall_codegen.S src/ray_
 scalar-reference: $(SCALAR_REFERENCE)
 scalar-fps: $(OUT) $(SCALAR_REFERENCE) tables-check
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/compare_scalar.py --reference $(SCALAR_REFERENCE) --optimized $(OUT) --output build/scalar-fps-comparison.json
+
+# VCS-inspired height-threshold PCE converter. The independent legacy build
+# proves exact paired-BAT textures and same-work dirty-view accounting.
+.PHONY: vcs-span-check
+VCS_SPAN_REFERENCE := build/34-rendered-raycaster-vcs-reference.pce
+$(VCS_SPAN_REFERENCE): src/main.c src/bat_sparse_irq.S src/backdrop_words.h src/sheet_pairs.h src/hires_texels.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -DRAY_VCS_SPAN_CONVERTER=0 -Itools src/main.c src/bat_sparse_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+vcs-span-check: $(OUT) $(VCS_SPAN_REFERENCE)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(VCS_SPAN_REFERENCE) --optimized $(OUT) --output build/vcs-span-visual.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(VCS_SPAN_REFERENCE) --elf $(VCS_SPAN_REFERENCE).elf --output build/vcs-span-reference-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(OUT) --elf $(OUT).elf --output build/vcs-span-optimized-benchmark.json
+	python3 tools/compare_vcs_span.py --baseline build/vcs-span-reference-benchmark.json --span build/vcs-span-optimized-benchmark.json --visual build/vcs-span-visual.json --output build/vcs-span-comparison.json

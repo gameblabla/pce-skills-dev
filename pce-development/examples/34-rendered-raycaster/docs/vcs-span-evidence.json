@@ -1,0 +1,80 @@
+{
+  "format": "vcs-span-pce-emulator-evidence-v1",
+  "source": "user supplied vcs-demo-raycaster-master.zip, MIT",
+  "resolution": [
+    128,
+    128
+  ],
+  "original_commit": "b2e6e0c",
+  "profiling": {
+    "instrumentation": "RAY_PROFILE_STAGE_WORDS=1 for both paths; same game input and emulator",
+    "unit": "emulated master-clock ticks per video frame attributed to the standalone staging function; not full screen FPS",
+    "segments": {
+      "turn": {
+        "baseline_ticks_per_frame": 122465.1,
+        "vcs_span_ticks_per_frame": 76766.0
+      },
+      "walk": {
+        "baseline_ticks_per_frame": 150719.6,
+        "vcs_span_ticks_per_frame": 86838.5
+      }
+    }
+  },
+  "benchmark": {
+    "passed": true,
+    "baseline": {
+      "passed": true,
+      "changed_views": 14,
+      "vram_words": 60281,
+      "video_frames": 1080,
+      "turning_views_per_second": 1.5,
+      "limitations": [
+        "Emulated NTSC seconds, not physical measurements",
+        "A dirty view may update only changed wall spans, unlike a complete framebuffer redraw"
+      ]
+    },
+    "vcs_span": {
+      "passed": true,
+      "changed_views": 14,
+      "vram_words": 60281,
+      "video_frames": 1080,
+      "turning_views_per_second": 1.5,
+      "limitations": [
+        "Emulated NTSC seconds, not physical measurements",
+        "A dirty view may update only changed wall spans, unlike a complete framebuffer redraw"
+      ]
+    },
+    "pixel_count": 135520,
+    "different_pixels": 0,
+    "claim": "equivalent full-detail PCE image; per-routine profiler needed for compositor CPU ticks, no FPS gain claimed"
+  },
+  "raster_sweep": {
+    "passed": true,
+    "emulator_frames": 540,
+    "warmup_frames": 180,
+    "minimum_colors": 9,
+    "color_counts": {
+      "9": 36,
+      "11": 97,
+      "13": 62,
+      "15": 166,
+      "16": 1,
+      "12": 58,
+      "14": 120
+    },
+    "game_updates": 506,
+    "highest_midpoint_floor_similarity": 0.0684,
+    "note": "all screenshots are native emulator pixels, not hardware validation"
+  },
+  "stress_summary": {
+    "game_updates": 1031,
+    "emulator_frames": 1080,
+    "changed_views": 19,
+    "logical_framebuffer_size": [
+      128,
+      128
+    ],
+    "note": "Changed views are dirty-column commits, NOT 128x128 full bitmap redraws"
+  },
+  "hardware_tested": false
+}
