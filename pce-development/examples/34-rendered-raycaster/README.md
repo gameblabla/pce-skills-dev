@@ -89,6 +89,54 @@ modes remain subject to raster and movement stress tests. Hardware timing
 has not been validated; a guaranteed tear-free 128×128 swap on a base PCE
 would require a different representation or additional video hardware.
 
+## Optional compressed-tile VBlank page flip (experimental)
+
+`make tiled-pageflip-rom` builds an **actual VBlank-selected pair of 128×128
+logical images** without the two visible DMA copies. This is a separate,
+**lossy** rendering format and does **not** replace the default 16-colour
+paired-BAT renderer. It remains an example implementation, not speed
+optimized, and has issues.
+
+The VDC's 128×64 BAT still occupies 8,192 VRAM words. Each offscreen/onscreen
+page instead uses only **2,048 words**: 64 BAT columns × 32 BAT rows. These
+fit side-by-side in the same BAT (columns 0–63 for page A, columns 64–127
+for page B). An 8-bit glyph index stores a 2×4 mask of logical pixels,
+with *two selected colours per tile*. The fixed 256-pattern atlas occupies
+VRAM `$2000..$2FFF`. Sixteen palette pairs approximate the source's original
+16-color texels, with a visible reduction in texture and shade fidelity.
+Each logical pixel occupies four physical display pixels horizontally and
+one or two vertically. The VDC naturally advances its vertical scroll and
+needs only **31 active raster row-skip updates**, rather than the default
+127; a VBlank IRQ changes BXR between 0 and 512 only after the entire
+hidden BAT page is filled. This is a true *compressed-page flip*, not a
+second BAT-base register or full-color bitmap double buffering.
+
+The mode initially updates four columns' worth of BAT tile groups per
+rendering iteration (128 words). On the emulator's 1,080-video-frame
+benchmark it measured **1.0 complete VBlank page flip/second while turning**;
+by contrast the unchanged 16-colour progressive renderer measures about
+**2.0 dirty-view commits/second** and the earlier IRQ-buffered DMA renderer
+about **2.167 completed-copy presentations/second**. Those operations are
+not equivalent FPS measures. The experiment is **slower and more posterized**
+than the previous default; the benefit is a genuine VBlank page selection
+with no full-frame VRAM copy. Although up to 1 MiB of ROM is permitted, this
+prototype uses a 32-KiB HuCard and does not yet exploit larger precomputed
+compression tables.
+
+The opt-in regression verifies that the image remains unchanged across
+screenshots sufficiently far from any VBlank flip, allowing for the emulator's
+one-frame lag between screenshot capture and CPU-state reads. In a **1,080
+consecutive-turn-frame** run, this and the pixel-diversity/midpoint checks
+passed. A separate **1,080-frame six-part movement test** passed. These are
+emulator validations, **not** hardware timing certification. The image is
+not pixel-equivalent to the 16-color source and should not be substituted
+for it in image-equality gates.
+
+```sh
+make tiled-pageflip-rom
+PCE_HEADLESS=/path/to/pce-headless make tiled-pageflip-verify
+```
+
 ## Build and verify
 
 With the LLVM-MOS PCE toolchain on `PATH`:

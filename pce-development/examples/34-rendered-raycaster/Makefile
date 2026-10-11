@@ -303,3 +303,19 @@ natural-irq-cycles: $(NATURAL_IRQ_ROM)
 	@test -n "$(PCE_HEADLESS)" && test -x "$(PCE_HEADLESS)" || { echo 'Set PCE_HEADLESS to a profiler-enabled emulator' >&2; exit 2; }
 	python3 ../../workflows/cycle_profile.py run --emulator "$(PCE_HEADLESS)" --rom $(NATURAL_IRQ_ROM) --mlb $(NATURAL_IRQ_ROM:.pce=.mlb) --scenario ../../workflows/specs/cycles/raycaster.json --out build/natural-irq-cycles
 	python3 ../../workflows/cycle_profile.py gate --report build/natural-irq-cycles/report.json --budget ../../workflows/specs/cycles/raycaster-natural-irq-budget.json
+
+# More highly compressed opt-in true VBlank page flip, using 2-color 2x4-pixel
+# glyphs, 32 V-scroll IRQs/frame, and 2048 BAT words/image. It is lossy.
+.PHONY: tiled-pageflip-rom tiled-pageflip-verify tiled-pageflip-tables-check
+TILED_PAGEFLIP_ROM := build/34-rendered-raycaster-tiled-pageflip-experimental.pce
+$(TILED_PAGEFLIP_ROM): src/pageflip_tiled.c src/pageflip_tiled_quant.h src/bat_pageflip_tiled_irq.S src/main.c | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -Itools src/pageflip_tiled.c src/bat_pageflip_tiled_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+tiled-pageflip-rom: tiled-pageflip-tables-check $(TILED_PAGEFLIP_ROM)
+tiled-pageflip-tables-check:
+	python3 tools/gen_pageflip_tiled.py --check
+	python3 tools/tiled_pageflip_layout.py
+
+tiled-pageflip-verify: tiled-pageflip-rom
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/tiled_pageflip_verify.py --rom $(TILED_PAGEFLIP_ROM) --elf $(TILED_PAGEFLIP_ROM).elf --output build/tiled-pageflip-verify.json --frames 1080
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/tiled_pageflip_stress.py --rom $(TILED_PAGEFLIP_ROM) --elf $(TILED_PAGEFLIP_ROM).elf --output build/tiled-pageflip-movement.json
