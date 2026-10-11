@@ -510,3 +510,29 @@ completes **6.333** (5.55% more). The independent stationary comparison has
 bytes. These measurements are specific to this scenario and compiler, not a
 prediction of actual console frame rate or a replacement for the much larger
 pixel-fill optimizations described by PCEdev.
+
+## 128×128 staged wall-pair cache (October 2026)
+
+The active 128×128 renderer resolves wall height, shade, V-phase and the
+ROM texture-strip addresses **once per paired BAT column**. Its inner
+`stage_pair_words()` loop then reads the cached pointers for each pixel,
+instead of re-indexing 3-dimensional ROM tables on every row. Both lanes
+retain independently sampled 128-ray texture coordinates; neither the
+32×32 close-wall art nor the seam-corrected second BAT page is reduced.
+The original short **8-word TIA bursts**, 96-word VBlank budget and
+staged-then-presented IRQ schedule remain intact.
+
+In the fixed 1,080-video-frame emulator benchmark (`make column-benchmark`),
+the preceding `c212a3e` build reported **790 game-loop updates**, 11
+dirty-view passes overall and **1.333 completed turning passes/s**. The
+cached-strip build reported **1,056 updates**, 14 passes and **1.500
+completed turning passes/s**. In the independent 1,080-frame movement
+stress, changed-view passes increased from 14 to 19. An independently
+captured stationary view matches the old ROM exactly (**0/135,520 RGB
+pixels differ**); the 540-frame continuous-turn raster sweep also passed.
+These are *progressive changed-view commits*, not atomic full-frame FPS.
+
+Larger VBlank budgets were tested rather than assumed safe: **112 words
+failed** the long movement stress and **144 words produced a sky-only
+turning frame**. Keep 96 words unless those failures are solved and tested
+on real hardware. The native cycle budget and 233 offline tests pass.

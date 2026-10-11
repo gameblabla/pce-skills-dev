@@ -121,18 +121,27 @@ class ColumnStreamTests(unittest.TestCase):
         mk=(ROOT/'Makefile').read_text()
         self.assertIn('-DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0',mk)
         self.assertIn('#define RAY_VBLANK_WORD_BUDGET 96u',src)
-        self.assertIn('static uint16_t stage_word(uint8_t pair,uint8_t y)',src)
-        self.assertIn('ray_wall_hires[wall_style[l]>>1]',src)
-        self.assertIn('staged_words[(uint8_t)(total+j)]=stage_word(',src)
+        self.assertIn('static void stage_pair_words(uint8_t pair,uint8_t first,uint8_t count,uint16_t *dest)',src)
+        self.assertIn('ray_wall_hires[sl>>1][ray_tex_phase[l]>>3]',src)
+        self.assertIn('if(count)stage_pair_words(pair,local_next,count,staged_words+total);',src)
         self.assertIn('if(pending)stage_columns();',src)
         self.assertIn('if(pending) render_columns();',src)
         self.assertLess(src.index('if(pending)stage_columns();'),
                         src.index('uint8_t before=bat_frames;while(before==bat_frames){}'))
         # No data-port operations are allowed inside the unmasked shader;
         # its output is buffered for the short vertical-blank transfers.
-        shader=src.split('static uint16_t stage_word(',1)[1].split('static void stage_columns(',1)[0]
+        shader=src.split('static void stage_pair_words(',1)[1].split('static void stage_columns(',1)[0]
         self.assertNotIn('IO_VDC_DATA',shader)
         self.assertNotIn('pce_cpu_irq_disable',shader)
+        # Resolve the vertical and horizontal texture strips once per pair;
+        # a separate ROM-address calculation for every pixel costs HuC6280 cycles.
+        setup,loop=shader.split('for(uint8_t j=0;j<count;++j)',1)
+        self.assertIn('const uint8_t *wl=',setup)
+        self.assertIn('const uint8_t *wr=',setup)
+        self.assertIn('const uint8_t *vl=',setup)
+        self.assertIn('const uint8_t *vr=',setup)
+        self.assertNotIn('ray_wall_hires[',loop)
+        self.assertNotIn('ray_sheet_pairs[',loop)
         render=src.split('static void render_columns(void) {',2)[-1].split('#endif\n#endif',1)[0]
         self.assertIn('if(n>8u)n=8u;',render)
         self.assertIn('pce_cpu_irq_enable();',render)

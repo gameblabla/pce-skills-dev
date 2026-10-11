@@ -687,37 +687,51 @@ static uint8_t staged_ready,staged_segments,staged_total_words;
 static uint8_t staged_segment_pair[64],staged_segment_first[64],staged_segment_count[64];
 static uint8_t staged_segment_last[64],staged_segment_finish[64];
 
-static uint16_t stage_word(uint8_t pair,uint8_t y) {
+/* Resolve the texture strips once per BAT pair instead of repeating three-
+ * dimensional ROM indexing for every written pixel. Only the generated BAT
+ * words (not the VDC presentation schedule) change in this optimization. */
+static void stage_pair_words(uint8_t pair,uint8_t first,uint8_t count,uint16_t *dest) {
     uint8_t l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
-    uint8_t tl=top[l],tr=top[r];
-    uint8_t pixels=(uint8_t)RAY_BACKDROP_FAST_WORD(y,pair);
-    if(y>=tl && (uint8_t)(y-tl)<wall_height[depth[l]]) {
-        uint8_t pixel;
-        if(depth[l]<=RAY_HIRES_MAX_DEPTH) {
-            uint8_t v=ray_hires_v[depth[l]][(uint8_t)(y-tl)];
-            uint8_t both=ray_wall_hires[wall_style[l]>>1][ray_tex_phase[l]>>3][v>>1];
-            pixel=(uint8_t)((v&1u)?(both&15u):(both>>4));
-            if(wall_style[l]&1u)pixel=ray_hires_dark[pixel];
-        } else {
-            uint8_t v=wall_tex_v[depth[l]][(uint8_t)(y-tl)>>1];
-            pixel=(uint8_t)(ray_sheet_pairs[wall_style[l]][tex_u[l]&15u][v]>>4);
+    uint8_t tl=top[l],tr=top[r],dl=depth[l],dr=depth[r];
+    uint8_t hl=wall_height[dl],hr=wall_height[dr];
+    uint8_t sl=wall_style[l],sr=wall_style[r];
+    uint8_t detail_l=dl<=RAY_HIRES_MAX_DEPTH;
+    uint8_t detail_r=dr<=RAY_HIRES_MAX_DEPTH;
+    const uint8_t *vl=detail_l?ray_hires_v[dl]:wall_tex_v[dl];
+    const uint8_t *vr=detail_r?ray_hires_v[dr]:wall_tex_v[dr];
+    const uint8_t *wl=detail_l?ray_wall_hires[sl>>1][ray_tex_phase[l]>>3]:
+                                  ray_sheet_pairs[sl][tex_u[l]&15u];
+    const uint8_t *wr=detail_r?ray_wall_hires[sr>>1][ray_tex_phase[r]>>3]:
+                                  ray_sheet_pairs[sr][tex_u[r]&15u];
+    for(uint8_t j=0;j<count;++j) {
+        uint8_t y=(uint8_t)(first+j);
+        uint8_t pixels=(uint8_t)RAY_BACKDROP_FAST_WORD(y,pair);
+        if(y>=tl && (uint8_t)(y-tl)<hl) {
+            uint8_t v=vl[detail_l?(uint8_t)(y-tl):((uint8_t)(y-tl)>>1)];
+            uint8_t pixel;
+            if(detail_l) {
+                uint8_t both=wl[v>>1];
+                pixel=(uint8_t)((v&1u)?(both&15u):(both>>4));
+                if(sl&1u)pixel=ray_hires_dark[pixel];
+            } else {
+                pixel=(uint8_t)(wl[v]>>4);
+            }
+            pixels=(uint8_t)((pixels&0x0fu)|(pixel<<4));
         }
-        pixels=(uint8_t)((pixels&0x0fu)|(pixel<<4));
-    }
-    if(y>=tr && (uint8_t)(y-tr)<wall_height[depth[r]]) {
-        uint8_t pixel;
-        if(depth[r]<=RAY_HIRES_MAX_DEPTH) {
-            uint8_t v=ray_hires_v[depth[r]][(uint8_t)(y-tr)];
-            uint8_t both=ray_wall_hires[wall_style[r]>>1][ray_tex_phase[r]>>3][v>>1];
-            pixel=(uint8_t)((v&1u)?(both&15u):(both>>4));
-            if(wall_style[r]&1u)pixel=ray_hires_dark[pixel];
-        } else {
-            uint8_t v=wall_tex_v[depth[r]][(uint8_t)(y-tr)>>1];
-            pixel=(uint8_t)(ray_sheet_pairs[wall_style[r]][tex_u[r]&15u][v]>>4);
+        if(y>=tr && (uint8_t)(y-tr)<hr) {
+            uint8_t v=vr[detail_r?(uint8_t)(y-tr):((uint8_t)(y-tr)>>1)];
+            uint8_t pixel;
+            if(detail_r) {
+                uint8_t both=wr[v>>1];
+                pixel=(uint8_t)((v&1u)?(both&15u):(both>>4));
+                if(sr&1u)pixel=ray_hires_dark[pixel];
+            } else {
+                pixel=(uint8_t)(wr[v]>>4);
+            }
+            pixels=(uint8_t)((pixels&0xf0u)|pixel);
         }
-        pixels=(uint8_t)((pixels&0xf0u)|pixel);
+        dest[j]=(uint16_t)(0xf200u|pixels);
     }
-    return (uint16_t)(0xf200u|pixels);
 }
 
 static void stage_columns(void) {
@@ -776,8 +790,7 @@ static void stage_columns(void) {
         staged_segment_count[segments]=count;
         staged_segment_last[segments]=local_last;
         staged_segment_finish[segments]=(count==remaining);
-        for(uint8_t j=0;j<count;++j)
-            staged_words[(uint8_t)(total+j)]=stage_word(pair,(uint8_t)(local_next+j));
+        if(count)stage_pair_words(pair,local_next,count,staged_words+total);
         total=(uint8_t)(total+count);
         budget=(uint8_t)(budget-count);
         ++segments;

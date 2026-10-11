@@ -193,6 +193,14 @@ Use `make cycles-ray`, `make raycaster-bitmap-test`,
 
 ### Fast, vertically streamed full-detail raycaster
 
+The default 128×128 variant now caches per-pair texture-strip pointers before
+staging BAT words. On the scripted emulator benchmark it improves game-loop
+updates from 790 to 1,056 per 1,080 video frames and completed turning
+changed-view passes from 1.333 to 1.500/s without altering 96-word VBlank
+limits or visible pixels. This is progressive update throughput, not full-frame
+FPS or a physical-console speed claim. See the example README for raster and
+long-movement regression evidence.
+
 Example 34 now follows PCEdev's **VRAM-resident bitmap** approach instead of
 redrawing the entire pseudo-framebuffer in C. It initializes a generated 16 KiB
 sky/floor BAT backdrop once, casts real map rays on camera changes, and writes
