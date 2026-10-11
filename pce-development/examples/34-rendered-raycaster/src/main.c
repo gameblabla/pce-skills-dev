@@ -678,7 +678,9 @@ static void render_columns(void) {
  * only a tiny buffered TIA burst with bounded IRQ masking touches VDC DATA.
  * This prevents missed raster IRQs without lowering the uploaded detail. */
 static uint16_t staged_words[RAY_VBLANK_WORD_BUDGET];
-static uint8_t staged_ready,staged_pair,staged_first,staged_count;
+static uint8_t staged_ready,staged_segments,staged_total_words;
+static uint8_t staged_segment_pair[64],staged_segment_first[64],staged_segment_count[64];
+static uint8_t staged_segment_last[64],staged_segment_finish[64];
 
 static uint16_t stage_word(uint8_t pair,uint8_t y) {
     uint8_t l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
@@ -714,14 +716,20 @@ static uint16_t stage_word(uint8_t pair,uint8_t y) {
 }
 
 static void stage_columns(void) {
+    uint8_t budget=RAY_VBLANK_WORD_BUDGET;
+    uint8_t total=0u,segments=0u;
+    uint8_t pair_cursor=next_column;
+    uint8_t local_active=upload_active;
+    uint8_t local_next=upload_next_y;
+    uint8_t local_last=upload_last_y;
     staged_ready=0u;
     /* Skip any unchanged columns, but never start the next view with stale
      * samples after finishing pair 63. Last-pass commits happen only after
      * all of their actual VRAM uploads are acknowledged. */
-    for(uint8_t checked=0;checked<64u;++checked) {
-        if(checked && next_column==0u)return;
-        uint8_t pair=next_column,l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
-        if(!upload_active) {
+    for(uint8_t checked=0;checked<64u && budget; ++checked) {
+        if(checked && pair_cursor==0u)break;
+        uint8_t pair=pair_cursor,l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
+        if(!local_active) {
             uint8_t dirty=0,first=128u,last=0u;
             for(uint8_t c=l;c<=r;++c) {
                 uint8_t h=wall_height[depth[c]],t=top[c];
@@ -741,45 +749,73 @@ static void stage_columns(void) {
                     if(end>last)last=end;
                 }
             }
-            if(!dirty) {finish_column(pair);continue;}
-            upload_next_y=first;upload_last_y=last;
-            upload_active=1u;column_pass_dirty=1u;
+            if(!dirty) {
+                if(segments)break;
+                finish_column(pair);
+                pair_cursor=next_column;
+                continue;
+            }
+            local_next=first;local_last=last;
+            local_active=1u;column_pass_dirty=1u;
         }
-        uint8_t remaining=(uint8_t)(upload_last_y-upload_next_y);
-        staged_count=(remaining<RAY_VBLANK_WORD_BUDGET)?remaining:RAY_VBLANK_WORD_BUDGET;
-        staged_first=upload_next_y;staged_pair=pair;
-        for(uint8_t j=0;j<staged_count;++j)
-            staged_words[j]=stage_word(pair,(uint8_t)(staged_first+j));
+        uint8_t remaining=(uint8_t)(local_last-local_next);
+        uint8_t count=(remaining<budget)?remaining:budget;
+        staged_segment_pair[segments]=pair;
+        staged_segment_first[segments]=local_next;
+        staged_segment_count[segments]=count;
+        staged_segment_last[segments]=local_last;
+        staged_segment_finish[segments]=(count==remaining);
+        for(uint8_t j=0;j<count;++j)
+            staged_words[(uint8_t)(total+j)]=stage_word(pair,(uint8_t)(local_next+j));
+        total=(uint8_t)(total+count);
+        budget=(uint8_t)(budget-count);
+        ++segments;
+        if(count!=remaining)break;
+        local_active=0u;
+        pair_cursor=(uint8_t)((pair+1u)&63u);
+    }
+    if(segments) {
+        staged_segments=segments;
+        staged_total_words=total;
         staged_ready=1u;
-        return;
     }
 }
 
 static void render_columns(void) {
     if(!staged_ready)return;
-    uint8_t done=0u;
-    while(done<staged_count) {
-        uint8_t y=(uint8_t)(staged_first+done);
-        uint8_t n=(uint8_t)(staged_count-done);
-        /* Page 2 starts at physical BAT row 63 (logical y=64) and wraps
-         * to row 0 at logical y=65, so never stride across that wrap. */
-        uint8_t physical_row=(uint8_t)((y&64u)?((y-1u)&63u):(y&63u));
-        uint8_t until_page=(uint8_t)(64u-physical_row);
-        if(n>8u)n=8u;
-        if(n>until_page)n=until_page;
-        pce_cpu_irq_disable();
-        pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,RAY_BAT_ADDRESS(y,staged_pair));
-        *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
-        pce_memop((void*)IO_VDC_DATA,staged_words+done,(uint16_t)(n<<1),PCE_MEMOP_INCR_ALT);
-        pce_cpu_irq_enable();
-        done=(uint8_t)(done+n);
+    uint8_t offset=0u;
+    for(uint8_t seg=0u; seg<staged_segments; ++seg) {
+        uint8_t pair=staged_segment_pair[seg];
+        uint8_t first=staged_segment_first[seg];
+        uint8_t count=staged_segment_count[seg];
+        uint8_t done=0u;
+        while(done<count) {
+            uint8_t y=(uint8_t)(first+done);
+            uint8_t n=(uint8_t)(count-done);
+            /* Page 2 starts at physical BAT row 63 (logical y=64) and wraps
+             * to row 0 at logical y=65, so never stride across that wrap. */
+            uint8_t physical_row=(uint8_t)((y&64u)?((y-1u)&63u):(y&63u));
+            uint8_t until_page=(uint8_t)(64u-physical_row);
+            if(n>8u)n=8u;
+            if(n>until_page)n=until_page;
+            pce_cpu_irq_disable();
+            pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,RAY_BAT_ADDRESS(y,pair));
+            *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
+            pce_memop((void*)IO_VDC_DATA,staged_words+offset+done,(uint16_t)(n<<1),PCE_MEMOP_INCR_ALT);
+            pce_cpu_irq_enable();
+            done=(uint8_t)(done+n);
+        }
+        offset=(uint8_t)(offset+count);
+        upload_next_y=(uint8_t)(first+count);
+        upload_last_y=staged_segment_last[seg];
+        if(staged_segment_finish[seg]) {
+            upload_active=0u;
+            finish_column(pair);
+        } else {
+            upload_active=1u;
+        }
     }
-    ray_bat_words=(uint16_t)(ray_bat_words+staged_count);
-    upload_next_y=(uint8_t)(upload_next_y+staged_count);
-    if(upload_next_y==upload_last_y) {
-        upload_active=0u;
-        finish_column(staged_pair);
-    }
+    ray_bat_words=(uint16_t)(ray_bat_words+staged_total_words);
     staged_ready=0u;
 }
 #endif
