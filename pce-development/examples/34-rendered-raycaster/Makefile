@@ -319,3 +319,14 @@ tiled-pageflip-tables-check:
 tiled-pageflip-verify: tiled-pageflip-rom
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/tiled_pageflip_verify.py --rom $(TILED_PAGEFLIP_ROM) --elf $(TILED_PAGEFLIP_ROM).elf --output build/tiled-pageflip-verify.json --frames 1080
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/tiled_pageflip_stress.py --rom $(TILED_PAGEFLIP_ROM) --elf $(TILED_PAGEFLIP_ROM).elf --output build/tiled-pageflip-movement.json
+
+# Equal-format speed comparison: both are the 2-colour compressed 128x128
+# tile-page-flipping renderer, differing ONLY in the ROM quantization LUT.
+# The old implementation remains buildable for reproducible quality checks.
+TILED_PAGEFLIP_LEGACY := build/34-rendered-raycaster-tiled-legacy-reference.pce
+$(TILED_PAGEFLIP_LEGACY): src/pageflip_tiled.c src/pageflip_tiled_quant.h src/bat_pageflip_tiled_irq.S src/main.c | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -DRAY_TILE_FAST_QUANT=0 -Itools src/pageflip_tiled.c src/bat_pageflip_tiled_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+.PHONY: tiled-pageflip-speed-compare
+tiled-pageflip-speed-compare: tiled-pageflip-tables-check $(TILED_PAGEFLIP_ROM) $(TILED_PAGEFLIP_LEGACY)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/tiled_pageflip_speed_compare.py --reference $(TILED_PAGEFLIP_LEGACY) --optimized $(TILED_PAGEFLIP_ROM) --output build/tiled-pageflip-speed-comparison.json

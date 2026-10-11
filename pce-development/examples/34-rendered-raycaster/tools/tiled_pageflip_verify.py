@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emulator regression for the opt-in 4-color genuine BAT page-switch mode.
+"""Emulator regression for the opt-in two-color-per-tile BAT page-switch mode.
 
 Unlike completed-copy counters, ray_redraws increments only at the VBlank page
 selection. Pixels must remain frozen between actual page selections.

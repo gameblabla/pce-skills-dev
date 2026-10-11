@@ -23,7 +23,22 @@ def quant():
         lines.append('};')
     lines.append('static const uint8_t ray_tiled_best_pair[256] = {')
     for x in range(0,256,16):lines.append('    '+','.join(str(t) for t in best[x:x+16])+',')
-    lines+=['};','#endif']
+    lines+=['};']
+    # One 8-bit input is already a paired 4-bit raycaster pixel. Four such
+    # inputs form a 2x4 tile: table lookup replaces repeated bit extraction,
+    # individual palette errors, and eight inner-loop quantization branches.
+    # Keep uint8_t score wrapping to remain bit-exact with the reference path.
+    perr=[[error[g][i>>4]+error[g][i&15] for i in range(256)] for g in range(16)]
+    mask=[[q[g][i>>4]*2+q[g][i&15] for i in range(256)] for g in range(16)]
+    for name,rows in [('ray_tiled_pair_error',perr),('ray_tiled_pair_mask',mask)]:
+        lines.append(f'static const uint8_t {name}[16][256] = {{')
+        for row in rows:
+            lines.append('    {')
+            for offset in range(0,256,16):
+                lines.append('        '+','.join(str(t) for t in row[offset:offset+16])+',')
+            lines.append('    },')
+        lines.append('};')
+    lines+=['#endif']
     return '\n'.join(lines)+'\n'
 def irq():
     b=['/* GENERATED 32-event scroll IRQ; two full 128x128 BAT pages. */',

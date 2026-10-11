@@ -8,6 +8,9 @@
 #include "main.c"
 #undef main
 #include "pageflip_tiled_quant.h"
+#ifndef RAY_TILE_FAST_QUANT
+#define RAY_TILE_FAST_QUANT 1
+#endif
 
 volatile uint8_t ray_flip_front,ray_flip_pending;
 static uint8_t flip_next_group,flip_pose_valid,flip_pose_angle;
@@ -61,6 +64,25 @@ static void flip_render_group(uint8_t group,uint16_t *dest) {
     for(uint8_t half=0u;half<2u;++half) {
         stage_pair_words(group,(uint8_t)(half<<6),64u,flip_pixel_rows);
         for(uint8_t tile=0u;tile<16u;++tile) {
+#if RAY_TILE_FAST_QUANT
+            /* Four packed source-pixel pairs make the 2x4 tile. A ROM
+             * lookup combines each pair's error and two glyph-mask bits,
+             * avoiding 16 individual palette/texture lookups per tile. */
+            uint8_t p0=(uint8_t)flip_pixel_rows[(uint8_t)(tile<<2)];
+            uint8_t p1=(uint8_t)flip_pixel_rows[(uint8_t)((tile<<2)+1u)];
+            uint8_t p2=(uint8_t)flip_pixel_rows[(uint8_t)((tile<<2)+2u)];
+            uint8_t p3=(uint8_t)flip_pixel_rows[(uint8_t)((tile<<2)+3u)];
+            uint8_t g0=ray_tiled_best_pair[p0];
+            uint8_t g1=ray_tiled_best_pair[p3];
+            const uint8_t *e0=ray_tiled_pair_error[g0];
+            const uint8_t *e1=ray_tiled_pair_error[g1];
+            uint8_t score0=(uint8_t)(e0[p0]+e0[p1]+e0[p2]+e0[p3]);
+            uint8_t score1=(uint8_t)(e1[p0]+e1[p1]+e1[p2]+e1[p3]);
+            uint8_t pal=(score1<score0)?g1:g0;
+            const uint8_t *mask=ray_tiled_pair_mask[pal];
+            uint8_t pattern=(uint8_t)((mask[p0]<<6)|(mask[p1]<<4)|
+                                      (mask[p2]<<2)|mask[p3]);
+#else
             uint8_t c[8];
             for(uint8_t row=0u;row<4u;++row) {
                 uint8_t v=(uint8_t)flip_pixel_rows[(uint8_t)((tile<<2)+row)];
@@ -78,6 +100,7 @@ static void flip_render_group(uint8_t group,uint16_t *dest) {
             uint8_t pattern=0u;
             for(uint8_t k=0u;k<8u;++k)
                 pattern=(uint8_t)((pattern<<1)|q[c[k]]);
+#endif
             dest[(uint8_t)((half<<4)+tile)]=(uint16_t)(((uint16_t)pal<<12)|0x0200u|pattern);
         }
     }

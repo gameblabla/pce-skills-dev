@@ -259,3 +259,33 @@ physical hardware remains untested.
 This is educational source, not a production engine. FPS remains constrained by live BAT uploads and IRQ timing; the floor remains screen-anchored, 128×128 logical pixels look blocky, and emulator success is not physical-hardware certification.
 
 The bitmap technique is based on [PCEdev's description](https://pcedev.wordpress.com/2015/12/10/pce-bitmap-mode/). The VCS-inspired coverage-span compositor and optional grid traversal are documented in `docs/vcs-port.md`, with the MIT-licensed reference sources retained. Older experimental variants remain in Git history for comparison, but are no longer build targets.
+
+### ROM lookup acceleration for compressed VBlank page flips
+
+The compressed-page experiment optionally uses `RAY_TILE_FAST_QUANT=1`
+(the default for that **experimental** ROM only). Two generated tables indexed by
+one packed source-pixel pair provide palette error and two glyph-pattern bits.
+They replace eight per-pixel palette tests and bit shifts per tile, while
+preserving the legacy renderer's 8-bit score wrap exactly. The two tables
+occupy 8 KiB of **ROM**, not PCE VRAM; the resulting HuCard still fits in
+32 KiB despite the permitted 1 MiB ceiling. The standard 16-colour renderer
+and the older VRAM-buffered/DMA renderers are unchanged.
+
+For a same-source comparison, run:
+
+```sh
+PCE_HEADLESS=/path/to/pce-headless make tiled-pageflip-speed-compare
+PCE_HEADLESS=/path/to/pce-headless make tiled-pageflip-verify
+```
+
+In the 1,080-frame emulator benchmark, the older compressed tile converter
+achieved **1.000 complete VBlank flips/sec while turning** (12 total flips)
+versus **1.333** (14 total flips) with the ROM lookups. A stationary capture
+matched **exactly, 0 / 135,520 physical pixels differing**. The new tiled
+renderer passed 2,160 consecutive turning screenshots (54 actual flips) and
+1,080 frames of mixed movement. Four 32-word groups per game update provided
+better game-loop responsiveness than eight; two groups were slower to complete
+whole image pages. The displayed artwork remains a deliberately **lossy
+2-colour-per-tile approximation**, not the original 16-colour image. It is not
+an unqualified FPS comparison against progressive dirty-view commits or DMA
+completion counts. No physical PCE validation has been performed.
