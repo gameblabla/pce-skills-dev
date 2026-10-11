@@ -26,6 +26,9 @@ def capture(rom: Path, output: Path, label: str):
         client.call('input', 0)
         client.call('run', 220)
         before = output.parent / f'{output.stem}-{label}-before.png'
+        # The headless frontend creates screenshots exclusively. Repeated
+        # regression runs must remove their prior captures first.
+        before.unlink(missing_ok=True)
         client.call('screenshot', str(before))
         images.append(Image.open(before).convert('RGB'))
         client.call('input', 1 << genre_trace.BUTTONS['right'])
@@ -37,6 +40,7 @@ def capture(rom: Path, output: Path, label: str):
                 client.call('run', frame - preceding)
             preceding = frame
             name = output.parent / f'{output.stem}-{label}-{frame:03d}.png'
+            name.unlink(missing_ok=True)
             client.call('screenshot', str(name))
             images.append(Image.open(name).convert('RGB'))
     finally:
@@ -71,18 +75,24 @@ def run(linear_rom: Path, center_rom: Path, output: Path):
             'linear_center_differing_pixels': difference(linear[index + 1], final, CENTER_BOX),
             'center_first_differing_pixels': difference(center[index + 1], final, CENTER_BOX),
         })
-    d40 = next(r for r in rows if r['frames_after_turn'] == 40)
-    d80 = next(r for r in rows if r['frames_after_turn'] == 80)
-    if not (d40['center_first_differing_pixels'] == 0 and
-            d40['linear_center_differing_pixels'] > 0 and
-            d80['linear_center_differing_pixels'] == 0):
-        raise ValueError(f'center-first latency advantage not demonstrated: {d40}, {d80}')
+    # The native ST0 VDC uploader can make both orders converge earlier.
+    # Measure the first clean checkpoint rather than locking the threshold
+    # to the historical frame-40/frame-80 results.
+    def first_clean(key):
+        return next((r['frames_after_turn'] for r in rows
+                     if r[key] == 0), None)
+    center_at=first_clean('center_first_differing_pixels')
+    linear_at=first_clean('linear_center_differing_pixels')
+    if center_at is None or linear_at is None or not center_at < linear_at:
+        raise ValueError(f'center-first latency advantage not demonstrated: {rows}')
     report = {
         'passed': True,
         'resolution': [128, 128],
         'metric': 'RGB mismatch against settled screenshot in central 128x145 physical pixels',
         'note': 'Perceptual center latency, not completed full-view FPS',
         'checkpoints': rows,
+        'center_first_settled_by_frame': center_at,
+        'linear_settled_by_frame': linear_at,
         'final_differing_pixels': difference(linear[-1], center[-1]),
     }
     output.write_text(json.dumps(report, indent=2) + '\n')

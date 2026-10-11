@@ -159,6 +159,11 @@ static uint8_t ray_next_pair(uint8_t pair) {
 #ifndef RAY_STAGE_UPLOAD
 #define RAY_STAGE_UPLOAD 0
 #endif
+/* Short staged BAT bursts use the HuC6280's immediate ST0 instruction,
+ * avoiding a general-purpose SDK call in the raster-sensitive loop. */
+#ifndef RAY_INLINE_VDC_ADDRESS
+#define RAY_INLINE_VDC_ADDRESS 1
+#endif
 #ifndef RAY_VBLANK_WORD_BUDGET
 /* Staging computes complex wall pixels before VBlank, so larger transfers
  * can be safely issued as separate <=8-word TIA bursts. The historical
@@ -842,8 +847,16 @@ static void render_columns(void) {
             if(n>8u)n=8u;
             if(n>until_page)n=until_page;
             pce_cpu_irq_disable();
+#if RAY_INLINE_VDC_ADDRESS
+            /* ST0 selects MAWR or VWR without an SDK call and does not
+             * clobber the accumulator used by the memory-copy routine. */
+            __asm__ volatile("st0 #0" ::: "memory");
+            *IO_VDC_DATA=RAY_BAT_ADDRESS(y,pair);
+            __asm__ volatile("st0 #2" ::: "memory");
+#else
             pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,RAY_BAT_ADDRESS(y,pair));
             *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
+#endif
             pce_memop((void*)IO_VDC_DATA,staged_words+offset+done,(uint16_t)(n<<1),PCE_MEMOP_INCR_ALT);
             pce_cpu_irq_enable();
             done=(uint8_t)(done+n);

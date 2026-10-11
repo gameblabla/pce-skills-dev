@@ -167,6 +167,28 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertIn('if(n>8u)n=8u;',render)
         self.assertIn('pce_cpu_irq_enable();',render)
 
+    def test_native_address_selector_retains_short_irq_mask(self):
+        src=(ROOT/'src/main.c').read_text()
+        mk=(ROOT/'Makefile').read_text()
+        render=src.split('static void render_columns(void) {',2)[-1].split('#endif\n#endif',1)[0]
+        # The 128x128 fast path changes only register selection, not the
+        # interrupt window or the independently tested BAT page-wrap rules.
+        self.assertIn('#define RAY_INLINE_VDC_ADDRESS 1',src)
+        self.assertIn('__asm__ volatile("st0 #0" ::: "memory")',render)
+        self.assertIn('__asm__ volatile("st0 #2" ::: "memory")',render)
+        self.assertIn('pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,RAY_BAT_ADDRESS(y,pair))',render)
+        self.assertLess(render.index('pce_cpu_irq_disable();'),render.index('#if RAY_INLINE_VDC_ADDRESS'))
+        self.assertLess(render.index('pce_memop((void*)IO_VDC_DATA'),render.index('pce_cpu_irq_enable();'))
+        self.assertIn('if(n>8u)n=8u;',render)
+        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 96u',src)
+        self.assertIn('vdc-inline-visual:',mk)
+        self.assertIn('-DRAY_INLINE_VDC_ADDRESS=0',mk)
+
+    def test_center_latency_screenshots_are_rerunnable(self):
+        src=(ROOT/'tools/center_latency.py').read_text()
+        self.assertIn('before.unlink(missing_ok=True)',src)
+        self.assertIn('name.unlink(missing_ok=True)',src)
+
     def test_interaction_trace_waits_for_one_time_bitmap_initialization(self):
         import json
         scenario=json.loads((ROOT/'tools/interaction-scenario.json').read_text())

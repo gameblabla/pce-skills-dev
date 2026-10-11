@@ -110,6 +110,16 @@ column-regression: $(OUT) tables-check
 	$(MAKE) column-benchmark
 	$(MAKE) raster-sweep
 
+# Validate HuC6280 immediate-ST0 address selection against the SDK VDC
+# helper without changing resolution, bitmap words, or the raster schedule.
+.PHONY: vdc-inline-visual
+VDC_SDK_ROM := build/34-rendered-raycaster-sdk-vdc.pce
+$(VDC_SDK_ROM): src/main.c src/bat_sparse_irq.S src/ray_tables.h src/hires_texels.h src/backdrop_words.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -DRAY_INLINE_VDC_ADDRESS=0 -Itools src/main.c src/bat_sparse_irq.S -o $@ $(FAST_ROM_LINK)
+vdc-inline-visual: $(OUT) $(VDC_SDK_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(VDC_SDK_ROM) --optimized $(OUT) --output build/vdc-inline-equivalence.json
+
 # Compare the center-first responsive presentation against the exact same
 # source with the historical left-to-right column order. Same 128x128 pixels.
 .PHONY: center-latency

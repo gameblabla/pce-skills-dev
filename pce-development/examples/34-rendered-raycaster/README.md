@@ -557,3 +557,34 @@ benchmark, both versions complete **14 dirty-view passes** and **1.500
 turning commits/s**. This is a **latency/responsiveness** improvement, not a
 higher full-screen FPS claim. Retain the raster sweep and movement stress
 regressions before changing the upload schedule again.
+
+## Native MAWR/VWR setup for 128×128 staged upload (October 2026)
+
+The raster-safe 128×128 staged renderer now selects the VDC's VRAM write
+address and data registers using the HuC6280 immediate `ST0` instructions,
+while retaining the SDK's `pce_memop` TIA transfer for each short burst.
+This removes the generic `pce_vdc_poke` function call from each 8-word-or-less
+burst. `-DRAY_INLINE_VDC_ADDRESS=0` builds the unchanged SDK-call reference;
+`make vdc-inline-visual` checks independently captured 128×128 screenshots
+for exact equivalence. Register access remains inside the same IRQ-masked
+section, and the second BAT page still wraps at logical rows 64/65.
+
+**Speed result:** In the fixed 1,080-video-frame benchmark, both versions
+complete 14 dirty-view passes and **1.500 turning passes/second**. The 1,080-
+frame movement stress completes 19 passes and the 540-frame raster sweep
+passes; stationary screenshots differ in **0 of 135,520 pixels**. The native
+selector therefore reduces code-path overhead but **does not yet produce a
+measurable completed-view FPS improvement**. CPU profiling attributes time
+in the wait-for-VBlank loop, so raw `main` tick counts are not a credible
+per-transfer performance comparison. A matched-camera-pose comparison
+likewise found **no earlier center convergence** for the native build; an
+initial apparent win was caused by differently processed button presses.
+The SDK-call variant remains available for controlled comparisons and for
+compiler portability.
+
+An attempt to increase the per-VBlank staging limit to 100 words (and prior
+larger experiments) still failed the movement raster test. Keep the default
+**96-word total** and **at-most-eight-word individual TIA bursts** until a
+separately verified raster/presentation redesign resolves those failures.
+Offline unit tests, the native cycle-budget gate, turning stress, long
+movement stress, and visual equivalence remain release requirements.
