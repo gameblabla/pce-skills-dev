@@ -190,3 +190,21 @@ vcs-span-check: $(OUT) $(VCS_SPAN_REFERENCE)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(VCS_SPAN_REFERENCE) --elf $(VCS_SPAN_REFERENCE).elf --output build/vcs-span-reference-benchmark.json
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(OUT) --elf $(OUT).elf --output build/vcs-span-optimized-benchmark.json
 	python3 tools/compare_vcs_span.py --baseline build/vcs-span-reference-benchmark.json --span build/vcs-span-optimized-benchmark.json --visual build/vcs-span-visual.json --output build/vcs-span-comparison.json
+
+# Experimental VCS-style cell grid-crossing and provably empty two-step jumps.
+# The default renderer remains the established bit-exact Q8 marcher because
+# same-work benchmarks have not established a measurable FPS improvement.
+.PHONY: grid-crossing-rom grid-crossing-check
+GRID_CROSS_ROM := build/34-rendered-raycaster-grid-crossing.pce
+$(GRID_CROSS_ROM): src/main.c src/bat_sparse_irq.S src/ray_tables.h src/hires_texels.h src/backdrop_words.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -DRAY_GRID_CROSSING=1 -Itools src/main.c src/bat_sparse_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+grid-crossing-rom: $(GRID_CROSS_ROM)
+grid-crossing-check: $(OUT) $(GRID_CROSS_ROM)
+	python3 -m unittest discover -s ../../workflows/tests -p 'test_ray_grid_crossing.py'
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(OUT) --optimized $(GRID_CROSS_ROM) --output build/grid-crossing-visual.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(OUT) --elf $(OUT).elf --output build/grid-crossing-default-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(GRID_CROSS_ROM) --elf $(GRID_CROSS_ROM).elf --output build/grid-crossing-experimental-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/raster_sweep.py --rom $(GRID_CROSS_ROM) --elf $(GRID_CROSS_ROM).elf --output build/grid-crossing-raster.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(GRID_CROSS_ROM) --elf $(GRID_CROSS_ROM).elf --mode column --output build/grid-crossing-stress.json
+	python3 tools/compare_grid_crossing.py --reference build/grid-crossing-default-benchmark.json --experimental build/grid-crossing-experimental-benchmark.json --visual build/grid-crossing-visual.json --raster build/grid-crossing-raster.json --stress build/grid-crossing-stress.json --output build/grid-crossing-evidence.json

@@ -244,22 +244,49 @@ static uint8_t material_at(int16_t x,int16_t y) {
     if(tx>=8u||ty>=8u)return 1;
     return map[ty][tx];
 }
+/* VCS-style gridline tracking experiment. The default preserves the
+ * measured production caster. RAY_GRID_CROSSING uses cached tile indices
+ * and skips exact, provably empty two-step segments, never interpolating
+ * through a crossing. Distances and texture phases match the reference. */
+#ifndef RAY_GRID_CROSSING
+#define RAY_GRID_CROSSING 0
+#endif
 static uint8_t cast_ray(uint8_t col) {
     int8_t dx=ray_step_x[angle&7u][col],dy=ray_step_y[angle&7u][col];
     if(angle&8u){dx=(int8_t)-dx;dy=(int8_t)-dy;}
     int16_t x=world_x,y=world_y;
+#if RAY_GRID_CROSSING
+    uint8_t cx=(uint8_t)((uint16_t)x>>8);
+    uint8_t cy=(uint8_t)((uint16_t)y>>8);
+#endif
     for(uint8_t n=1;n<=32;++n) {
+#if RAY_GRID_CROSSING
+        /* Two-step jump is safe only when BOTH endpoints are in the same
+         * cell. With a monotone signed step, the midpoint must be too. */
+        if(n<32u) {
+            int16_t x2=(int16_t)(x+(int16_t)dx*2);
+            int16_t y2=(int16_t)(y+(int16_t)dy*2);
+            if((((uint16_t)(x^x2))&0xff00u)==0u &&
+               (((uint16_t)(y^y2))&0xff00u)==0u) {
+                x=x2;y=y2;n=(uint8_t)(n+1u);
+                continue;
+            }
+        }
+        x+=dx;y+=dy;
+        uint8_t nx=(uint8_t)((uint16_t)x>>8);
+        uint8_t ny=(uint8_t)((uint16_t)y>>8);
+        if(cx==nx && cy==ny)continue;
+        int16_t px=(int16_t)(x-dx),py=(int16_t)(y-dy);
+#else
         int16_t px=x,py=y;
         x+=dx;y+=dy;
-        /* No grid boundary crossed: the next cell is necessarily empty.
-         * Avoid a map lookup on almost every sub-cell march. */
+        /* No grid boundary crossed: the next cell is necessarily empty. */
         if(((uint16_t)px>>8)==((uint16_t)x>>8) &&
            ((uint16_t)py>>8)==((uint16_t)y>>8))continue;
+#endif
         uint8_t m=material_at(x,y);
         if(m) {
-            /* One sub-cell midpoint refinement locates the first solid cell within
-             * the last ray step. Do not sample the texture at the overshot
-             * marching endpoint (which makes textures jump on rotation). */
+            /* Midpoint refinement preserves the precise Q8 wall phase. */
             {
                 int16_t mx=(int16_t)(px+((x-px)>>1));
                 int16_t my=(int16_t)(py+((y-py)>>1));
@@ -273,6 +300,9 @@ static uint8_t cast_ray(uint8_t col) {
             ray_hit_cell[col]=(uint8_t)((((uint8_t)(((uint16_t)y)>>8))<<3) | (uint8_t)(((uint16_t)x)>>8));
             return n;
         }
+#if RAY_GRID_CROSSING
+        cx=nx;cy=ny;
+#endif
     }
     tex_u[col]=0;ray_tex_phase[col]=0;wall_kind[col]=1;ray_hit_cell[col]=0xffu;
     return 32;

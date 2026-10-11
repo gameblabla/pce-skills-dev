@@ -1,0 +1,35 @@
+{
+  "result": "passed",
+  "name": "VCS-inspired grid boundary tracking with exact Q8 empty-cell skips",
+  "benchmark_video_frames": 1080,
+  "reference_game_updates": 1056,
+  "experimental_game_updates": 1057,
+  "reference_dirty_views": 14,
+  "experimental_dirty_views": 14,
+  "reference_turning_commits_per_second": 1.5,
+  "experimental_turning_commits_per_second": 1.5,
+  "reference_vram_words": 60281,
+  "experimental_vram_words": 60281,
+  "stationary_pixel_differences": 0,
+  "raster_frames": 540,
+  "midpoint_floor_similarity": 0.0684,
+  "movement_frames": 1080,
+  "movement_dirty_views": 19,
+  "interpretation": "No measurable completed-view FPS benefit. Keep the original caster as the production default; optional experiment only.",
+  "native_profiler_cast_ray": {
+    "turn": {
+      "reference_cast_ray_ticks_per_frame": 19761.65,
+      "grid_cast_ray_ticks_per_frame": 16350.5,
+      "reference_game_updates": 53,
+      "grid_game_updates": 53,
+      "grid_cast_self_time_reduction_percent": 17.3
+    },
+    "walk": {
+      "reference_cast_ray_ticks_per_frame": 7323.3,
+      "grid_cast_ray_ticks_per_frame": 6907.85,
+      "reference_game_updates": 57,
+      "grid_game_updates": 57,
+      "grid_cast_self_time_reduction_percent": 5.7
+    }
+  }
+}

@@ -5,6 +5,17 @@ own PC engine game or application for Hucard or (Super/Arcade) CDROM² !
 
 I recommend that you get the strongest local AI model that you can possibly
 use for your PC.
+### Experimental VCS grid crossing (128×128)
+
+The original VCS assembly has also informed an **optional** Q8 grid-boundary
+skip (`-DRAY_GRID_CROSSING=1`). It preserves the production wall hits and
+texture phases, and reduces `cast_ray` attributed CPU time in the emulator,
+but it does **not** measurably improve completed screen updates. The default
+ROM keeps the established caster; use
+`make -C pce-development/examples/34-rendered-raycaster grid-crossing-check`
+for independent visual, raster and movement comparisons. Full notes:
+[`vcs-grid-crossing.md`](pce-development/examples/34-rendered-raycaster/docs/vcs-grid-crossing.md).
+
 ## Single-purpose C examples
 
 The 99 small examples are in [`pce-development/examples/micro/`](pce-development/examples/micro/README.md).
@@ -49,7 +60,7 @@ palette-safe, deduplicated PCE tiles, BAT, and sprite data, with manifest and
 VRAM overlap checks. `visual_scenario.py` couples scripted input, framebuffer
 captures, trace input latching, and movement/diff thresholds. These tools and
 assets are bundled inside the standalone example projects. The raycaster is
-an actual 32-ray renderer writing two independent four-bit pixels per BAT
+an actual 128-ray renderer writing two independent four-bit pixels per BAT
 entry, *not* a static image or 8px solid-colour BAT columns. Run
 `PCE_HEADLESS=... make raycaster-bitmap-test` for its independent 512×224
 bitmap screenshot audit. Game traces remain separate from visual evidence.
