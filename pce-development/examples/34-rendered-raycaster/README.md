@@ -536,3 +536,24 @@ Larger VBlank budgets were tested rather than assumed safe: **112 words
 failed** the long movement stress and **144 words produced a sky-only
 turning frame**. Keep 96 words unless those failures are solved and tested
 on real hardware. The native cycle budget and 233 offline tests pass.
+
+## Center-first progressive update (October 2026)
+
+At 128×128 the PCE paired-BAT trick requires a substantial number of VRAM
+words to replace a dirty wall view. Instead of making the player watch the
+image redraw left-to-right, the default uses an alternating **center-out**
+order: pairs 31, 32, 30, 33, ..., 0, 63. All 64 pairs, all 128 independent
+rays, 32×32 close-wall textures, and the corrected row-64 page mapping are
+preserved. The VBlank budget remains **96 words**, with no longer IRQ-masked
+bursts. Build with `-DRAY_CENTER_FIRST=0` to restore the linear order.
+
+`make center-latency` builds both render orders from the same source and
+captures real emulator screenshots after a short camera turn. In the fixed
+scenario the central 128-pixel-wide view matches its settled final rendering
+by **40 video frames** with the center-first order; at the same point the
+linear order still differs at **1,318 pixels**, converging by frame 80. The
+final 560×242 RGB screenshots are identical. Over the standard 1,080-frame
+benchmark, both versions complete **14 dirty-view passes** and **1.500
+turning commits/s**. This is a **latency/responsiveness** improvement, not a
+higher full-screen FPS claim. Retain the raster sweep and movement stress
+regressions before changing the upload schedule again.

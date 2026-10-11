@@ -110,6 +110,16 @@ column-regression: $(OUT) tables-check
 	$(MAKE) column-benchmark
 	$(MAKE) raster-sweep
 
+# Compare the center-first responsive presentation against the exact same
+# source with the historical left-to-right column order. Same 128x128 pixels.
+.PHONY: center-latency
+CENTER_LINEAR_ROM := build/34-rendered-raycaster-linear-order.pce
+$(CENTER_LINEAR_ROM): src/main.c src/bat_sparse_irq.S src/ray_tables.h src/hires_texels.h src/backdrop_words.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -DRAY_CENTER_FIRST=0 -Itools src/main.c src/bat_sparse_irq.S -o $@ $(FAST_ROM_LINK)
+center-latency: $(OUT) $(CENTER_LINEAR_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/center_latency.py --linear-rom $(CENTER_LINEAR_ROM) --center-rom $(OUT) --output build/center-latency.json
+
 .PHONY: raster-sweep
 raster-sweep: $(OUT)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/raster_sweep.py --rom $(OUT) --elf $(OUT).elf --output build/raster-sweep.json

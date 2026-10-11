@@ -105,7 +105,7 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertIn('column_pass_dirty',src)
         self.assertIn('ray_bat_words',src)
         self.assertIn('if(cast_valid && cast_angle==angle',src)
-        self.assertIn('if(i && next_column==0u)break;',src)
+        self.assertIn('if(i && next_column==RAY_FIRST_PAIR)break;',src)
         self.assertIn('column_prepare()',src)
         self.assertIn('upload_next_y=(uint8_t)(upload_next_y+n)',src)
         self.assertIn('if(upload_active)return 1u;',src)
@@ -115,6 +115,27 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertIn('src/bat_bitmap_irq.S',make) # atomic/reference remain independent
         self.assertIn('__rom_bank0_size=0x8000',make)
         self.assertIn('$(MAKE) raster-sweep',make)
+
+    def test_center_out_order_visits_all_64_pairs_exactly_once(self):
+        # This order prioritizes forward-facing pixels but cannot silently
+        # omit columns, repeat a pair, or wrap the view mid-projection.
+        def successor(pair):
+            return 31 if pair==63 else (63-pair if pair<=31 else 62-pair)
+        pairs=[31]
+        for _ in range(63):
+            pairs.append(successor(pairs[-1]))
+        self.assertEqual(len(set(pairs)),64)
+        self.assertEqual(set(pairs),set(range(64)))
+        self.assertEqual(pairs[:8],[31,32,30,33,29,34,28,35])
+        self.assertEqual(pairs[-2:],[0,63])
+        self.assertEqual(successor(pairs[-1]),31)
+        src=(ROOT/'src/main.c').read_text()
+        self.assertIn('#define RAY_CENTER_FIRST 1',src)
+        self.assertIn('#define RAY_FIRST_PAIR 31u',src)
+        self.assertIn('next_column=RAY_FIRST_PAIR;',src)
+        self.assertIn('if(checked && pair_cursor==RAY_FIRST_PAIR)break;',src)
+        self.assertIn('pair_cursor=ray_next_pair(pair);',src)
+        self.assertIn('next_column=ray_next_pair(pair);',src)
 
     def test_quality_shader_runs_before_the_vblank_transfer(self):
         src=(ROOT/'src/main.c').read_text()

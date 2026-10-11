@@ -126,6 +126,25 @@ static uint16_t ray_bat_addresses[128];
  * both halves must therefore use BAT row 63 for logical y=63/64. */
 #define RAY_BAT_ADDRESS(y,pair) ((uint16_t)((((uint16_t)(((y)&64u)?(((y)-1u)&63u):((y)&63u)))<<7)+(((y)&64u)?64u:0u)+(pair)))
 #endif
+/* A progressive pass need not expose the stale center of the image until
+ * the uploader reaches column 32. Work from the player's view center out:
+ * 31,32,30,33,...,0,63. Every pair is still visited exactly once; this
+ * changes latency, not resolution, image quality, or the VBlank word cap. */
+#ifndef RAY_CENTER_FIRST
+#define RAY_CENTER_FIRST 1
+#endif
+#if RAY_CENTER_FIRST
+#define RAY_FIRST_PAIR 31u
+static uint8_t ray_next_pair(uint8_t pair) {
+    if(pair==63u)return 31u;
+    return (uint8_t)(pair<=31u?63u-pair:62u-pair);
+}
+#else
+#define RAY_FIRST_PAIR 0u
+static uint8_t ray_next_pair(uint8_t pair) {
+    return (uint8_t)((pair+1u)&63u);
+}
+#endif
 #ifndef RAY_COLUMNS_PER_UPDATE
 /* Limit the number of distinct BAT pairs scheduled per VBlank. Work on a
  * long wall column is resumable across VBlanks below. */
@@ -611,7 +630,7 @@ static uint8_t column_prepare(void) {
     /* Do not recast or replace current wall samples halfway through an
      * interrupted vertical column. It must be completed first. */
     if(upload_active)return 1u;
-    if(next_column==0u) {
+    if(next_column==RAY_FIRST_PAIR) {
         if(cast_valid && cast_angle==angle &&
            cast_x==world_x && cast_y==world_y)return 0u;
         cast_x=world_x;cast_y=world_y;cast_angle=angle;cast_valid=1u;
@@ -629,8 +648,8 @@ static void finish_column(uint8_t pair) {
         old_depth[c]=depth[c];
 #endif
     }
-    next_column=(uint8_t)((pair+1u)&63u);
-    if(next_column==0u && column_pass_dirty)++ray_redraws;
+    next_column=ray_next_pair(pair);
+    if(next_column==RAY_FIRST_PAIR && column_pass_dirty)++ray_redraws;
 }
 #if !RAY_STAGE_UPLOAD
 static void render_columns(void) {
@@ -638,7 +657,7 @@ static void render_columns(void) {
     for(uint8_t i=0;i<column_pairs_per_update && budget;++i) {
         /* Reaching zero commits this view: never begin the next camera
          * pass in the same VBlank without a fresh projection. */
-        if(i && next_column==0u)break;
+        if(i && next_column==RAY_FIRST_PAIR)break;
         const uint8_t pair=next_column,l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
         if(!upload_active) {
             uint8_t dirty=0,first=128u,last=0u;
@@ -746,7 +765,7 @@ static void stage_columns(void) {
      * samples after finishing pair 63. Last-pass commits happen only after
      * all of their actual VRAM uploads are acknowledged. */
     for(uint8_t checked=0;checked<64u && budget; ++checked) {
-        if(checked && pair_cursor==0u)break;
+        if(checked && pair_cursor==RAY_FIRST_PAIR)break;
         uint8_t pair=pair_cursor,l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
         if(!local_active) {
             uint8_t dirty=0,first=128u,last=0u;
@@ -777,7 +796,7 @@ static void stage_columns(void) {
                 staged_segment_last[segments]=0u;
                 staged_segment_finish[segments]=1u;
                 ++segments;
-                pair_cursor=(uint8_t)((pair+1u)&63u);
+                pair_cursor=ray_next_pair(pair);
                 continue;
             }
             local_next=first;local_last=last;
@@ -796,7 +815,7 @@ static void stage_columns(void) {
         ++segments;
         if(count!=remaining)break;
         local_active=0u;
-        pair_cursor=(uint8_t)((pair+1u)&63u);
+        pair_cursor=ray_next_pair(pair);
     }
     if(segments) {
         staged_segments=segments;
@@ -879,7 +898,7 @@ int main(void) {
                  VDC_CONTROL_IRQ_SCANLINE|VDC_CONTROL_IRQ_VBLANK|
                  VDC_CONTROL_VRAM_ADD_128);
     pce_cpu_irq_enable();
-    next_column=0;cast_valid=0;upload_active=0;ray_bat_words=0;
+    next_column=RAY_FIRST_PAIR;cast_valid=0;upload_active=0;ray_bat_words=0;
     column_pairs_per_update=RAY_COLUMNS_PER_UPDATE;
 #if RAY_WALL_CODEGEN
     ray_codegen_words=0;
