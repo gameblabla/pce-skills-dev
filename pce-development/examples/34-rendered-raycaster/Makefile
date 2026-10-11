@@ -93,7 +93,7 @@ vram-present-compare: $(OUT) $(VRAM_ADDRESS_REFERENCE)
 	python3 tools/compare_vram_present.py --old build/vram-original-benchmark.json --new build/vram-contiguous-benchmark.json --visual build/vram-presentation-visual.json --output build/vram-presentation-comparison.json
 
 # Compare the original consecutive 96-word VBlank writer against the
-# raster-paced 136-word writer. Both use the identical shaders/128x128 mode.
+# raster-paced 138-word writer. Both use the identical shaders/128x128 mode.
 .PHONY: vram-pacing-compare
 UNPACED_ROM := build/34-rendered-raycaster-unpaced96.pce
 $(UNPACED_ROM): src/main.c src/bat_sparse_irq.S src/ray_tables.h src/backdrop_words.h | toolchain
@@ -101,9 +101,26 @@ $(UNPACED_ROM): src/main.c src/bat_sparse_irq.S src/ray_tables.h src/backdrop_wo
 	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -DRAY_PRESENT_PACED=0 -DRAY_VBLANK_WORD_BUDGET=96 -Itools src/main.c src/bat_sparse_irq.S -o $@ $(FAST_ROM_LINK)
 vram-pacing-compare: $(OUT) $(UNPACED_ROM)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(UNPACED_ROM) --elf $(UNPACED_ROM).elf --output build/vram-unpaced96-benchmark.json
-	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(OUT) --elf $(OUT).elf --output build/vram-paced136-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(OUT) --elf $(OUT).elf --output build/vram-paced138-benchmark.json
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(UNPACED_ROM) --optimized $(OUT) --output build/vram-pacing-visual.json
-	python3 tools/compare_vram_pacing.py --old build/vram-unpaced96-benchmark.json --new build/vram-paced136-benchmark.json --visual build/vram-pacing-visual.json --output build/vram-pacing-comparison.json
+	python3 tools/compare_vram_pacing.py --old build/vram-unpaced96-benchmark.json --new build/vram-paced138-benchmark.json --visual build/vram-pacing-visual.json --output build/vram-pacing-comparison.json
+
+# Same shaders, compare original Y-indexed sparse IRQ at the verified
+# 136-word pacing against the X-only IRQ and 138-word pacing. Preserve the
+# old generator as a reference without maintaining a second active example.
+.PHONY: irq-compare
+IRQ_LEGACY_ASM := build/bat_sparse_irq-legacy.S
+IRQ_LEGACY_ROM := build/34-rendered-raycaster-irq-reference.pce
+$(IRQ_LEGACY_ASM): tools/gen_sparse_irq.py
+	@mkdir -p build
+	python3 tools/gen_sparse_irq.py --legacy-output $@
+$(IRQ_LEGACY_ROM): src/main.c $(IRQ_LEGACY_ASM) src/ray_tables.h src/backdrop_words.h | toolchain
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -DRAY_VBLANK_WORD_BUDGET=136 -Itools src/main.c $(IRQ_LEGACY_ASM) -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+irq-compare: $(OUT) $(IRQ_LEGACY_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(IRQ_LEGACY_ROM) --elf $(IRQ_LEGACY_ROM).elf --output build/irq-reference-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(OUT) --elf $(OUT).elf --output build/irq-optimized-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(IRQ_LEGACY_ROM) --optimized $(OUT) --output build/irq-exact-visual.json
+	python3 tools/compare_irq_speed.py --old build/irq-reference-benchmark.json --new build/irq-optimized-benchmark.json --visual build/irq-exact-visual.json --output build/irq-comparison.json
 
 # New full-detail VRAM-resident raycaster acceptance: verifies real changed
 # columns, render state, long controller exercise, and bounded raster IRQ.

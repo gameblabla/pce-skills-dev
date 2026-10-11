@@ -6,7 +6,6 @@
 irq_vdc:
     pha
     phx
-    phy
     cld
     lda $0000
     pha
@@ -27,30 +26,29 @@ irq_vdc:
     pla
     and #$04
     beq .Ldone
-    lda bat_source_y
-    cmp #127
+    ldx bat_source_y
+    cpx #127
     bcs .Ldone
-    inc bat_source_y
-    ldy bat_source_y
-    cpy #64
+    inx
+    stx bat_source_y
+    cpx #64
     bne .Lno_page
     st0 #7
     st1 #0
     st2 #2
 .Lno_page:
     st0 #8
-    lda irq_byr_low,y
+    lda irq_byr_low,x
     sta $0002
-    lda irq_byr_high,y
+    lda irq_byr_high,x
     sta $0003
     st0 #6
-    iny
-    lda irq_rcr_low,y
+    inx
+    lda irq_rcr_low,x
     sta $0002
-    lda irq_rcr_high,y
+    lda irq_rcr_high,x
     sta $0003
 .Ldone:
-    ply
     plx
     pla
     rti

@@ -63,13 +63,22 @@ class ColumnStreamTests(unittest.TestCase):
 
     def test_sparse_irq_is_host_generated_and_schedules_127_changes(self):
         self.assertEqual((ROOT/'src/bat_sparse_irq.S').read_text(),gen_sparse_irq.gen())
+        self.assertNotIn('    phy', gen_sparse_irq.gen())
+        self.assertNotIn('    ply', gen_sparse_irq.gen())
+        self.assertIn('    stx bat_source_y', gen_sparse_irq.gen())
+        self.assertIn('    phy', gen_sparse_irq.gen(legacy=True))
+        self.assertIn('    ply', gen_sparse_irq.gen(legacy=True))
+        self.assertIn('    cpy #64', gen_sparse_irq.gen(legacy=True))
+        self.assertIn('    cpx #64', gen_sparse_irq.gen())
+        self.assertEqual(gen_sparse_irq.gen().split('irq_byr_low:',1)[1],
+                         gen_sparse_irq.gen(legacy=True).split('irq_byr_low:',1)[1])
         lines=[(y*7+3)//4 for y in range(1,128)]
         self.assertEqual(len(lines),127)
         self.assertEqual(lines[:4],[2,4,6,7])
         self.assertEqual(lines[-1],223)
         self.assertEqual(len(lines),len(set(lines)))
         self.assertEqual(sum(1 for y in range(128) if y==64),1)
-        self.assertNotIn('st2 #2\n.Lno_page:',gen_sparse_irq.gen().split('cpy #64')[0])
+        self.assertNotIn('st2 #2\n.Lno_page:',gen_sparse_irq.gen().split('cpx #64')[0])
 
     def test_second_page_scroll_guard_matches_staged_upload_wrap(self):
         # Logical y=64 must resolve to the *same physical BAT row* that
@@ -95,7 +104,7 @@ class ColumnStreamTests(unittest.TestCase):
         src=(ROOT/'src/main.c').read_text()
         render=src.rsplit('static void render_columns(void) {',1)[1].split('#endif\n#endif',1)[0]
         self.assertIn('#define RAY_PRESENT_PACED RAY_STAGE_UPLOAD',src)
-        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 136u',src)
+        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 138u',src)
         self.assertIn('#define RAY_VBLANK_WORD_BUDGET 96u',src)
         self.assertIn('while(last_raster==bat_source_y && start_frame==bat_frames)',render)
         self.assertLess(render.index('pce_cpu_irq_enable();'),render.index('while(last_raster==bat_source_y'))
@@ -161,7 +170,7 @@ class ColumnStreamTests(unittest.TestCase):
         src=(ROOT/'src/main.c').read_text()
         mk=(ROOT/'Makefile').read_text()
         self.assertIn('-DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0',mk)
-        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 136u',src)
+        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 138u',src)
         self.assertIn('static void stage_pair_words(uint8_t pair,uint8_t first,uint8_t count,uint16_t *dest)',src)
         self.assertIn('ray_wall_hires[sl>>1][ray_tex_phase[l]>>3]',src)
         self.assertIn('if(count)stage_pair_words(pair,local_next,count,staged_words+total);',src)
@@ -200,7 +209,7 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertLess(render.index('pce_cpu_irq_disable();'),render.index('#if RAY_INLINE_VDC_ADDRESS'))
         self.assertLess(render.index('pce_memop((void*)IO_VDC_DATA'),render.index('pce_cpu_irq_enable();'))
         self.assertIn('if(n>8u)n=8u;',render)
-        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 136u',src)
+        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 138u',src)
         self.assertIn('vdc-inline-visual:',mk)
         self.assertIn('-DRAY_INLINE_VDC_ADDRESS=0',mk)
 

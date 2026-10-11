@@ -160,12 +160,12 @@ static uint8_t ray_next_pair(uint8_t pair) {
 #define RAY_INLINE_VDC_ADDRESS 1
 #endif
 #ifndef RAY_VBLANK_WORD_BUDGET
-/* The paced staged writer was validated at 136 words/frame with <=8-word
+/* The paced staged writer is emulator-validated at 138 words/frame with <=8-word
  * IRQ-masked bursts and a raster-progress wait between bursts. The old
  * uninterrupted writer remains limited to 96 words. Higher 144-word paced
  * and 104-word uninterrupted variants failed sustained raster tests. */
 #if RAY_STAGE_UPLOAD && RAY_PRESENT_PACED
-#define RAY_VBLANK_WORD_BUDGET 136u
+#define RAY_VBLANK_WORD_BUDGET 138u
 #elif RAY_STAGE_UPLOAD
 #define RAY_VBLANK_WORD_BUDGET 96u
 #else
