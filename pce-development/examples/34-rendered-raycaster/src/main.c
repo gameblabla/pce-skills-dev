@@ -922,7 +922,10 @@ static void render_columns(void) {
     if(!staged_ready)return;
     uint8_t offset=0u;
 #if RAY_PRESENT_PACED
-    const uint8_t start_frame=bat_frames;
+    /* Track the most recently observed raster event AND frame. A single
+     * immutable start-frame makes all pacing waits no-ops after the first
+     * VBlank rollover during a long staged upload. */
+    uint8_t last_frame=bat_frames;
     uint8_t last_raster=bat_source_y;
     uint8_t pace_bursts=0u;
 #endif
@@ -973,7 +976,8 @@ static void render_columns(void) {
             if(++pace_bursts==RAY_PACE_BURSTS) {
                 pace_bursts=0u;
                 if(done<count || (uint8_t)(seg+1u)<staged_segments) {
-                    while(last_raster==bat_source_y && start_frame==bat_frames) {}
+                    while(last_raster==bat_source_y && last_frame==bat_frames) {}
+                    last_frame=bat_frames;
                     last_raster=bat_source_y;
                 }
             }

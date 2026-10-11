@@ -94,7 +94,9 @@ its entire event order and scroll offsets.
 
 The experimental variant uses a **160-word prepared batch** and yields once
 per two eight-word transfers, instead of the default 138 words with a yield
-between each transfer. It is **not a hardware-safe transfer guarantee**:
+between each transfer. Pacing re-arms after each video-frame rollover instead
+of comparing later waits against the batch's first frame: long transfers now
+continue to wait for raster progress even after crossing VBlank. It is **not a hardware-safe transfer guarantee**:
 140, 152 and 156-word experiments failed the 1,080-frame movement stress,
 even though 144, 148 and 160 passed. The timing is sensitive to workload and
 controller state; the production ROM remains unchanged. Use:
@@ -103,6 +105,7 @@ controller state; the production ROM remains unchanged. Use:
 make natural-irq-rom
 PCE_HEADLESS=/path/to/pce-headless make natural-irq-compare
 PCE_HEADLESS=/path/to/pce-headless make natural-irq-stress
+PCE_HEADLESS=/path/to/pce-headless make natural-irq-marathon
 PCE_HEADLESS=/path/to/pce-headless make natural-irq-cycles
 ```
 
@@ -110,8 +113,14 @@ On the tested emulator, both ROMs match all **135,520 pixels** of the settled
 frame. Over the 1,080-video-frame benchmark, turning dirty-view commits rise
 from **2.000 to 2.167 per second**, and transferred BAT words from **77,895
 to 88,115**. The separate movement stress completes **32** dirty passes,
-versus **28** in the default ROM. The experimental ROM passes 1,080 consecutive
-turning screenshot checks (including the midpoint) and 1,080 movement frames.
+versus **28** in the default ROM. The experimental ROM passes 2,160 consecutive turning screenshots (including
+the midpoint), 1,080 movement-stress frames, and a separate 4,320-frame
+mixed-input marathon with 24 screenshot checkpoints. The marathon explicitly
+allows a genuine near-wall (depth 1–2) view to occupy the sky/floor: the older
+six-checkpoint palette-diversity rule falsely diagnosed those close walls as
+missing graphics. It still rejects empty frames, midpoint stripes and stalls.
+A 160-word budget remains experimental: neither these tests nor an emulator
+provide physical-hardware raster-timing proof.
 The native profiler attributes **47,592 -> 26,256** master-clock ticks
 per video frame to `irq_vdc` (about **45% fewer**). The experimental cycle
 budget retains the stable build's turn and walk constraints and tightens the

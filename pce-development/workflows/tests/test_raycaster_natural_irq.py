@@ -44,4 +44,33 @@ class NaturalIRQTests(unittest.TestCase):
         self.assertEqual(ray.natural_offset(63),63*8-1)
         self.assertEqual(ray.natural_offset(64),63*8-1)
 
+class NaturalRasterPacingTests(unittest.TestCase):
+    def test_wait_tracks_new_frame_after_rollover(self):
+        source=(ROOT/'src/main.c').read_text()
+        self.assertIn('uint8_t last_frame=bat_frames;',source)
+        self.assertIn('while(last_raster==bat_source_y && last_frame==bat_frames) {}',source)
+        self.assertIn('last_frame=bat_frames;',source[source.index('while(last_raster==bat_source_y')+10:])
+        self.assertNotIn('start_frame==bat_frames',source)
+
+    def test_frame_change_wakes_pacing_and_rearms_next_wait(self):
+        def needs_wait(observed_frame,observed_row,current_frame,current_row):
+            return observed_frame==current_frame and observed_row==current_row
+        self.assertTrue(needs_wait(22,17,22,17))
+        self.assertFalse(needs_wait(22,17,22,19))
+        self.assertFalse(needs_wait(22,17,23,0))
+        # After observing frame rollover, a second wait must be armed.
+        self.assertTrue(needs_wait(23,0,23,0))
+        self.assertFalse(needs_wait(255,126,0,0))
+        self.assertTrue(needs_wait(0,0,0,0))
+
+class MarathonNearWallTests(unittest.TestCase):
+    def test_close_wall_can_cover_sky_and_floor(self):
+        import sys
+        sys.path.insert(0,str(ROOT/'tools'))
+        from natural_irq_marathon import close_wall_visible
+        self.assertTrue(close_wall_visible(1,5,2))
+        self.assertFalse(close_wall_visible(1,4,2))
+        self.assertFalse(close_wall_visible(1,5,1))
+        self.assertFalse(close_wall_visible(7,5,2))
+
 if __name__=='__main__':unittest.main()

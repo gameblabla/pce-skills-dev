@@ -250,6 +250,13 @@ natural-irq-stress: $(NATURAL_IRQ_ROM)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/raster_sweep.py --rom $(NATURAL_IRQ_ROM) --elf $(NATURAL_IRQ_ROM).elf --output build/natural-irq-raster1080.json --frames 1080
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(NATURAL_IRQ_ROM) --elf $(NATURAL_IRQ_ROM).elf --mode column --output build/natural-irq-stress.json
 
+# Longer alternating-input regression catches boundary and pacing failures
+# that a single 1,080-frame run can miss. Counts are progressive dirty passes.
+.PHONY: natural-irq-marathon
+natural-irq-marathon: $(NATURAL_IRQ_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/raster_sweep.py --rom $(NATURAL_IRQ_ROM) --elf $(NATURAL_IRQ_ROM).elf --output build/natural-irq-turn2160.json --frames 2160
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/natural_irq_marathon.py --rom $(NATURAL_IRQ_ROM) --elf $(NATURAL_IRQ_ROM).elf --output build/natural-irq-marathon.json --repeats 4
+
 # The ordinary profiler's idle-main bound assumes 127 IRQs. Here idle main
 # deliberately waits longer because 59 IRQs were eliminated; use a stricter
 # IRQ limit while allowing that waiting time to be attributed to main.
