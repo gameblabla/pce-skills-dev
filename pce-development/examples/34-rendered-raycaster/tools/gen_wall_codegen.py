@@ -53,7 +53,7 @@ def generate():
         a.extend('    .word '+','.join(addresses[i:i+8]) for i in (0,8))
     a += [f'/* 16 V offsets x {STRIDE} (7 material * 2 shades * 16 U) variants. */',
           '/* Complete VDC VRAM address selection in native code. */',
-          '.balign 256','ray_codegen_pixels:']
+          '.balign 256','.global ray_codegen_pixels','ray_codegen_pixels:']
     pairs=converted()
     for v in range(16):
         values=[pairs[style][u][v] for style in range(STYLE_COUNT) for u in range(U_PHASES)]

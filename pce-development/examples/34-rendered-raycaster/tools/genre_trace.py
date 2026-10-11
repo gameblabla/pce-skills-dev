@@ -226,7 +226,13 @@ def run_emulator(rom,address,scenario,bios=None,base_dir=None,initial_frames=2,s
     exe=old._find_binary(rom)
     base_dir=pathlib.Path(base_dir or 'build/genre-trace-base').resolve()
     base_dir.mkdir(parents=True,exist_ok=True)
-    client=old.NativeControl(str(exe),rom,base_dir,bios,initial_frames)
+    # Optional explicit boot warmup: the VRAM-resident 128x128 example
+    # initializes 8,192 BAT words and 256 tile patterns before game ticks.
+    # Those display setup frames are not part of the interaction scenario.
+    boot_frames=scenario.get('boot_frames',initial_frames)
+    if not isinstance(boot_frames,int) or not 1<=boot_frames<=600:
+        raise ValueError('boot_frames must be an integer from 1 to 600')
+    client=old.NativeControl(str(exe),rom,base_dir,bios,boot_frames)
     samples=[]
     try:
         for step in steps:

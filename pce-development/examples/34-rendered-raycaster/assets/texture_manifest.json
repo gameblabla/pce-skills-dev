@@ -10,6 +10,12 @@
     16,
     16
   ],
+  "near_wall_tile_px": [
+    32,
+    32
+  ],
+  "near_wall_packed_bytes": 3584,
+  "subpixel_blend_packed_bytes": 128,
   "source_pce_unique_colours": 15,
   "pce_palette_slots": 16,
   "pce_pair_variants": 224,

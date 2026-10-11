@@ -24,15 +24,26 @@ volatile uint8_t bat_line, bat_source_y, bat_phase, bat_frames;
 volatile uint8_t bat_display_page, bat_ready_page;
 #endif
 
-/* Each tile is a pair of horizontally solid four-pixel colour fields. */
+/* The native tile-set has 256 entries, indexed by (left<<4)|right.
+ * In full-detail mode, use a 3+2+3 horizontal transition rather than hard
+ * 4+4 color slabs: PCEdev-inspired subpixel blending, with no extra BAT
+ * writes or dynamic planar tile updates. Atomic/reference retain 4+4. */
 static void bat_bitmap_patterns(void) {
     for (uint16_t pair=0; pair<256; ++pair) {
         uint8_t a = (uint8_t)(pair >> 4), b = (uint8_t)(pair & 15);
         uint16_t planes[4];
         uint8_t mask=1u;
         for (uint8_t bit=0; bit<4; ++bit) {
+#if !RAY_DOUBLE_BUFFER && !defined(RAY_NO_SUBPIXEL_BLEND)
+            uint8_t mid=ray_palette_blend_packed[pair>>1];
+            mid=(uint8_t)((pair&1u)?(mid&15u):(mid>>4));
+            planes[bit] = ((a & mask) ? 0xe0u : 0u) |
+                          ((mid & mask) ? 0x18u : 0u) |
+                          ((b & mask) ? 0x07u : 0u);
+#else
             planes[bit] = ((a & mask) ? 0xf0u : 0u) |
                           ((b & mask) ? 0x0fu : 0u);
+#endif
             mask=(uint8_t)(mask<<1);
         }
         pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,

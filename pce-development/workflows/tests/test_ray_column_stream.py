@@ -15,13 +15,15 @@ import bitmap_stress
 class ColumnStreamTests(unittest.TestCase):
     def test_background_is_precomputed_and_deterministic(self):
         self.assertEqual((ROOT/'src/backdrop_words.h').read_text(),gen_backdrop.generate())
-        # Exactly 8192 physical BAT words = complete 128x128 logical image.
-        rows=gen_backdrop.original_rows()
-        unique,indices=gen_backdrop.compress(rows)
+        # The bitmap now uses a deterministic procedural 128x128 backdrop
+        # instead of the old 14-row checkerboard.  Its 8,192 words remain
+        # entirely VDC-resident; no framebuffer or extra per-frame upload.
+        rows=[[gen_backdrop.backdrop(y,p) for p in range(64)] for y in range(128)]
         self.assertEqual(len(rows)*len(rows[0]),8192)
-        self.assertEqual(len(unique),14)
-        self.assertEqual([unique[i] for i in indices],rows)
-        self.assertLess(len(unique)*64+128,8192)
+        self.assertTrue(all(0xf200<=v<=0xf2ff for row in rows for v in row))
+        self.assertGreater(len(set(tuple(row) for row in rows[:64])),8)
+        self.assertGreater(len(set(tuple(row) for row in rows[64:])),20)
+        self.assertGreater(len(set(v for row in rows for v in row)),14)
 
     def test_sparse_irq_is_host_generated_and_schedules_127_changes(self):
         self.assertEqual((ROOT/'src/bat_sparse_irq.S').read_text(),gen_sparse_irq.gen())
@@ -50,6 +52,35 @@ class ColumnStreamTests(unittest.TestCase):
         self.assertIn('src/bat_bitmap_irq.S',make) # atomic/reference remain independent
         self.assertIn('__rom_bank0_size=0x8000',make)
         self.assertIn('$(MAKE) raster-sweep',make)
+
+    def test_quality_shader_runs_before_the_vblank_transfer(self):
+        src=(ROOT/'src/main.c').read_text()
+        mk=(ROOT/'Makefile').read_text()
+        self.assertIn('-DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0',mk)
+        self.assertIn('#define RAY_VBLANK_WORD_BUDGET 96u',src)
+        self.assertIn('static uint16_t stage_word(uint8_t pair,uint8_t y)',src)
+        self.assertIn('ray_wall_hires[wall_style[l]>>1]',src)
+        self.assertIn('staged_words[j]=stage_word(',src)
+        self.assertIn('if(pending)stage_columns();',src)
+        self.assertIn('if(pending) render_columns();',src)
+        self.assertLess(src.index('if(pending)stage_columns();'),
+                        src.index('uint8_t before=bat_frames;while(before==bat_frames){}'))
+        # No data-port operations are allowed inside the unmasked shader;
+        # its output is buffered for the short vertical-blank transfers.
+        shader=src.split('static uint16_t stage_word(',1)[1].split('static void stage_columns(',1)[0]
+        self.assertNotIn('IO_VDC_DATA',shader)
+        self.assertNotIn('pce_cpu_irq_disable',shader)
+        render=src.split('static void render_columns(void) {',2)[-1].split('#endif\n#endif',1)[0]
+        self.assertIn('if(n>8u)n=8u;',render)
+        self.assertIn('pce_cpu_irq_enable();',render)
+
+    def test_interaction_trace_waits_for_one_time_bitmap_initialization(self):
+        import json
+        scenario=json.loads((ROOT/'tools/interaction-scenario.json').read_text())
+        self.assertEqual(scenario['boot_frames'],180)
+        runner=(ROOT/'tools/genre_trace.py').read_text()
+        self.assertIn("boot_frames=scenario.get('boot_frames',initial_frames)",runner)
+        self.assertIn('client=old.NativeControl(str(exe),rom,base_dir,bios,boot_frames)',runner)
 
     def sample(self):
         result=[]

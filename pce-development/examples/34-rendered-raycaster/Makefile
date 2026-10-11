@@ -14,9 +14,9 @@ FAST_ROM_LINK := -Wl,--defsym=__rom_bank0=0x8000,--defsym=__rom_bank0_size=0x800
 ROW_ROM_LINK := -Wl,--defsym=__rom_bank0=0xc000,--defsym=__rom_bank0_size=0x4000
 .PHONY: interaction-test interaction-replay all run trace visual-test bitmap-test clean
 all: tables-check $(OUT)
-$(OUT): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/backdrop_words.h src/wall_codegen.S src/sheet_pairs.h src/sheet_palette.h assets/wolftextures16.png tools/genre_trace.h | toolchain
+$(OUT): src/main.c src/bat_bitmap.h src/bat_sparse_irq.S src/ray_tables.h src/wall_pairs.h src/backdrop_words.h src/wall_codegen.S src/sheet_pairs.h src/hires_texels.h src/sheet_palette.h assets/wolftextures16.png tools/genre_trace.h | toolchain
 	@mkdir -p build
-	$(LLVM_MOS_CC) $(PCE_FLAGS) -Itools src/main.c src/bat_sparse_irq.S src/wall_codegen.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -Itools src/main.c src/bat_sparse_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
 PCE_RUN_FRAMES ?= 180
 run: $(OUT)
 	@PCE_RUN_FRAMES="$(PCE_RUN_FRAMES)" PCE_HEADLESS="$(PCE_HEADLESS)" tools/run-pce-headless.sh run "$(OUT)"

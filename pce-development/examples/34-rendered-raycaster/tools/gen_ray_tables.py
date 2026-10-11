@@ -41,6 +41,10 @@ def generate():
     for h in heights:
         out.append('    {'+','.join(str((k*32)//h if (k*2)<h else 0) for k in range(64))+'},')
     out.append('};')
+    out.append('static const uint8_t ray_hires_v[9][128] = {')
+    for h in heights[:9]:
+        out.append('    {'+','.join(str((k*32)//h if k<h else 0) for k in range(128))+'},')
+    out.append('};')
     out.append('static const uint8_t floor_shift[128] = {'+','.join(
         str(0 if y<66 else 4 if y<73 else 3 if y<82 else 2 if y<101 else 1)
         for y in range(128))+'};')

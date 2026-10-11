@@ -1,4 +1,4 @@
-# 34 — fast 128×128 VRAM-resident raycaster (HuC6280)
+# 34 — 128×128 VRAM-resident raycaster (HuC6280)
 
 This is a **128-sample textured raycaster** using the paired-BAT technique in
 [PCEdev's Wolfenstein article](https://pcedev.wordpress.com/2015/11/25/wolfenstein-3d-on-the-pc-engine/)
@@ -7,7 +7,61 @@ It sets physical **512×224** and keeps **128×128 logical 4-bit pixels** in the
 VDC's 128×64 BAT, with two pixels per word and 256 fixed glyphs. It is **not**
 128×64 atomic mode and does not create 8×8 planar tiles every frame.
 
-## Current 128-ray revision: NES-inspired sparse projection and two-lane BAT
+## Current visual-quality revision: retain source pixels, blend BAT texels
+
+The **default** 32 KiB ROM now improves what is actually rendered, not the
+number of rays (still 128):
+
+- **32×32 original texture data** on near walls (`depth <= 8`); the previous
+  renderer threw away half of both texture axes by downsampling to 16×16.
+  `src/hires_texels.h` packs all 7 materials into 3,584 ROM bytes, and
+  `ray_hires_v` indexes all 32 vertical texels. Distant walls keep the
+  precomputed 16×16 variants to avoid wasting time on subpixel details.
+- **3+2+3 physical-pixel filtering:** each BAT word still specifies its two
+  independent four-bit logical texels. A fixed set of 256 VDC character
+  patterns now displays three physical pixels of the left color, two pixels
+  of their nearest-palette midpoint, then three of the right color. The
+  midpoint lookup is generated against the actual 3:3:3 VCE colors and
+  occupies 128 ROM bytes. This does **not** add logical resolution, but it
+  reduces the abrupt four-pixel color seam with no extra runtime BAT writes.
+- A generated procedural **dithered sky and textured stone floor** replaces
+  the 14 repeated coarse backdrop rows. The initial 8,192 BAT words are
+  prepared once with BG off; changed columns restore the exact same formula.
+- **Staged VRAM transfers** prepare at most 96 textured BAT words in RAM
+  before VBlank, then upload them in IRQ-masked bursts of **at most eight
+  words**. Old column keys are committed only after the full span is written.
+  This is necessary because doing the more detailed wall shading in the
+  raster-critical upload caused reproducible sky-only failures. Use
+  `-DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0` for this verified build.
+
+The **128×128 logical size is unchanged**. At physical 512×224 a paired-BAT
+texel is nominally four physical pixels wide. Filtering those hard edges
+improves gradients, but it **cannot** provide arbitrary 256-wide wall detail;
+that would require a different graphics/palette/pattern strategy and a new
+performance and IRQ stability evaluation. Hardware timing is unverified.
+
+**Measured on the headless emulator:** the default build passes a 540-frame
+continuous-turn screenshot sweep without a blank/sky-only frame; 1,080 frames
+of controller movement; a 600-frame pixel-identical stationary comparison
+against the independent C reference; the native cycle gate; and the 229
+Python offline checks (including pixel-exact 32×32 texture unpacking and
+all 256 paired-palette blends). The 96-word staged path completes **0.667
+changed-view commits/second during turns** in the 1,080-frame benchmark,
+versus 0.333 in the previous 24-word raster-safe release. These are dirty-view
+passes, **not full-screen FPS**; the visible image is updated progressively.
+The separate 128×64 atomic ROM remains a lower-resolution presentation option.
+The interaction RPC scenario specifies an explicit 180-frame boot warmup for
+one-time 8,192-word BAT and 256-tile initialization; the subsequent 305
+gameplay samples pass wall-collision and motion audits.
+
+Reproduce with `make tables-check bitmap-test column-regression wall-lookup-visual
+atomic-test`, and from the repository root `make test cycles-ray`, with LLVM-MOS
+and the RPC-capable emulator configured. Generated texture sources should be
+regenerated via `python3 tools/gen_texture_sheet.py` after changing artwork.
+
+---
+
+## Previous 128-ray revision: NES-inspired sparse projection and two-lane BAT
 
 The full-resolution default now projects **128 horizontal sample rays**, one
 per logical screen pixel. Every **single BAT word** still stores two independent
@@ -44,7 +98,7 @@ prototype reached **3.00**, but missed raster IRQs during prolonged movement
 and occasionally displayed a sky-only frame. Increasing the number of rays
 alone is **not an FPS improvement**.
 
-The current **128-ray raster-safe configuration** finishes each partial BAT
+The previous **128-ray raster-safe configuration** finished each partial BAT
 column over multiple VBlank periods, with **at most 24 BAT words** scheduled
 per period. Each pair's old dirty key is updated only when its final segment
 has been uploaded. The camera view is recast only after all 64 pairs of the
@@ -56,7 +110,7 @@ turning** pass; the latter recorded *at least ten real emulator colours in
 every frame*, with no sky-only image. These checks are now in
 `make column-regression`.
 
-Under an **extended 1,080-video-frame benchmark** (90 idle, 180 turn right,
+For that earlier configuration, under an **extended 1,080-video-frame benchmark** (90 idle, 180 turn right,
 180 walk, 180 turn left, 360 settle, 90 quiet), this build measures **0.333
 changed-view commits/second during turning**. These are finished dirty-column
 passes, **not full-screen atomic FPS**. The stable 128-ray version is therefore

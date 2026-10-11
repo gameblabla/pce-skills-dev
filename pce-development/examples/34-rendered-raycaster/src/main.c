@@ -15,6 +15,7 @@
 #endif
 #if !RAY_DOUBLE_BUFFER
 #include "sheet_pairs.h"
+#include "hires_texels.h"
 #include "sheet_palette.h"
 #define RAY_ACTIVE_PAIRS ray_sheet_pairs
 #define RAY_U_MASK 15u
@@ -125,9 +126,21 @@ static uint16_t ray_bat_addresses[128];
 #ifndef RAY_COLUMN_CHUNK_WORDS
 #define RAY_COLUMN_CHUNK_WORDS 8u
 #endif
+#ifndef RAY_HIRES_MAX_DEPTH
+#define RAY_HIRES_MAX_DEPTH 8u
+#endif
+#ifndef RAY_STAGE_UPLOAD
+#define RAY_STAGE_UPLOAD 0
+#endif
 #ifndef RAY_VBLANK_WORD_BUDGET
-/* Never monopolize the early raster with long full-height wall uploads. */
+/* Staging computes complex wall pixels before VBlank, so larger transfers
+ * can be safely issued as separate <=8-word TIA bursts. The historical
+ * in-VBlank renderer retains its conservative 24-word limit. */
+#if RAY_STAGE_UPLOAD
+#define RAY_VBLANK_WORD_BUDGET 96u
+#else
 #define RAY_VBLANK_WORD_BUDGET 24u
+#endif
 #endif
 static uint8_t next_column,cast_valid,cast_angle;
 static volatile uint8_t column_pairs_per_update;
@@ -170,6 +183,15 @@ volatile uint16_t ray_codegen_vram_address;
 volatile uint8_t ray_codegen_variant;
 volatile uint8_t ray_codegen_variant_right;
 volatile uint8_t ray_codegen_low_nibble;
+/* The generated native texture table is V-major; share it with short
+ * scalar tails instead of linking a second 3.5 KiB transposed copy. */
+extern const uint8_t ray_codegen_pixels[16][224];
+static const uint8_t *const ray_codegen_vlines[16]={
+    ray_codegen_pixels[0],ray_codegen_pixels[1],ray_codegen_pixels[2],ray_codegen_pixels[3],
+    ray_codegen_pixels[4],ray_codegen_pixels[5],ray_codegen_pixels[6],ray_codegen_pixels[7],
+    ray_codegen_pixels[8],ray_codegen_pixels[9],ray_codegen_pixels[10],ray_codegen_pixels[11],
+    ray_codegen_pixels[12],ray_codegen_pixels[13],ray_codegen_pixels[14],ray_codegen_pixels[15]
+};
 volatile uint16_t ray_codegen_words;
 #endif
 static uint16_t column_words[RAY_COLUMN_CHUNK_WORDS];
@@ -371,9 +393,9 @@ static __attribute__((unused)) uint8_t bitmap_pair(uint8_t pair,uint8_t y) {
 }
 
 /* Build a bounded RAM staging batch, then transfer BAT entries ONLY in VBlank.
- * Each TIA sends 128 bytes to alternating VDC data ports ($0002/$0003),
- * autoincrementing the VRAM word address. TIA masks IRQs until completion:
- * the bounded eight-row / 1024-byte batch MUST remain within VBlank.
+ * Each TIA sends a bounded row burst to alternating VDC data ports
+ * ($0002/$0003), autoincrementing the VRAM word address. TIA masks IRQs
+ * until completion; no raster event is needed during that brief mask.
  * Unsupported larger batches have NOT been validated on hardware.
  * Cache camera position once per 128-row redraw so its textured floor never
  * combines pixels from multiple player positions inside the same pass.
@@ -450,6 +472,7 @@ static __attribute__((unused)) void render_slice(void) {
  * not the sky and floor. All raster IRQs remain enabled between bursts.
  * The background lives in VDC VRAM, not an 8K RAM framebuffer.
  */
+static uint16_t backdrop_init_row[64];
 static void column_background_init(void) {
     for(uint8_t y=0;y<128u;++y) {
         uint16_t addr=(uint16_t)((((uint16_t)y&63u)<<7)+((y&64u)?64u:0u));
@@ -458,8 +481,9 @@ static void column_background_init(void) {
 #endif
         pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,addr);
         *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
-        /* IRQs disabled by bat_bitmap_setup; initial 128-byte TIA safe. */
-        pce_memop((void*)IO_VDC_DATA,ray_backdrop_row(y),128u,PCE_MEMOP_INCR_ALT);
+        /* Generate once, then upload full BAT rows with VDC display off. */
+        for(uint8_t p=0;p<64u;++p)backdrop_init_row[p]=ray_backdrop_word(y,p);
+        pce_memop((void*)IO_VDC_DATA,backdrop_init_row,128u,PCE_MEMOP_INCR_ALT);
     }
 }
 /* Word renderer: two genuinely different 128-ray samples, with a fast
@@ -472,16 +496,21 @@ static __attribute__((unused)) uint8_t ray_pair_fast(uint8_t left,uint8_t right)
     return (uint8_t)(top[left]==top[right] &&
         wall_height[depth[left]]==wall_height[depth[right]]);
 }
-static void column_upload(uint8_t pair,uint8_t first,uint8_t last) {
+static __attribute__((unused)) void column_upload(uint8_t pair,uint8_t first,uint8_t last) {
     const uint8_t l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
     const uint8_t tl=top[l],tr=top[r];
     const uint8_t el=(uint8_t)(tl+wall_height[depth[l]]);
     const uint8_t er=(uint8_t)(tr+wall_height[depth[r]]);
+#if !RAY_WALL_CODEGEN
     const uint8_t *wl=RAY_ACTIVE_PAIRS[wall_style[l]][tex_u[l]&RAY_U_MASK];
     const uint8_t *wr=RAY_ACTIVE_PAIRS[wall_style[r]][tex_u[r]&RAY_U_MASK];
+#endif
+/* Full source texture resolution for close walls: 32 distinct V samples
+     * and correct shade. The native 16-row writer remains fast for far walls. */
+    const uint8_t detailed_l=depth[l]<=RAY_HIRES_MAX_DEPTH,detailed_r=depth[r]<=RAY_HIRES_MAX_DEPTH;
     const uint8_t *vl=wall_tex_v[depth[l]],*vr=wall_tex_v[depth[r]];
 #if RAY_WALL_CODEGEN
-    const uint8_t fast=ray_pair_fast(l,r);
+    const uint8_t fast=(uint8_t)(!detailed_l && !detailed_r && ray_pair_fast(l,r));
 #endif
     for(uint8_t y=first;y<last;) {
 #if RAY_WALL_CODEGEN
@@ -513,14 +542,40 @@ static void column_upload(uint8_t pair,uint8_t first,uint8_t last) {
         uint8_t n=0,stop=(uint8_t)((y&64u)?128u:64u),yy=y;
         uint16_t *out=column_words;
         while(n<RAY_COLUMN_CHUNK_WORDS && yy<last && yy<stop) {
-            uint16_t word=ray_backdrop_row(yy)[pair];
+            uint16_t word=ray_backdrop_word(yy,pair);
             if(yy>=tl && yy<el) {
-                uint8_t pixel=wl[vl[(uint8_t)(yy-tl)>>1]];
-                word=(uint16_t)((word&0xff0fu)|(pixel&0xf0u));
+                uint8_t pixel;
+                if(detailed_l) {
+                    uint8_t v=ray_hires_v[depth[l]][(uint8_t)(yy-tl)];
+                    uint8_t both=ray_wall_hires[wall_style[l]>>1][ray_tex_phase[l]>>3][v>>1];
+                    pixel=(uint8_t)((v&1u)?(both&15u):(both>>4));
+                    if(wall_style[l]&1u)pixel=ray_hires_dark[pixel];
+                } else {
+#if RAY_WALL_CODEGEN
+                    pixel=(uint8_t)(ray_codegen_vlines[vl[(uint8_t)(yy-tl)>>1]]
+                        [(wall_style[l]<<4)|(tex_u[l]&15u)]>>4);
+#else
+                    pixel=(uint8_t)(wl[vl[(uint8_t)(yy-tl)>>1]]>>4);
+#endif
+                }
+                word=(uint16_t)((word&0xff0fu)|((uint16_t)pixel<<4));
             }
             if(yy>=tr && yy<er) {
-                uint8_t pixel=wr[vr[(uint8_t)(yy-tr)>>1]];
-                word=(uint16_t)((word&0xfff0u)|(pixel>>4));
+                uint8_t pixel;
+                if(detailed_r) {
+                    uint8_t v=ray_hires_v[depth[r]][(uint8_t)(yy-tr)];
+                    uint8_t both=ray_wall_hires[wall_style[r]>>1][ray_tex_phase[r]>>3][v>>1];
+                    pixel=(uint8_t)((v&1u)?(both&15u):(both>>4));
+                    if(wall_style[r]&1u)pixel=ray_hires_dark[pixel];
+                } else {
+#if RAY_WALL_CODEGEN
+                    pixel=(uint8_t)(ray_codegen_vlines[vr[(uint8_t)(yy-tr)>>1]]
+                        [(wall_style[r]<<4)|((tex_u[r]-1u)&15u)]&15u);
+#else
+                    pixel=(uint8_t)(wr[vr[(uint8_t)(yy-tr)>>1]]>>4);
+#endif
+                }
+                word=(uint16_t)((word&0xfff0u)|pixel);
             }
             *out++=word;
             ++n;++yy;
@@ -557,7 +612,8 @@ static void finish_column(uint8_t pair) {
     const uint8_t l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
     for(uint8_t c=l;c<=r;++c) {
         old_top[c]=top[c];old_height[c]=wall_height[depth[c]];
-        old_tex[c]=tex_u[c]&RAY_U_MASK;old_style[c]=wall_style[c];
+        old_tex[c]=(uint8_t)(depth[c]<=RAY_HIRES_MAX_DEPTH?(ray_tex_phase[c]>>3):
+                           (tex_u[c]&RAY_U_MASK));old_style[c]=wall_style[c];
 #if !RAY_CANONICAL_WALL_KEY
         old_depth[c]=depth[c];
 #endif
@@ -565,6 +621,7 @@ static void finish_column(uint8_t pair) {
     next_column=(uint8_t)((pair+1u)&63u);
     if(next_column==0u && column_pass_dirty)++ray_redraws;
 }
+#if !RAY_STAGE_UPLOAD
 static void render_columns(void) {
     uint8_t budget=RAY_VBLANK_WORD_BUDGET;
     for(uint8_t i=0;i<column_pairs_per_update && budget;++i) {
@@ -577,7 +634,8 @@ static void render_columns(void) {
             for(uint8_t c=l;c<=r;++c) {
                 const uint8_t h=wall_height[depth[c]], t=top[c];
                 if(old_height[c]!=h || old_top[c]!=t ||
-                   old_tex[c]!=(tex_u[c]&RAY_U_MASK) ||
+                   old_tex[c]!=(depth[c]<=RAY_HIRES_MAX_DEPTH?(ray_tex_phase[c]>>3):
+                                (tex_u[c]&RAY_U_MASK)) ||
                    old_style[c]!=wall_style[c]
 #if !RAY_CANONICAL_WALL_KEY
                    || old_depth[c]!=depth[c]
@@ -608,6 +666,114 @@ static void render_columns(void) {
         finish_column(pair);
     }
 }
+#else
+/* Drawing and VRAM presentation are two distinct phases. The heavier 32x32
+ * textured pixels are calculated before VBlank; while the display is active,
+ * only a tiny buffered TIA burst with bounded IRQ masking touches VDC DATA.
+ * This prevents missed raster IRQs without lowering the uploaded detail. */
+static uint16_t staged_words[RAY_VBLANK_WORD_BUDGET];
+static uint8_t staged_ready,staged_pair,staged_first,staged_count;
+
+static uint16_t stage_word(uint8_t pair,uint8_t y) {
+    uint8_t l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
+    uint8_t tl=top[l],tr=top[r];
+    uint16_t w=ray_backdrop_word(y,pair);
+    if(y>=tl && (uint8_t)(y-tl)<wall_height[depth[l]]) {
+        uint8_t pixel;
+        if(depth[l]<=RAY_HIRES_MAX_DEPTH) {
+            uint8_t v=ray_hires_v[depth[l]][(uint8_t)(y-tl)];
+            uint8_t both=ray_wall_hires[wall_style[l]>>1][ray_tex_phase[l]>>3][v>>1];
+            pixel=(uint8_t)((v&1u)?(both&15u):(both>>4));
+            if(wall_style[l]&1u)pixel=ray_hires_dark[pixel];
+        } else {
+            uint8_t v=wall_tex_v[depth[l]][(uint8_t)(y-tl)>>1];
+            pixel=(uint8_t)(ray_sheet_pairs[wall_style[l]][tex_u[l]&15u][v]>>4);
+        }
+        w=(uint16_t)((w&0xff0fu)|((uint16_t)pixel<<4));
+    }
+    if(y>=tr && (uint8_t)(y-tr)<wall_height[depth[r]]) {
+        uint8_t pixel;
+        if(depth[r]<=RAY_HIRES_MAX_DEPTH) {
+            uint8_t v=ray_hires_v[depth[r]][(uint8_t)(y-tr)];
+            uint8_t both=ray_wall_hires[wall_style[r]>>1][ray_tex_phase[r]>>3][v>>1];
+            pixel=(uint8_t)((v&1u)?(both&15u):(both>>4));
+            if(wall_style[r]&1u)pixel=ray_hires_dark[pixel];
+        } else {
+            uint8_t v=wall_tex_v[depth[r]][(uint8_t)(y-tr)>>1];
+            pixel=(uint8_t)(ray_sheet_pairs[wall_style[r]][tex_u[r]&15u][v]>>4);
+        }
+        w=(uint16_t)((w&0xfff0u)|pixel);
+    }
+    return w;
+}
+
+static void stage_columns(void) {
+    staged_ready=0u;
+    /* Skip any unchanged columns, but never start the next view with stale
+     * samples after finishing pair 63. Last-pass commits happen only after
+     * all of their actual VRAM uploads are acknowledged. */
+    for(uint8_t checked=0;checked<64u;++checked) {
+        if(checked && next_column==0u)return;
+        uint8_t pair=next_column,l=(uint8_t)(pair<<1),r=(uint8_t)(l+1u);
+        if(!upload_active) {
+            uint8_t dirty=0,first=128u,last=0u;
+            for(uint8_t c=l;c<=r;++c) {
+                uint8_t h=wall_height[depth[c]],t=top[c];
+                if(old_height[c]!=h || old_top[c]!=t ||
+                   old_tex[c]!=(depth[c]<=RAY_HIRES_MAX_DEPTH?
+                             (ray_tex_phase[c]>>3):(tex_u[c]&RAY_U_MASK)) ||
+                   old_style[c]!=wall_style[c]
+#if !RAY_CANONICAL_WALL_KEY
+                   || old_depth[c]!=depth[c]
+#endif
+                  ) {
+                    dirty=1u;
+                    if(t<first)first=t;
+                    if((uint8_t)(t+h)>last)last=(uint8_t)(t+h);
+                    if(old_top[c]<first && old_height[c])first=old_top[c];
+                    uint8_t end=(uint8_t)(old_top[c]+old_height[c]);
+                    if(end>last)last=end;
+                }
+            }
+            if(!dirty) {finish_column(pair);continue;}
+            upload_next_y=first;upload_last_y=last;
+            upload_active=1u;column_pass_dirty=1u;
+        }
+        uint8_t remaining=(uint8_t)(upload_last_y-upload_next_y);
+        staged_count=(remaining<RAY_VBLANK_WORD_BUDGET)?remaining:RAY_VBLANK_WORD_BUDGET;
+        staged_first=upload_next_y;staged_pair=pair;
+        for(uint8_t j=0;j<staged_count;++j)
+            staged_words[j]=stage_word(pair,(uint8_t)(staged_first+j));
+        staged_ready=1u;
+        return;
+    }
+}
+
+static void render_columns(void) {
+    if(!staged_ready)return;
+    uint8_t done=0u;
+    while(done<staged_count) {
+        uint8_t y=(uint8_t)(staged_first+done);
+        uint8_t n=(uint8_t)(staged_count-done);
+        uint8_t until_page=(uint8_t)(64u-(y&63u));
+        if(n>8u)n=8u;
+        if(n>until_page)n=until_page;
+        pce_cpu_irq_disable();
+        pce_vdc_poke(VDC_REG_VRAM_WRITE_ADDR,RAY_BAT_ADDRESS(y,staged_pair));
+        *IO_VDC_INDEX=VDC_REG_VRAM_DATA;
+        pce_memop((void*)IO_VDC_DATA,staged_words+done,(uint16_t)(n<<1),PCE_MEMOP_INCR_ALT);
+        pce_cpu_irq_enable();
+        done=(uint8_t)(done+n);
+    }
+    ray_bat_words=(uint16_t)(ray_bat_words+staged_count);
+    upload_next_y=(uint8_t)(upload_next_y+staged_count);
+    if(upload_next_y==upload_last_y) {
+        upload_active=0u;
+        finish_column(staged_pair);
+    }
+    staged_ready=0u;
+}
+#endif
 #endif
 __attribute__((noinline))
 static void publish(uint32_t frame,uint16_t buttons,int16_t moved_x,int16_t moved_y) {
@@ -674,6 +840,9 @@ int main(void) {
 #if RAY_COLUMN_STREAM
         /* Project in active raster time; VDC BAT writes only after VBlank. */
         uint8_t pending=column_prepare();
+#if RAY_STAGE_UPLOAD
+        if(pending)stage_columns();
+#endif
         uint8_t before=bat_frames;while(before==bat_frames){}
         if(pending) render_columns();
 #else
