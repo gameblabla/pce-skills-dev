@@ -80,6 +80,48 @@ blank frames or midpoint-floor stripe. A 144-word variant failed the long
 movement test; it is not enabled. These observations are emulator-only and
 can change if CPU timing, scene state, or hardware behavior differs.
 
+## Experimental natural-scroll IRQ (optional, not default)
+
+`make natural-irq-rom` builds a *separate* 128×128 HuCard with
+`src/bat_natural_irq.S`. This is an adaptation to the PCE's vertically uniform
+bitmap tiles: setting the BYR offset near the end of a tile lets the VDC
+advance naturally into the following logical row. Only **68 raster events**
+are scheduled, versus **127** in the default X-indexed handler. The original
+schedule is deliberately retained for logical rows 60–68, including the
+rotated BAT page transition at 63/64, to prevent the midpoint stripe.
+The generator is in `tools/gen_sparse_irq.py` and source-level tests verify
+its entire event order and scroll offsets.
+
+The experimental variant uses a **160-word prepared batch** and yields once
+per two eight-word transfers, instead of the default 138 words with a yield
+between each transfer. It is **not a hardware-safe transfer guarantee**:
+140, 152 and 156-word experiments failed the 1,080-frame movement stress,
+even though 144, 148 and 160 passed. The timing is sensitive to workload and
+controller state; the production ROM remains unchanged. Use:
+
+```sh
+make natural-irq-rom
+PCE_HEADLESS=/path/to/pce-headless make natural-irq-compare
+PCE_HEADLESS=/path/to/pce-headless make natural-irq-stress
+PCE_HEADLESS=/path/to/pce-headless make natural-irq-cycles
+```
+
+On the tested emulator, both ROMs match all **135,520 pixels** of the settled
+frame. Over the 1,080-video-frame benchmark, turning dirty-view commits rise
+from **2.000 to 2.167 per second**, and transferred BAT words from **77,895
+to 88,115**. The separate movement stress completes **32** dirty passes,
+versus **28** in the default ROM. The experimental ROM passes 1,080 consecutive
+turning screenshot checks (including the midpoint) and 1,080 movement frames.
+The native profiler attributes **47,592 -> 26,256** master-clock ticks
+per video frame to `irq_vdc` (about **45% fewer**). The experimental cycle
+budget retains the stable build's turn and walk constraints and tightens the
+IRQ limit. It increases only the idle-`main` allowance because eliminating
+interrupts shifts more frame-waiting time into the main-loop symbol; it does
+not relax gameplay work budgets.
+
+These are progressive dirty-view passes, *not full-screen video FPS*;
+physical hardware remains untested.
+
 ## Limitations and references
 
 This is educational source, not a production engine. FPS remains constrained by live BAT uploads and IRQ timing; the floor remains screen-anchored, 128×128 logical pixels look blocky, and emulator success is not physical-hardware certification.

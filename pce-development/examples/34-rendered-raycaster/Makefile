@@ -230,3 +230,31 @@ grid-crossing-check: $(OUT) $(GRID_CROSS_ROM)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/raster_sweep.py --rom $(GRID_CROSS_ROM) --elf $(GRID_CROSS_ROM).elf --output build/grid-crossing-raster.json
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(GRID_CROSS_ROM) --elf $(GRID_CROSS_ROM).elf --mode column --output build/grid-crossing-stress.json
 	python3 tools/compare_grid_crossing.py --reference build/grid-crossing-default-benchmark.json --experimental build/grid-crossing-experimental-benchmark.json --visual build/grid-crossing-visual.json --raster build/grid-crossing-raster.json --stress build/grid-crossing-stress.json --output build/grid-crossing-evidence.json
+
+# Experimental PCE-specific natural-scroll scheduler. It relies on vertical
+# tile pixels being uniform: 59 of 127 logical row transitions can occur from
+# the VDC's own BYR increment. Keep ordinary IRQs around the BXR page switch.
+# This does not change the 128x128 display or the production ROM.
+NATURAL_IRQ_ROM := build/34-rendered-raycaster-natural-irq-experimental.pce
+$(NATURAL_IRQ_ROM): src/main.c src/bat_bitmap.h src/bat_natural_irq.S src/ray_tables.h src/sheet_pairs.h src/backdrop_words.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -DRAY_PACE_BURSTS=2 -DRAY_VBLANK_WORD_BUDGET=160 -Itools src/main.c src/bat_natural_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+.PHONY: natural-irq-rom natural-irq-compare natural-irq-stress
+natural-irq-rom: $(NATURAL_IRQ_ROM)
+natural-irq-compare: $(OUT) $(NATURAL_IRQ_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(OUT) --elf $(OUT).elf --output build/natural-standard-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(NATURAL_IRQ_ROM) --elf $(NATURAL_IRQ_ROM).elf --output build/natural-experimental-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(OUT) --optimized $(NATURAL_IRQ_ROM) --output build/natural-irq-visual.json
+	python3 tools/compare_natural_irq.py --standard build/natural-standard-benchmark.json --natural build/natural-experimental-benchmark.json --visual build/natural-irq-visual.json --output build/natural-irq-comparison.json
+natural-irq-stress: $(NATURAL_IRQ_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/raster_sweep.py --rom $(NATURAL_IRQ_ROM) --elf $(NATURAL_IRQ_ROM).elf --output build/natural-irq-raster1080.json --frames 1080
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(NATURAL_IRQ_ROM) --elf $(NATURAL_IRQ_ROM).elf --mode column --output build/natural-irq-stress.json
+
+# The ordinary profiler's idle-main bound assumes 127 IRQs. Here idle main
+# deliberately waits longer because 59 IRQs were eliminated; use a stricter
+# IRQ limit while allowing that waiting time to be attributed to main.
+.PHONY: natural-irq-cycles
+natural-irq-cycles: $(NATURAL_IRQ_ROM)
+	@test -n "$(PCE_HEADLESS)" && test -x "$(PCE_HEADLESS)" || { echo 'Set PCE_HEADLESS to a profiler-enabled emulator' >&2; exit 2; }
+	python3 ../../workflows/cycle_profile.py run --emulator "$(PCE_HEADLESS)" --rom $(NATURAL_IRQ_ROM) --mlb $(NATURAL_IRQ_ROM:.pce=.mlb) --scenario ../../workflows/specs/cycles/raycaster.json --out build/natural-irq-cycles
+	python3 ../../workflows/cycle_profile.py gate --report build/natural-irq-cycles/report.json --budget ../../workflows/specs/cycles/raycaster-natural-irq-budget.json
