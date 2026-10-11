@@ -250,6 +250,25 @@ vram-buffer-stress: $(VRAM_BUFFER_ROM)
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/raster_sweep.py --rom $(VRAM_BUFFER_ROM) --elf $(VRAM_BUFFER_ROM).elf --output build/vram-buffer-raster.json
 	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(VRAM_BUFFER_ROM) --elf $(VRAM_BUFFER_ROM).elf --mode column --output build/vram-buffer-stress.json
 
+# DMA-completion-IRQ variant of the 128x128 hidden-VRAM experiment.
+# Unlike pce_vdc_dma_finished() status polling, DMA completion is acknowledged
+# in the raster ISR after the BYR/RCR writes. Both 4096-word DMA copies are
+# still non-atomic. The consecutive-copy timing remains opt-in.
+.PHONY: vram-buffer-irq-rom vram-buffer-irq-compare vram-buffer-irq-stress
+VRAM_IRQ_ROM := build/34-rendered-raycaster-vram-irq-experimental.pce
+$(VRAM_IRQ_ROM): src/main.c src/bat_dma_irq.S src/bat_bitmap.h src/backdrop_words.h src/hires_texels.h | toolchain
+	@mkdir -p build
+	$(LLVM_MOS_CC) $(PCE_FLAGS) -DRAY_STAGE_UPLOAD=1 -DRAY_WALL_CODEGEN=0 -DRAY_VRAM_DOUBLE_BUFFER=1 -DRAY_VRAM_IRQ_DMA=1 -DRAY_VRAM_CONSECUTIVE_DMA=1 -DRAY_PRESENT_PACED=0 -DRAY_VBLANK_WORD_BUDGET=192 -Itools src/main.c src/bat_dma_irq.S -o $@ $(FAST_ROM_LINK) -Wl,-Map,$@.map
+vram-buffer-irq-rom: $(VRAM_IRQ_ROM)
+vram-buffer-irq-compare: $(VRAM_BUFFER_ROM) $(VRAM_IRQ_ROM) $(OUT)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(VRAM_BUFFER_ROM) --elf $(VRAM_BUFFER_ROM).elf --output build/vram-irq-status-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/column_benchmark.py --rom $(VRAM_IRQ_ROM) --elf $(VRAM_IRQ_ROM).elf --output build/vram-irq-completion-benchmark.json
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/wall_equivalence.py --reference $(OUT) --optimized $(VRAM_IRQ_ROM) --output build/vram-irq-exact-image.json
+	python3 tools/compare_dma_irq.py --polling build/vram-irq-status-benchmark.json --irq build/vram-irq-completion-benchmark.json --visual build/vram-irq-exact-image.json --output build/vram-buffer-irq-comparison.json
+vram-buffer-irq-stress: $(VRAM_IRQ_ROM)
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/raster_sweep.py --rom $(VRAM_IRQ_ROM) --elf $(VRAM_IRQ_ROM).elf --output build/vram-buffer-irq-raster.json --frames 1080
+	PCE_HEADLESS="$(PCE_HEADLESS)" python3 tools/bitmap_stress.py --rom $(VRAM_IRQ_ROM) --elf $(VRAM_IRQ_ROM).elf --mode column --output build/vram-buffer-irq-stress.json
+
 # Experimental PCE-specific natural-scroll scheduler. It relies on vertical
 # tile pixels being uniform: 59 of 127 logical row transitions can occur from
 # the VDC's own BYR increment. Keep ordinary IRQs around the BXR page switch.

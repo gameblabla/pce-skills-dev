@@ -162,8 +162,8 @@ static uint8_t ray_next_pair(uint8_t pair) {
 /* Experimental VRAM-backed image buffering: a complete 8192-word hidden
  * bitmap at $4000..$5FFF. The PCE has ONE fixed-origin BAT: this is NOT
  * a scroll-register page flip. Presenting copies the hidden BAT to $0000.
- * Limit each DMA to 4096 words; an 8192-word transfer failed equivalence
- * despite its completion poll. The two smaller DMA copies pass, but are
+ * Limit each DMA to 4096 words; an 8192-word transfer fails equivalence
+ * even with IRQ completion. The two smaller DMA copies pass, but are
  * separate display operations and CAN expose partial presentation.
  * Do not equate a larger HuCard ROM with additional VDC VRAM. */
 #ifndef RAY_VRAM_DOUBLE_BUFFER
@@ -176,6 +176,18 @@ static uint8_t ray_next_pair(uint8_t pair) {
 #if RAY_VRAM_DOUBLE_BUFFER
 static uint8_t ray_present_pending;
 volatile uint16_t ray_dma_presents;
+/* Use a DMA-completion IRQ instead of polling the VDC status register:
+ * status reads acknowledge and clear raster IRQ flags too. The dedicated
+ * assembly handler checks DMA after the timing-critical BYR/RCR writes. */
+#ifndef RAY_VRAM_IRQ_DMA
+#define RAY_VRAM_IRQ_DMA 0
+#endif
+#ifndef RAY_VRAM_CONSECUTIVE_DMA
+#define RAY_VRAM_CONSECUTIVE_DMA 0
+#endif
+#if RAY_VRAM_IRQ_DMA
+volatile uint8_t ray_dma_completed;
+#endif
 #endif
 #ifndef RAY_VBLANK_WORD_BUDGET
 /* The paced staged writer is emulator-validated at 138 words/frame with <=8-word
@@ -1033,16 +1045,33 @@ static void render_columns(void) {
         /* Begin presentation only after an entire offscreen view completes.
          * Never change that buffer during either internal VRAM DMA. */
         /* The VDC's one visible BAT cannot switch to a different base.
-         * Copy a completed 128x128 image in two independently bounded
-         * VRAM-to-VRAM DMAs. They are not an atomic full-frame swap. */
+         * Copy the full offscreen frame in two independently bounded
+         * VRAM-to-VRAM DMAs. This is not an atomic full-frame swap.
+         * With IRQ DMA,
+         * never read VDC_STATUS in a busy-loop: it acknowledges raster
+         * events that the IRQ handler must process. */
         for(uint8_t piece=0u;piece<2u;++piece) {
-            uint8_t before_chunk=bat_frames;
-            while(before_chunk==bat_frames) {}
+            /* The default keeps each half on a separate VBlank. An opt-in
+             * benchmark can start the second DMA right after the first. */
+            if(!RAY_VRAM_CONSECUTIVE_DMA || piece==0u) {
+                uint8_t before_chunk=bat_frames;
+                while(before_chunk==bat_frames) {}
+            }
             pce_cpu_irq_disable();
+#if RAY_VRAM_IRQ_DMA
+            ray_dma_completed=0u;
+            pce_vdc_dma_start(VDC_DMA_IRQ_DONE,(uint16_t)(RAY_VRAM_BACK_BASE+((uint16_t)piece<<12)),
+                                   (uint16_t)((uint16_t)piece<<12),4096u);
+#else
             pce_vdc_dma_start(0u,(uint16_t)(RAY_VRAM_BACK_BASE+((uint16_t)piece<<12)),
                                    (uint16_t)((uint16_t)piece<<12),4096u);
+#endif
             pce_cpu_irq_enable();
+#if RAY_VRAM_IRQ_DMA
+            while(!ray_dma_completed) {}
+#else
             while(!pce_vdc_dma_finished()) {}
+#endif
         }
         ++ray_dma_presents;
         ++ray_redraws;
@@ -1091,6 +1120,9 @@ int main(void) {
     next_column=RAY_FIRST_PAIR;cast_valid=0;upload_active=0;ray_bat_words=0;
 #if RAY_VRAM_DOUBLE_BUFFER
     ray_present_pending=0u;ray_dma_presents=0u;
+#if RAY_VRAM_IRQ_DMA
+    ray_dma_completed=0u;
+#endif
 #endif
     column_pairs_per_update=RAY_COLUMNS_PER_UPDATE;
 #if RAY_WALL_CODEGEN

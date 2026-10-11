@@ -56,6 +56,32 @@ PCE_HEADLESS=/path/to/pce-headless make vram-buffer-compare
 PCE_HEADLESS=/path/to/pce-headless make vram-buffer-stress
 ```
 
+### DMA completion interrupt experiment (not an atomic flip)
+
+`make vram-buffer-irq-rom` builds another opt-in 128×128 buffered version.
+Its raster IRQ handler signals DMA completion *after* the scanline scroll
+registers are written. This avoids repeatedly reading the VDC status register
+while the main loop waits for DMA: each status read can acknowledge raster
+interrupts, interfering with the bitmap-row remapper. The experiment uses two
+4,096-word copies **back-to-back** after a video-frame boundary, rather than
+waiting another VBlank between copies. It still has no physical page flip and
+**cannot promise a tear-free presentation on actual hardware**.
+
+In the 1,080-video-frame emulator benchmark, the earlier polling implementation
+measured **2.333 completed presentations/sec while turning**; the interrupt
+version measured **2.167**. Both made 18 total commits in that scenario.
+The new path does **not** demonstrate an FPS improvement. Its stationary image
+matches the progressive reference exactly; the 540-frame raster sweep and
+1,080-frame movement stress also passed. Tests of one 8,192-word DMA and
+8×1,024-word dirty-stripe DMAs were rejected due to image mismatch or
+raster stalls. Increasing the staged word budget beyond 192 was also slower or
+unstable. Keep the polling version and progressive default available.
+
+```sh
+PCE_HEADLESS=/path/to/pce-headless make vram-buffer-irq-compare
+PCE_HEADLESS=/path/to/pce-headless make vram-buffer-irq-stress
+```
+
 The `vram-buffer-compare` target requires **exact** independent emulator
 screenshots before publishing performance numbers, preventing the earlier
 DMA overrun/corruption from being mistaken for a speedup. Both presentation
